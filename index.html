@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>KFS Padel Ranking</title>
+<meta name="theme-color" content="#0a2b2c">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="shell">
+  <div class="wordmark">
+    <span class="dot"></span>
+    <span>KFS PADEL RANKING</span>
+  </div>
+
+  <!-- ===================== LOGIN VIEW ===================== -->
+  <div class="card" id="view-login">
+    <h1>ادخل بروفايلك</h1>
+    <p class="sub">استخدم الكود والباسورد اللي اداهولك الأدمن.</p>
+
+    <div class="msg error" id="login-error"></div>
+
+    <form id="login-form">
+      <div class="field">
+        <label for="login-code">الكود</label>
+        <input type="text" id="login-code" class="mono" placeholder="KFS-461" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="login-pass">الباسورد</label>
+        <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn-primary" id="login-btn">دخول</button>
+    </form>
+
+    <div class="foot-link">
+      <span style="opacity:.7; font-size:13px;">مفيش عندك كود؟ كلم الأدمن في نادي KFS</span>
+    </div>
+  </div>
+
+  <!-- ===================== PROFILE VIEW ===================== -->
+  <div class="card hidden" id="view-profile">
+    <div class="profile-head">
+      <div class="avatar" id="pf-avatar">؟</div>
+      <div>
+        <div class="profile-name" id="pf-name">—</div>
+        <div class="profile-code" id="pf-code">—</div>
+      </div>
+    </div>
+
+    <div class="tier-badge">
+      <div class="tier-shield" id="pf-shield">—</div>
+      <div class="tier-info">
+        <div class="tier-name" id="pf-tier-name">—</div>
+        <div class="tier-points" id="pf-points">— نقطة</div>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="num" id="pf-matches">0</div>
+        <div class="lbl">ماتش</div>
+      </div>
+      <div class="stat-box">
+        <div class="num" id="pf-wins">0</div>
+        <div class="lbl">فوز</div>
+      </div>
+      <div class="stat-box">
+        <div class="num" id="pf-losses">0</div>
+        <div class="lbl">خسارة</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <button class="link-btn" id="toggle-change-pass" type="button" style="color:var(--court);">تغيير الباسورد</button>
+
+    <form id="change-pass-form" class="hidden" style="margin-top:14px;">
+      <div class="msg error" id="pass-error"></div>
+      <div class="msg success" id="pass-success"></div>
+      <div class="field">
+        <label for="cp-current">الباسورد الحالي</label>
+        <input type="password" id="cp-current" required autocomplete="current-password">
+      </div>
+      <div class="field">
+        <label for="cp-new">الباسورد الجديد</label>
+        <input type="password" id="cp-new" required minlength="6" autocomplete="new-password">
+      </div>
+      <div class="field">
+        <label for="cp-confirm">تأكيد الباسورد الجديد</label>
+        <input type="password" id="cp-confirm" required minlength="6" autocomplete="new-password">
+      </div>
+      <button type="submit" class="btn btn-primary" id="cp-btn">حفظ الباسورد الجديد</button>
+    </form>
+
+    <div class="foot-link" style="margin-top:22px;">
+      <button class="link-btn" id="logout-btn" type="button" style="color:var(--danger);">تسجيل الخروج</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

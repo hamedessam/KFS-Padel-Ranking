@@ -1,0 +1,40 @@
+rules_version = '2';
+
+// Draft rules — paste into Firebase Console > Firestore Database > Rules.
+// Since login is custom (code+password), NOT Firebase Auth, we can't use
+// request.auth here. These rules are intentionally permissive at the
+// document level but block direct edits to sensitive fields from random
+// clients isn't fully enforceable without Firebase Auth. This is an
+// acceptable trade-off for an MVP with a small trusted player base —
+// tighten later by migrating to real Firebase Auth (e.g. Phone Auth or
+// custom tokens minted from a Cloud Function) once the app has real usage.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /players/{playerId} {
+      allow read: if true;   // needed so login can query by playerCode
+      allow write: if true;  // MVP: admin.js and app.js both write directly
+    }
+
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /tournaments/{id} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /matches/{id} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /ratingHistory/{id} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}
