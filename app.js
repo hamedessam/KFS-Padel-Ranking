@@ -5,6 +5,7 @@ const $ = (id) => document.getElementById(id);
 
 const viewLogin = $("view-login");
 const viewApp = $("view-app");
+const tabbar = $("tabbar");
 
 let currentPlayer = null; // { id, ...data }
 
@@ -22,7 +23,7 @@ function getSession() {
 // ---------------- rendering ----------------
 function renderProfile(player) {
   currentPlayer = player;
-  $("pf-avatar").textContent = (player.name || "؟").trim().charAt(0);
+  $("pf-avatar").textContent = (player.name || "?").trim().charAt(0);
   $("pf-name").textContent = player.name || "—";
   $("pf-code").textContent = player.playerCode || "—";
 
@@ -30,7 +31,7 @@ function renderProfile(player) {
   $("pf-shield").textContent = meta.level || "-";
   $("pf-shield").className = "tier-shield " + meta.cssClass;
   $("pf-tier-name").textContent = meta.displayName;
-  $("pf-points").textContent = `${Math.round(player.ratingPoints ?? 1000)} نقطة`;
+  $("pf-points").textContent = `${Math.round(player.ratingPoints ?? 1000)} pts`;
 
   $("pf-matches").textContent = player.matchesPlayed ?? 0;
   $("pf-wins").textContent = player.wins ?? 0;
@@ -38,6 +39,7 @@ function renderProfile(player) {
 
   viewLogin.classList.add("hidden");
   viewApp.classList.remove("hidden");
+  tabbar.classList.remove("hidden");
   switchTab("home");
   loadHome();
 }
@@ -45,6 +47,7 @@ function renderProfile(player) {
 function showLogin() {
   currentPlayer = null;
   viewApp.classList.add("hidden");
+  tabbar.classList.add("hidden");
   viewLogin.classList.remove("hidden");
 }
 
@@ -88,20 +91,20 @@ async function ensureLeaderboardData(forceRefresh = false) {
 
 // ---------------- home tab ----------------
 async function loadHome() {
-  $("home-greeting").textContent = `أهلاً ${(currentPlayer.name || "").split(" ")[0] || ""} 👋`;
+  $("home-greeting").textContent = `Hey ${(currentPlayer.name || "").split(" ")[0] || ""} 👋`;
 
   const meta = tierMeta(currentPlayer.currentTier);
   $("hm-shield").textContent = meta.level || "-";
   $("hm-shield").className = "tier-shield " + meta.cssClass;
   $("hm-tier-name").textContent = meta.displayName;
-  $("hm-points").textContent = `${Math.round(currentPlayer.ratingPoints ?? 1000)} نقطة`;
+  $("hm-points").textContent = `${Math.round(currentPlayer.ratingPoints ?? 1000)} pts`;
 
   loadAnnouncement();
 
   try {
     const data = await ensureLeaderboardData();
     const mine = data.find((p) => p.id === currentPlayer.id);
-    $("hm-rank-value").textContent = mine ? `#${mine.rank} من ${data.length}` : "—";
+    $("hm-rank-value").textContent = mine ? `#${mine.rank} of ${data.length}` : "—";
   } catch (err) {
     console.error(err);
     $("hm-rank-value").textContent = "—";
@@ -142,9 +145,9 @@ async function loadLeaderboard() {
       const rankClass = p.rank === 1 ? "top1" : p.rank === 2 ? "top2" : p.rank === 3 ? "top3" : "";
       li.innerHTML = `
         <span class="lb-rank ${rankClass}">${p.rank}</span>
-        <span class="lb-avatar">${(p.name || "؟").trim().charAt(0)}</span>
+        <span class="lb-avatar">${(p.name || "?").trim().charAt(0)}</span>
         <span class="lb-mid">
-          <div class="lb-name">${p.name || "—"}${isMe ? " (انت)" : ""}</div>
+          <div class="lb-name">${p.name || "—"}${isMe ? " (you)" : ""}</div>
           <div class="lb-tier">${meta.displayName}</div>
         </span>
         <span class="lb-points">${Math.round(p.ratingPoints ?? 1000)}</span>
@@ -153,13 +156,13 @@ async function loadLeaderboard() {
     });
 
     const mine = data.find((p) => p.id === currentPlayer.id);
-    $("my-rank-value").textContent = mine ? `#${mine.rank} من ${data.length}` : "—";
+    $("my-rank-value").textContent = mine ? `#${mine.rank} of ${data.length}` : "—";
 
     loadingEl.classList.add("hidden");
     listEl.classList.remove("hidden");
   } catch (err) {
     console.error(err);
-    loadingEl.textContent = "حصل خطأ في تحميل الترتيب.";
+    loadingEl.textContent = "Couldn't load the leaderboard.";
   }
 }
 
@@ -198,27 +201,27 @@ $("login-form").addEventListener("submit", async (e) => {
   const pass = $("login-pass").value;
   const btn = $("login-btn");
   btn.disabled = true;
-  btn.textContent = "جاري الدخول...";
+  btn.textContent = "Signing in...";
 
   try {
     const player = await findPlayerByCode(codeRaw);
     if (!player) {
-      showMsg(errEl, "الكود ده مش موجود. اتأكد منه وحاول تاني.");
+      showMsg(errEl, "That code doesn't exist. Double-check it and try again.");
       return;
     }
     const computedHash = await hashPassword(pass, player.passwordSalt || "");
     if (computedHash !== player.passwordHash) {
-      showMsg(errEl, "الباسورد غلط. حاول تاني.");
+      showMsg(errEl, "Wrong password. Try again.");
       return;
     }
     saveSession(player.id);
     renderProfile(player);
   } catch (err) {
     console.error(err);
-    showMsg(errEl, "حصل خطأ في الاتصال. حاول تاني.");
+    showMsg(errEl, "Something went wrong. Try again.");
   } finally {
     btn.disabled = false;
-    btn.textContent = "دخول";
+    btn.textContent = "Sign in";
   }
 });
 
@@ -239,22 +242,22 @@ $("change-pass-form").addEventListener("submit", async (e) => {
   const confirm = $("cp-confirm").value;
 
   if (next !== confirm) {
-    showMsg(errEl, "الباسورد الجديد وتأكيده مش متطابقين.");
+    showMsg(errEl, "New password and confirmation don't match.");
     return;
   }
   if (next.length < 6) {
-    showMsg(errEl, "الباسورد الجديد لازم يكون 6 حروف أو أرقام على الأقل.");
+    showMsg(errEl, "New password must be at least 6 characters.");
     return;
   }
 
   const btn = $("cp-btn");
   btn.disabled = true;
-  btn.textContent = "جاري الحفظ...";
+  btn.textContent = "Saving...";
 
   try {
     const computedCurrentHash = await hashPassword(current, currentPlayer.passwordSalt || "");
     if (computedCurrentHash !== currentPlayer.passwordHash) {
-      showMsg(errEl, "الباسورد الحالي غلط.");
+      showMsg(errEl, "Current password is wrong.");
       return;
     }
     const newSalt = randomSalt();
@@ -265,16 +268,16 @@ $("change-pass-form").addEventListener("submit", async (e) => {
     });
     currentPlayer.passwordSalt = newSalt;
     currentPlayer.passwordHash = newHash;
-    showMsg(okEl, "تم تغيير الباسورد بنجاح.");
+    showMsg(okEl, "Password changed successfully.");
     $("cp-current").value = "";
     $("cp-new").value = "";
     $("cp-confirm").value = "";
   } catch (err) {
     console.error(err);
-    showMsg(errEl, "حصل خطأ، حاول تاني.");
+    showMsg(errEl, "Something went wrong. Try again.");
   } finally {
     btn.disabled = false;
-    btn.textContent = "حفظ الباسورد الجديد";
+    btn.textContent = "Save new password";
   }
 });
 

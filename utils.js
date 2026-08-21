@@ -29,7 +29,7 @@ export function playerCodeFromSeq(seq) {
 export function tierMeta(tierId) {
   // tierId format: "silver_3", "gold_1", "bronze_2" etc.
   const [family, level] = (tierId || "bronze_3").split("_");
-  const names = { bronze: "برونزي", silver: "فضي", gold: "ذهبي" };
+  const names = { bronze: "Bronze", silver: "Silver", gold: "Gold" };
   return {
     family,
     level,

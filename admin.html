@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,116 +9,120 @@
 </head>
 <body>
 
-<div class="shell">
-  <div class="wordmark">
+<div class="app-frame">
+  <div class="topbar">
     <span class="dot"></span>
-    <span>KFS PADEL — ADMIN</span>
+    <span class="brand">KFS PADEL — ADMIN</span>
   </div>
 
-  <!-- ===================== GATE VIEW ===================== -->
-  <div class="card" id="view-gate">
-    <h1>دخول الأدمن</h1>
-    <p class="sub">الصفحة دي خاصة بالأدمن بس.</p>
-    <div class="msg error" id="gate-error"></div>
-    <form id="gate-form">
-      <div class="field">
-        <label for="gate-pass">باسورد الأدمن</label>
-        <input type="password" id="gate-pass" required autocomplete="current-password">
-      </div>
-      <button type="submit" class="btn btn-primary">دخول</button>
-    </form>
-  </div>
+  <div class="content-scroll">
 
-  <!-- ===================== ADD PLAYER VIEW ===================== -->
-  <div class="admin-wrap hidden" id="view-admin">
-
-    <div class="card admin-card">
-      <h1>إضافة لاعب جديد</h1>
-      <p class="sub">هيتولد كود وباسورد تلقائي — انسخهم وابعتهم للاعب على واتساب.</p>
-
-      <div class="msg error" id="add-error"></div>
-      <div class="msg success" id="add-success"></div>
-
-      <form id="add-form">
+    <!-- ===================== GATE VIEW ===================== -->
+    <div class="panel login-fill" id="view-gate">
+      <h1>Admin sign-in</h1>
+      <p class="sub">This page is for the admin only.</p>
+      <div class="msg error" id="gate-error"></div>
+      <form id="gate-form">
         <div class="field">
-          <label for="ap-name">اسم اللاعب</label>
-          <input type="text" id="ap-name" required placeholder="محمد أحمد">
+          <label for="gate-pass">Admin password</label>
+          <input type="password" id="gate-pass" required autocomplete="current-password">
         </div>
-        <div class="field">
-          <label for="ap-phone">رقم الموبايل</label>
-          <input type="tel" id="ap-phone" required placeholder="01xxxxxxxxx">
-        </div>
-        <div class="field">
-          <label for="ap-tier">المستوى المبدئي</label>
-          <select id="ap-tier">
-            <option value="bronze_3">برونزي 3 (مبتدئ)</option>
-            <option value="bronze_2">برونزي 2</option>
-            <option value="bronze_1">برونزي 1</option>
-            <option value="silver_3" selected>فضي 3</option>
-            <option value="silver_2">فضي 2</option>
-            <option value="silver_1">فضي 1</option>
-            <option value="gold_3">ذهبي 3</option>
-            <option value="gold_2">ذهبي 2</option>
-            <option value="gold_1">ذهبي 1</option>
-          </select>
-        </div>
-        <button type="submit" class="btn btn-primary" id="add-btn">إضافة اللاعب وتوليد الكود</button>
+        <button type="submit" class="btn btn-primary">Sign in</button>
       </form>
     </div>
 
-    <div class="card admin-card hidden" id="credentials-card" style="margin-top:16px;">
-      <h1>بيانات الدخول</h1>
-      <p class="sub">ابعت البيانات دي للاعب — مش هتتعرض تاني بعد كدا.</p>
-      <div class="field">
-        <label>الكود</label>
-        <div class="code-tag" id="new-code">—</div>
-      </div>
-      <div class="field">
-        <label>الباسورد</label>
-        <div class="code-tag" id="new-pass">—</div>
-      </div>
-      <button class="btn btn-ghost" id="copy-creds" type="button">نسخ الرسالة الجاهزة للواتساب</button>
-    </div>
+    <!-- ===================== ADMIN VIEW ===================== -->
+    <div class="hidden" id="view-admin">
 
-    <div class="card admin-card" id="announcement-card" style="margin-top:16px;">
-      <h1>الإعلان في صفحة الرئيسية</h1>
-      <p class="sub">هيظهر لكل اللاعبين فوق تاب الرئيسية. سيبه فاضي وشيّله لو مفيش إعلان.</p>
-      <div class="msg success" id="ann-success"></div>
-      <form id="announcement-form">
+      <div class="panel">
+        <h1>Add a new player</h1>
+        <p class="sub">A code and password are generated automatically — copy them and send to the player on WhatsApp.</p>
+
+        <div class="msg error" id="add-error"></div>
+        <div class="msg success" id="add-success"></div>
+
+        <form id="add-form">
+          <div class="field">
+            <label for="ap-name">Player name</label>
+            <input type="text" id="ap-name" required placeholder="Mohamed Ahmed">
+          </div>
+          <div class="field">
+            <label for="ap-phone">Phone number</label>
+            <input type="tel" id="ap-phone" required placeholder="01xxxxxxxxx">
+          </div>
+          <div class="field">
+            <label for="ap-tier">Starting tier</label>
+            <select id="ap-tier">
+              <option value="bronze_3">Bronze 3 (beginner)</option>
+              <option value="bronze_2">Bronze 2</option>
+              <option value="bronze_1">Bronze 1</option>
+              <option value="silver_3" selected>Silver 3</option>
+              <option value="silver_2">Silver 2</option>
+              <option value="silver_1">Silver 1</option>
+              <option value="gold_3">Gold 3</option>
+              <option value="gold_2">Gold 2</option>
+              <option value="gold_1">Gold 1</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary" id="add-btn">Add player &amp; generate code</button>
+        </form>
+      </div>
+
+      <div class="panel hidden" id="credentials-card" style="margin-top:16px;">
+        <h1>Login details</h1>
+        <p class="sub">Send this to the player — it won't be shown again after this.</p>
         <div class="field">
-          <label for="ann-text">نص الإعلان</label>
-          <input type="text" id="ann-text" placeholder="مثال: تسجيل بطولة الأربعاء فتح لحد الثلاثاء">
+          <label>Code</label>
+          <div class="code-tag" id="new-code">—</div>
         </div>
-        <div class="field" style="display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="ann-active" style="width:auto;">
-          <label for="ann-active" style="margin:0;">الإعلان ده ظاهر دلوقتي</label>
+        <div class="field">
+          <label>Password</label>
+          <div class="code-tag" id="new-pass">—</div>
         </div>
-        <button type="submit" class="btn btn-primary" id="ann-btn">حفظ الإعلان</button>
-      </form>
-    </div>
-
-    <div class="card admin-card" style="margin-top:16px;">
-      <h1>كل اللاعبين</h1>
-      <div id="players-loading" style="font-size:13px; color:var(--ink-soft);">
-        <span class="spinner"></span> جاري التحميل...
+        <button class="btn btn-ghost" id="copy-creds" type="button">Copy WhatsApp-ready message</button>
       </div>
-      <table class="players hidden" id="players-table">
-        <thead>
-          <tr>
-            <th>الاسم</th>
-            <th>الكود</th>
-            <th>المستوى</th>
-            <th>النقط</th>
-            <th>ماتشات</th>
-          </tr>
-        </thead>
-        <tbody id="players-tbody"></tbody>
-      </table>
+
+      <div class="panel" id="announcement-card" style="margin-top:16px;">
+        <h1>Home screen announcement</h1>
+        <p class="sub">Shown to every player above the Home tab. Leave it off if there's nothing to announce.</p>
+        <div class="msg success" id="ann-success"></div>
+        <form id="announcement-form">
+          <div class="field">
+            <label for="ann-text">Announcement text</label>
+            <input type="text" id="ann-text" placeholder="e.g. Wednesday tournament registration closes Tuesday">
+          </div>
+          <div class="field" style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="ann-active" style="width:auto;">
+            <label for="ann-active" style="margin:0;">This announcement is live</label>
+          </div>
+          <button type="submit" class="btn btn-primary" id="ann-btn">Save announcement</button>
+        </form>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <h1>All players</h1>
+        <div id="players-loading" style="font-size:13px; color:var(--ink-soft);">
+          <span class="spinner"></span> Loading...
+        </div>
+        <table class="players hidden" id="players-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Code</th>
+              <th>Tier</th>
+              <th>Points</th>
+              <th>Matches</th>
+            </tr>
+          </thead>
+          <tbody id="players-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="foot-link" style="margin-top:16px; margin-bottom: 16px;">
+        <button class="link-btn" id="admin-logout" type="button" style="color:var(--white); opacity:.8;">Log out</button>
+      </div>
     </div>
 
-    <div class="foot-link" style="margin-top:16px;">
-      <button class="link-btn" id="admin-logout" type="button" style="color:var(--white); opacity:.8;">خروج</button>
-    </div>
   </div>
 </div>
 

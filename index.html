@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -10,168 +10,172 @@
 </head>
 <body>
 
-<div class="shell">
-  <div class="wordmark">
+<div class="app-frame">
+  <div class="topbar">
     <span class="dot"></span>
-    <span>KFS PADEL RANKING</span>
+    <span class="brand">KFS PADEL RANKING</span>
   </div>
 
-  <!-- ===================== LOGIN VIEW ===================== -->
-  <div class="card" id="view-login">
-    <h1>ادخل بروفايلك</h1>
-    <p class="sub">استخدم الكود والباسورد اللي اداهولك الأدمن.</p>
+  <div class="content-scroll">
 
-    <div class="msg error" id="login-error"></div>
+    <!-- ===================== LOGIN VIEW ===================== -->
+    <div class="panel login-fill" id="view-login">
+      <h1>Sign in to your profile</h1>
+      <p class="sub">Use the code and password your admin gave you.</p>
 
-    <form id="login-form">
-      <div class="field">
-        <label for="login-code">الكود</label>
-        <input type="text" id="login-code" class="mono" placeholder="KFS-461" autocomplete="username" required>
-      </div>
-      <div class="field">
-        <label for="login-pass">الباسورد</label>
-        <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" required>
-      </div>
-      <button type="submit" class="btn btn-primary" id="login-btn">دخول</button>
-    </form>
+      <div class="msg error" id="login-error"></div>
 
-    <div class="foot-link">
-      <span style="opacity:.7; font-size:13px;">مفيش عندك كود؟ كلم الأدمن في نادي KFS</span>
-    </div>
-  </div>
-
-  <!-- ===================== APP VIEW (tabs) ===================== -->
-  <div class="app-shell hidden" id="view-app">
-
-    <!-- ---- tab: home ---- -->
-    <div class="card tab-panel" id="tab-home">
-      <div class="announcement-bar hidden" id="announcement-bar">
-        <span class="ann-ico">📣</span>
-        <span id="announcement-text"></span>
-      </div>
-
-      <h1 id="home-greeting">أهلاً 👋</h1>
-      <p class="sub">دي لمحة سريعة عن حالتك في KFS Padel.</p>
-
-      <div class="tier-badge">
-        <div class="tier-shield" id="hm-shield">—</div>
-        <div class="tier-info">
-          <div class="tier-name" id="hm-tier-name">—</div>
-          <div class="tier-points" id="hm-points">— نقطة</div>
-        </div>
-      </div>
-
-      <div class="my-rank-strip" id="hm-rank-strip">
-        <span>ترتيبك في الليدربورد</span>
-        <strong id="hm-rank-value">—</strong>
-      </div>
-    </div>
-
-    <!-- ---- tab: profile ---- -->
-    <div class="card tab-panel hidden" id="tab-profile">
-      <div class="profile-head">
-        <div class="avatar" id="pf-avatar">؟</div>
-        <div>
-          <div class="profile-name" id="pf-name">—</div>
-          <div class="profile-code" id="pf-code">—</div>
-        </div>
-      </div>
-
-      <div class="tier-badge">
-        <div class="tier-shield" id="pf-shield">—</div>
-        <div class="tier-info">
-          <div class="tier-name" id="pf-tier-name">—</div>
-          <div class="tier-points" id="pf-points">— نقطة</div>
-        </div>
-      </div>
-
-      <div class="stat-row">
-        <div class="stat-box">
-          <div class="num" id="pf-matches">0</div>
-          <div class="lbl">ماتش</div>
-        </div>
-        <div class="stat-box">
-          <div class="num" id="pf-wins">0</div>
-          <div class="lbl">فوز</div>
-        </div>
-        <div class="stat-box">
-          <div class="num" id="pf-losses">0</div>
-          <div class="lbl">خسارة</div>
-        </div>
-      </div>
-
-      <div class="divider"></div>
-
-      <button class="link-btn" id="toggle-change-pass" type="button" style="color:var(--court);">تغيير الباسورد</button>
-
-      <form id="change-pass-form" class="hidden" style="margin-top:14px;">
-        <div class="msg error" id="pass-error"></div>
-        <div class="msg success" id="pass-success"></div>
+      <form id="login-form">
         <div class="field">
-          <label for="cp-current">الباسورد الحالي</label>
-          <input type="password" id="cp-current" required autocomplete="current-password">
+          <label for="login-code">Player code</label>
+          <input type="text" id="login-code" class="mono" placeholder="KFS-461" autocomplete="username" required>
         </div>
         <div class="field">
-          <label for="cp-new">الباسورد الجديد</label>
-          <input type="password" id="cp-new" required minlength="6" autocomplete="new-password">
+          <label for="login-pass">Password</label>
+          <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" required>
         </div>
-        <div class="field">
-          <label for="cp-confirm">تأكيد الباسورد الجديد</label>
-          <input type="password" id="cp-confirm" required minlength="6" autocomplete="new-password">
-        </div>
-        <button type="submit" class="btn btn-primary" id="cp-btn">حفظ الباسورد الجديد</button>
+        <button type="submit" class="btn btn-primary" id="login-btn">Sign in</button>
       </form>
 
-      <div class="foot-link" style="margin-top:22px;">
-        <button class="link-btn" id="logout-btn" type="button" style="color:var(--danger);">تسجيل الخروج</button>
+      <div class="foot-link">
+        <span style="opacity:.7; font-size:13px;">No code yet? Ask the admin at KFS club.</span>
       </div>
     </div>
 
-    <!-- ---- tab: leaderboard ---- -->
-    <div class="card tab-panel hidden" id="tab-leaderboard">
-      <h1>الترتيب العام</h1>
-      <p class="sub">ترتيب كل لاعيبة KFS حسب النقط.</p>
+    <!-- ===================== APP TABS ===================== -->
+    <div class="hidden" id="view-app">
 
-      <div class="my-rank-strip" id="my-rank-strip">
-        <span>ترتيبك</span>
-        <strong id="my-rank-value">—</strong>
+      <!-- ---- tab: home ---- -->
+      <div class="panel" id="tab-home">
+        <div class="announcement-bar hidden" id="announcement-bar">
+          <span class="ann-ico">📣</span>
+          <span id="announcement-text"></span>
+        </div>
+
+        <h1 id="home-greeting">Hey 👋</h1>
+        <p class="sub">A quick look at where you stand in KFS Padel.</p>
+
+        <div class="tier-badge">
+          <div class="tier-shield" id="hm-shield">—</div>
+          <div class="tier-info">
+            <div class="tier-name" id="hm-tier-name">—</div>
+            <div class="tier-points" id="hm-points">— pts</div>
+          </div>
+        </div>
+
+        <div class="my-rank-strip" id="hm-rank-strip">
+          <span>Your leaderboard rank</span>
+          <strong id="hm-rank-value">—</strong>
+        </div>
       </div>
 
-      <div id="lb-loading" style="font-size:13px; color:var(--ink-soft); margin-top:14px;">
-        <span class="spinner"></span> جاري التحميل...
+      <!-- ---- tab: profile ---- -->
+      <div class="panel hidden" id="tab-profile">
+        <div class="profile-head">
+          <div class="avatar" id="pf-avatar">?</div>
+          <div>
+            <div class="profile-name" id="pf-name">—</div>
+            <div class="profile-code" id="pf-code">—</div>
+          </div>
+        </div>
+
+        <div class="tier-badge">
+          <div class="tier-shield" id="pf-shield">—</div>
+          <div class="tier-info">
+            <div class="tier-name" id="pf-tier-name">—</div>
+            <div class="tier-points" id="pf-points">— pts</div>
+          </div>
+        </div>
+
+        <div class="stat-row">
+          <div class="stat-box">
+            <div class="num" id="pf-matches">0</div>
+            <div class="lbl">Matches</div>
+          </div>
+          <div class="stat-box">
+            <div class="num" id="pf-wins">0</div>
+            <div class="lbl">Wins</div>
+          </div>
+          <div class="stat-box">
+            <div class="num" id="pf-losses">0</div>
+            <div class="lbl">Losses</div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <button class="link-btn" id="toggle-change-pass" type="button">Change password</button>
+
+        <form id="change-pass-form" class="hidden" style="margin-top:14px;">
+          <div class="msg error" id="pass-error"></div>
+          <div class="msg success" id="pass-success"></div>
+          <div class="field">
+            <label for="cp-current">Current password</label>
+            <input type="password" id="cp-current" required autocomplete="current-password">
+          </div>
+          <div class="field">
+            <label for="cp-new">New password</label>
+            <input type="password" id="cp-new" required minlength="6" autocomplete="new-password">
+          </div>
+          <div class="field">
+            <label for="cp-confirm">Confirm new password</label>
+            <input type="password" id="cp-confirm" required minlength="6" autocomplete="new-password">
+          </div>
+          <button type="submit" class="btn btn-primary" id="cp-btn">Save new password</button>
+        </form>
+
+        <div class="foot-link" style="margin-top:22px;">
+          <button class="link-btn" id="logout-btn" type="button" style="color:var(--danger);">Log out</button>
+        </div>
       </div>
-      <ol class="lb-list hidden" id="lb-list"></ol>
+
+      <!-- ---- tab: leaderboard ---- -->
+      <div class="panel hidden" id="tab-leaderboard">
+        <h1>Leaderboard</h1>
+        <p class="sub">Every KFS player, ranked by rating points.</p>
+
+        <div class="my-rank-strip" id="my-rank-strip">
+          <span>Your rank</span>
+          <strong id="my-rank-value">—</strong>
+        </div>
+
+        <div id="lb-loading" style="font-size:13px; color:var(--ink-soft); margin-top:14px;">
+          <span class="spinner"></span> Loading...
+        </div>
+        <ol class="lb-list hidden" id="lb-list"></ol>
+      </div>
+
+      <!-- ---- tab: marketplace ---- -->
+      <div class="panel hidden" id="tab-marketplace">
+        <div class="coming-soon">
+          <div class="coming-soon-badge">Coming soon</div>
+          <h1>Marketplace</h1>
+          <p class="sub">Soon you'll be able to buy custom codes, padel gear, and book courts directly from here. Stay tuned.</p>
+        </div>
+      </div>
+
     </div>
-
-    <!-- ---- tab: marketplace ---- -->
-    <div class="card tab-panel hidden" id="tab-marketplace">
-      <div class="coming-soon">
-        <div class="coming-soon-badge">قريبًا</div>
-        <h1>Marketplace</h1>
-        <p class="sub">هتقدر قريبًا تشتري أكواد مميزة، معدات بادل، وحجوزات مباشرة من هنا. تابعنا.</p>
-      </div>
-    </div>
-
-    <!-- ---- bottom tab bar ---- -->
-    <nav class="tabbar">
-      <button class="tab-btn active" data-tab="home" type="button">
-        <span class="tab-ico">⌂</span>
-        <span>الرئيسية</span>
-      </button>
-      <button class="tab-btn" data-tab="profile" type="button">
-        <span class="tab-ico">●</span>
-        <span>البروفايل</span>
-      </button>
-      <button class="tab-btn" data-tab="leaderboard" type="button">
-        <span class="tab-ico">▲</span>
-        <span>الترتيب</span>
-      </button>
-      <button class="tab-btn" data-tab="marketplace" type="button">
-        <span class="tab-ico">◆</span>
-        <span>Marketplace</span>
-      </button>
-    </nav>
   </div>
+
+  <!-- ---- bottom tab bar ---- -->
+  <nav class="tabbar hidden" id="tabbar">
+    <button class="tab-btn active" data-tab="home" type="button">
+      <span class="tab-ico">⌂</span>
+      <span>Home</span>
+    </button>
+    <button class="tab-btn" data-tab="profile" type="button">
+      <span class="tab-ico">●</span>
+      <span>Profile</span>
+    </button>
+    <button class="tab-btn" data-tab="leaderboard" type="button">
+      <span class="tab-ico">▲</span>
+      <span>Leaderboard</span>
+    </button>
+    <button class="tab-btn" data-tab="marketplace" type="button">
+      <span class="tab-ico">◆</span>
+      <span>Marketplace</span>
+    </button>
+  </nav>
 </div>
 
 <script type="module" src="app.js"></script>

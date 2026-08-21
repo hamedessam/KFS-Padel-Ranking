@@ -32,8 +32,8 @@ async function initGate() {
   const snap = await getDoc(ADMIN_CONFIG_REF);
   if (!snap.exists()) {
     isSetupMode = true;
-    gateTitle.textContent = "أول مرة؟ اعمل باسورد الأدمن";
-    gateSub.textContent = "الباسورد ده هتستخدمه كل مرة تدخل بيها الصفحة دي، احفظه كويس.";
+    gateTitle.textContent = "First time? Set the admin password";
+    gateSub.textContent = "You'll use this password every time you open this page — keep it safe.";
   }
 
   if (localStorage.getItem(ADMIN_SESSION_KEY) === "ok" && !isSetupMode) {
@@ -50,7 +50,7 @@ gateForm.addEventListener("submit", async (e) => {
   try {
     if (isSetupMode) {
       if (pass.length < 6) {
-        showMsg(errEl, "الباسورد لازم يكون 6 حروف على الأقل.");
+        showMsg(errEl, "Password must be at least 6 characters.");
         return;
       }
       const salt = randomSalt();
@@ -65,14 +65,14 @@ gateForm.addEventListener("submit", async (e) => {
     const data = snap.data();
     const computed = await hashPassword(pass, data.passwordSalt);
     if (computed !== data.passwordHash) {
-      showMsg(errEl, "الباسورد غلط.");
+      showMsg(errEl, "Wrong password.");
       return;
     }
     localStorage.setItem(ADMIN_SESSION_KEY, "ok");
     enterAdmin();
   } catch (err) {
     console.error(err);
-    showMsg(errEl, "حصل خطأ، حاول تاني.");
+    showMsg(errEl, "Something went wrong. Try again.");
   }
 });
 
@@ -104,7 +104,7 @@ $("add-form").addEventListener("submit", async (e) => {
   if (!name || !phone) return;
 
   btn.disabled = true;
-  btn.textContent = "جاري الإضافة...";
+  btn.textContent = "Adding...";
 
   try {
     // atomic counter for sequential player codes: KFS-001, KFS-002, ...
@@ -142,21 +142,21 @@ $("add-form").addEventListener("submit", async (e) => {
     $("new-pass").textContent = password;
     $("credentials-card").classList.remove("hidden");
     $("copy-creds").onclick = () => {
-      const msg = `أهلاً ${name}! ده الكود والباسورد بتاعك في تطبيق KFS Padel Ranking:\nالكود: ${playerCode}\nالباسورد: ${password}`;
+      const msg = `Hey ${name}! Here are your login details for KFS Padel Ranking:\nCode: ${playerCode}\nPassword: ${password}`;
       navigator.clipboard.writeText(msg);
-      $("copy-creds").textContent = "اتنسخت ✓";
-      setTimeout(() => { $("copy-creds").textContent = "نسخ الرسالة الجاهزة للواتساب"; }, 1800);
+      $("copy-creds").textContent = "Copied ✓";
+      setTimeout(() => { $("copy-creds").textContent = "Copy WhatsApp-ready message"; }, 1800);
     };
 
-    showMsg(okEl, `تم إضافة ${name} بنجاح.`);
+    showMsg(okEl, `${name} added successfully.`);
     $("add-form").reset();
     loadPlayers();
   } catch (err) {
     console.error(err);
-    showMsg(errEl, "حصل خطأ أثناء الإضافة، حاول تاني.");
+    showMsg(errEl, "Something went wrong while adding the player. Try again.");
   } finally {
     btn.disabled = false;
-    btn.textContent = "إضافة اللاعب وتوليد الكود";
+    btn.textContent = "Add player & generate code";
   }
 });
 
@@ -189,7 +189,7 @@ async function loadPlayers() {
     tableEl.classList.remove("hidden");
   } catch (err) {
     console.error(err);
-    loadingEl.textContent = "حصل خطأ في تحميل اللاعبين.";
+    loadingEl.textContent = "Couldn't load the players.";
   }
 }
 
@@ -221,19 +221,19 @@ $("announcement-form").addEventListener("submit", async (e) => {
   hideMsg(okEl);
   const btn = $("ann-btn");
   btn.disabled = true;
-  btn.textContent = "جاري الحفظ...";
+  btn.textContent = "Saving...";
   try {
     await setDoc(ANNOUNCEMENT_REF, {
       text: $("ann-text").value.trim(),
       active: $("ann-active").checked,
       updatedAt: serverTimestamp()
     });
-    showMsg(okEl, "تم حفظ الإعلان.");
+    showMsg(okEl, "Announcement saved.");
   } catch (err) {
     console.error(err);
   } finally {
     btn.disabled = false;
-    btn.textContent = "حفظ الإعلان";
+    btn.textContent = "Save announcement";
   }
 });
 
