@@ -339,6 +339,153 @@ table.players tr:last-child td { border-bottom: none; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ---------- app shell with bottom tabs ---------- */
+.app-shell {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding-bottom: 78px; /* room for fixed tabbar */
+}
+.tab-panel { margin: 0; }
+
+.tabbar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  background: var(--ink);
+  border-top: 1px solid rgba(251,250,246,0.08);
+  padding: 10px max(12px, env(safe-area-inset-left)) calc(10px + env(safe-area-inset-bottom));
+  z-index: 20;
+}
+.tab-btn {
+  flex: 1;
+  max-width: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  color: rgba(251,250,246,0.5);
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 6px 4px;
+  border-radius: 10px;
+  transition: color .15s ease;
+}
+.tab-btn .tab-ico {
+  font-size: 13px;
+  color: inherit;
+}
+.tab-btn.active {
+  color: var(--ball);
+}
+.tab-btn:hover { color: var(--white); }
+
+/* ---------- leaderboard ---------- */
+.my-rank-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--ink);
+  color: var(--white);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  font-size: 13.5px;
+  margin-bottom: 4px;
+}
+.my-rank-strip strong {
+  font-family: var(--font-mono);
+  color: var(--ball);
+  font-size: 16px;
+}
+
+.lb-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lb-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  border: 1.5px solid rgba(20,32,35,0.08);
+}
+.lb-row.me {
+  border-color: var(--court);
+  background: rgba(15,61,62,0.06);
+}
+.lb-rank {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  width: 26px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.lb-rank.top1 { color: var(--gold); }
+.lb-rank.top2 { color: var(--silver); }
+.lb-rank.top3 { color: var(--bronze); }
+.lb-avatar {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--ball);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.lb-mid { flex: 1; min-width: 0; }
+.lb-name {
+  font-weight: 700;
+  font-size: 13.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lb-tier {
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-top: 1px;
+}
+.lb-points {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* ---------- coming soon (marketplace) ---------- */
+.coming-soon { text-align: center; padding: 30px 6px 10px; }
+.coming-soon-badge {
+  display: inline-block;
+  background: var(--ball);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 2px;
+  padding: 5px 14px;
+  border-radius: 20px;
+  margin-bottom: 14px;
+}
+.coming-soon h1 { margin-top: 0; }
+
 @media (max-width: 480px) {
   .card { padding: 24px 18px 20px; }
 }

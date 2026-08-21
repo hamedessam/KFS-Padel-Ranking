@@ -1,10 +1,10 @@
-import { db, collection, doc, getDoc, getDocs, updateDoc, query, where, limit } from "./firebase-config.js";
+import { db, collection, doc, getDoc, getDocs, updateDoc, query, where, limit, orderBy } from "./firebase-config.js";
 import { hashPassword, randomSalt, tierMeta } from "./utils.js";
 
 const $ = (id) => document.getElementById(id);
 
 const viewLogin = $("view-login");
-const viewProfile = $("view-profile");
+const viewApp = $("view-app");
 
 let currentPlayer = null; // { id, ...data }
 
@@ -37,13 +37,87 @@ function renderProfile(player) {
   $("pf-losses").textContent = player.losses ?? 0;
 
   viewLogin.classList.add("hidden");
-  viewProfile.classList.remove("hidden");
+  viewApp.classList.remove("hidden");
 }
 
 function showLogin() {
   currentPlayer = null;
-  viewProfile.classList.add("hidden");
+  viewApp.classList.add("hidden");
   viewLogin.classList.remove("hidden");
+}
+
+// ---------------- tabs ----------------
+const tabButtons = document.querySelectorAll(".tab-btn");
+const tabPanels = {
+  profile: $("tab-profile"),
+  leaderboard: $("tab-leaderboard"),
+  marketplace: $("tab-marketplace")
+};
+let leaderboardLoaded = false;
+
+tabButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const target = btn.dataset.tab;
+    tabButtons.forEach((b) => b.classList.toggle("active", b === btn));
+    Object.entries(tabPanels).forEach(([key, panel]) => {
+      panel.classList.toggle("hidden", key !== target);
+    });
+    if (target === "leaderboard" && !leaderboardLoaded) {
+      loadLeaderboard();
+    }
+  });
+});
+
+// ---------------- leaderboard ----------------
+async function loadLeaderboard() {
+  const loadingEl = $("lb-loading");
+  const listEl = $("lb-list");
+  loadingEl.classList.remove("hidden");
+  listEl.classList.add("hidden");
+
+  try {
+    const q = query(
+      collection(db, "players"),
+      where("isActive", "==", true),
+      orderBy("ratingPoints", "desc")
+    );
+    const snap = await getDocs(q);
+
+    listEl.innerHTML = "";
+    let rank = 0;
+    let myRank = null;
+
+    snap.forEach((d) => {
+      rank++;
+      const p = d.data();
+      const isMe = d.id === currentPlayer.id;
+      if (isMe) myRank = rank;
+
+      const meta = tierMeta(p.currentTier);
+      const li = document.createElement("li");
+      li.className = "lb-row" + (isMe ? " me" : "");
+      const rankClass = rank === 1 ? "top1" : rank === 2 ? "top2" : rank === 3 ? "top3" : "";
+      li.innerHTML = `
+        <span class="lb-rank ${rankClass}">${rank}</span>
+        <span class="lb-avatar">${(p.name || "؟").trim().charAt(0)}</span>
+        <span class="lb-mid">
+          <div class="lb-name">${p.name || "—"}${isMe ? " (انت)" : ""}</div>
+          <div class="lb-tier">${meta.displayName}</div>
+        </span>
+        <span class="lb-points">${Math.round(p.ratingPoints ?? 1000)}</span>
+      `;
+      listEl.appendChild(li);
+    });
+
+    $("my-rank-value").textContent = myRank ? `#${myRank} من ${rank}` : "—";
+
+    leaderboardLoaded = true;
+    loadingEl.classList.add("hidden");
+    listEl.classList.remove("hidden");
+  } catch (err) {
+    console.error(err);
+    loadingEl.textContent = "حصل خطأ في تحميل الترتيب.";
+  }
 }
 
 function showMsg(el, text) {
@@ -164,6 +238,7 @@ $("change-pass-form").addEventListener("submit", async (e) => {
 // ---------------- logout ----------------
 $("logout-btn").addEventListener("click", () => {
   clearSession();
+  leaderboardLoaded = false;
   showLogin();
 });
 

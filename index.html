@@ -40,64 +40,109 @@
     </div>
   </div>
 
-  <!-- ===================== PROFILE VIEW ===================== -->
-  <div class="card hidden" id="view-profile">
-    <div class="profile-head">
-      <div class="avatar" id="pf-avatar">؟</div>
-      <div>
-        <div class="profile-name" id="pf-name">—</div>
-        <div class="profile-code" id="pf-code">—</div>
+  <!-- ===================== APP VIEW (tabs) ===================== -->
+  <div class="app-shell hidden" id="view-app">
+
+    <!-- ---- tab: profile ---- -->
+    <div class="card tab-panel" id="tab-profile">
+      <div class="profile-head">
+        <div class="avatar" id="pf-avatar">؟</div>
+        <div>
+          <div class="profile-name" id="pf-name">—</div>
+          <div class="profile-code" id="pf-code">—</div>
+        </div>
+      </div>
+
+      <div class="tier-badge">
+        <div class="tier-shield" id="pf-shield">—</div>
+        <div class="tier-info">
+          <div class="tier-name" id="pf-tier-name">—</div>
+          <div class="tier-points" id="pf-points">— نقطة</div>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat-box">
+          <div class="num" id="pf-matches">0</div>
+          <div class="lbl">ماتش</div>
+        </div>
+        <div class="stat-box">
+          <div class="num" id="pf-wins">0</div>
+          <div class="lbl">فوز</div>
+        </div>
+        <div class="stat-box">
+          <div class="num" id="pf-losses">0</div>
+          <div class="lbl">خسارة</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <button class="link-btn" id="toggle-change-pass" type="button" style="color:var(--court);">تغيير الباسورد</button>
+
+      <form id="change-pass-form" class="hidden" style="margin-top:14px;">
+        <div class="msg error" id="pass-error"></div>
+        <div class="msg success" id="pass-success"></div>
+        <div class="field">
+          <label for="cp-current">الباسورد الحالي</label>
+          <input type="password" id="cp-current" required autocomplete="current-password">
+        </div>
+        <div class="field">
+          <label for="cp-new">الباسورد الجديد</label>
+          <input type="password" id="cp-new" required minlength="6" autocomplete="new-password">
+        </div>
+        <div class="field">
+          <label for="cp-confirm">تأكيد الباسورد الجديد</label>
+          <input type="password" id="cp-confirm" required minlength="6" autocomplete="new-password">
+        </div>
+        <button type="submit" class="btn btn-primary" id="cp-btn">حفظ الباسورد الجديد</button>
+      </form>
+
+      <div class="foot-link" style="margin-top:22px;">
+        <button class="link-btn" id="logout-btn" type="button" style="color:var(--danger);">تسجيل الخروج</button>
       </div>
     </div>
 
-    <div class="tier-badge">
-      <div class="tier-shield" id="pf-shield">—</div>
-      <div class="tier-info">
-        <div class="tier-name" id="pf-tier-name">—</div>
-        <div class="tier-points" id="pf-points">— نقطة</div>
+    <!-- ---- tab: leaderboard ---- -->
+    <div class="card tab-panel hidden" id="tab-leaderboard">
+      <h1>الترتيب العام</h1>
+      <p class="sub">ترتيب كل لاعيبة KFS حسب النقط.</p>
+
+      <div class="my-rank-strip" id="my-rank-strip">
+        <span>ترتيبك</span>
+        <strong id="my-rank-value">—</strong>
+      </div>
+
+      <div id="lb-loading" style="font-size:13px; color:var(--ink-soft); margin-top:14px;">
+        <span class="spinner"></span> جاري التحميل...
+      </div>
+      <ol class="lb-list hidden" id="lb-list"></ol>
+    </div>
+
+    <!-- ---- tab: marketplace ---- -->
+    <div class="card tab-panel hidden" id="tab-marketplace">
+      <div class="coming-soon">
+        <div class="coming-soon-badge">قريبًا</div>
+        <h1>Marketplace</h1>
+        <p class="sub">هتقدر قريبًا تشتري أكواد مميزة، معدات بادل، وحجوزات مباشرة من هنا. تابعنا.</p>
       </div>
     </div>
 
-    <div class="stat-row">
-      <div class="stat-box">
-        <div class="num" id="pf-matches">0</div>
-        <div class="lbl">ماتش</div>
-      </div>
-      <div class="stat-box">
-        <div class="num" id="pf-wins">0</div>
-        <div class="lbl">فوز</div>
-      </div>
-      <div class="stat-box">
-        <div class="num" id="pf-losses">0</div>
-        <div class="lbl">خسارة</div>
-      </div>
-    </div>
-
-    <div class="divider"></div>
-
-    <button class="link-btn" id="toggle-change-pass" type="button" style="color:var(--court);">تغيير الباسورد</button>
-
-    <form id="change-pass-form" class="hidden" style="margin-top:14px;">
-      <div class="msg error" id="pass-error"></div>
-      <div class="msg success" id="pass-success"></div>
-      <div class="field">
-        <label for="cp-current">الباسورد الحالي</label>
-        <input type="password" id="cp-current" required autocomplete="current-password">
-      </div>
-      <div class="field">
-        <label for="cp-new">الباسورد الجديد</label>
-        <input type="password" id="cp-new" required minlength="6" autocomplete="new-password">
-      </div>
-      <div class="field">
-        <label for="cp-confirm">تأكيد الباسورد الجديد</label>
-        <input type="password" id="cp-confirm" required minlength="6" autocomplete="new-password">
-      </div>
-      <button type="submit" class="btn btn-primary" id="cp-btn">حفظ الباسورد الجديد</button>
-    </form>
-
-    <div class="foot-link" style="margin-top:22px;">
-      <button class="link-btn" id="logout-btn" type="button" style="color:var(--danger);">تسجيل الخروج</button>
-    </div>
+    <!-- ---- bottom tab bar ---- -->
+    <nav class="tabbar">
+      <button class="tab-btn active" data-tab="profile" type="button">
+        <span class="tab-ico">●</span>
+        <span>البروفايل</span>
+      </button>
+      <button class="tab-btn" data-tab="leaderboard" type="button">
+        <span class="tab-ico">▲</span>
+        <span>الترتيب</span>
+      </button>
+      <button class="tab-btn" data-tab="marketplace" type="button">
+        <span class="tab-ico">◆</span>
+        <span>Marketplace</span>
+      </button>
+    </nav>
   </div>
 </div>
 
