@@ -43,8 +43,32 @@
   <!-- ===================== APP VIEW (tabs) ===================== -->
   <div class="app-shell hidden" id="view-app">
 
+    <!-- ---- tab: home ---- -->
+    <div class="card tab-panel" id="tab-home">
+      <div class="announcement-bar hidden" id="announcement-bar">
+        <span class="ann-ico">📣</span>
+        <span id="announcement-text"></span>
+      </div>
+
+      <h1 id="home-greeting">أهلاً 👋</h1>
+      <p class="sub">دي لمحة سريعة عن حالتك في KFS Padel.</p>
+
+      <div class="tier-badge">
+        <div class="tier-shield" id="hm-shield">—</div>
+        <div class="tier-info">
+          <div class="tier-name" id="hm-tier-name">—</div>
+          <div class="tier-points" id="hm-points">— نقطة</div>
+        </div>
+      </div>
+
+      <div class="my-rank-strip" id="hm-rank-strip">
+        <span>ترتيبك في الليدربورد</span>
+        <strong id="hm-rank-value">—</strong>
+      </div>
+    </div>
+
     <!-- ---- tab: profile ---- -->
-    <div class="card tab-panel" id="tab-profile">
+    <div class="card tab-panel hidden" id="tab-profile">
       <div class="profile-head">
         <div class="avatar" id="pf-avatar">؟</div>
         <div>
@@ -130,7 +154,11 @@
 
     <!-- ---- bottom tab bar ---- -->
     <nav class="tabbar">
-      <button class="tab-btn active" data-tab="profile" type="button">
+      <button class="tab-btn active" data-tab="home" type="button">
+        <span class="tab-ico">⌂</span>
+        <span>الرئيسية</span>
+      </button>
+      <button class="tab-btn" data-tab="profile" type="button">
         <span class="tab-ico">●</span>
         <span>البروفايل</span>
       </button>

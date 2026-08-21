@@ -80,6 +80,7 @@ function enterAdmin() {
   viewGate.classList.add("hidden");
   viewAdmin.classList.remove("hidden");
   loadPlayers();
+  loadAnnouncementForm();
 }
 
 $("admin-logout").addEventListener("click", () => {
@@ -197,5 +198,43 @@ function escapeHtml(str) {
   div.textContent = str;
   return div.innerHTML;
 }
+
+// ---------------- announcement ----------------
+const ANNOUNCEMENT_REF = doc(db, "config", "announcement");
+
+async function loadAnnouncementForm() {
+  try {
+    const snap = await getDoc(ANNOUNCEMENT_REF);
+    if (snap.exists()) {
+      const d = snap.data();
+      $("ann-text").value = d.text || "";
+      $("ann-active").checked = !!d.active;
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+$("announcement-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const okEl = $("ann-success");
+  hideMsg(okEl);
+  const btn = $("ann-btn");
+  btn.disabled = true;
+  btn.textContent = "جاري الحفظ...";
+  try {
+    await setDoc(ANNOUNCEMENT_REF, {
+      text: $("ann-text").value.trim(),
+      active: $("ann-active").checked,
+      updatedAt: serverTimestamp()
+    });
+    showMsg(okEl, "تم حفظ الإعلان.");
+  } catch (err) {
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "حفظ الإعلان";
+  }
+});
 
 initGate();

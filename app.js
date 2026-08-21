@@ -38,6 +38,8 @@ function renderProfile(player) {
 
   viewLogin.classList.add("hidden");
   viewApp.classList.remove("hidden");
+  switchTab("home");
+  loadHome();
 }
 
 function showLogin() {
@@ -49,26 +51,79 @@ function showLogin() {
 // ---------------- tabs ----------------
 const tabButtons = document.querySelectorAll(".tab-btn");
 const tabPanels = {
+  home: $("tab-home"),
   profile: $("tab-profile"),
   leaderboard: $("tab-leaderboard"),
   marketplace: $("tab-marketplace")
 };
-let leaderboardLoaded = false;
+let leaderboardCache = null; // array of {id, rank, ...data}, shared between Home + Leaderboard tabs
+
+function switchTab(target) {
+  tabButtons.forEach((b) => b.classList.toggle("active", b.dataset.tab === target));
+  Object.entries(tabPanels).forEach(([key, panel]) => {
+    panel.classList.toggle("hidden", key !== target);
+  });
+}
 
 tabButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
     const target = btn.dataset.tab;
-    tabButtons.forEach((b) => b.classList.toggle("active", b === btn));
-    Object.entries(tabPanels).forEach(([key, panel]) => {
-      panel.classList.toggle("hidden", key !== target);
-    });
-    if (target === "leaderboard" && !leaderboardLoaded) {
-      loadLeaderboard();
-    }
+    switchTab(target);
+    if (target === "leaderboard") loadLeaderboard();
   });
 });
 
-// ---------------- leaderboard ----------------
+// ---------------- shared leaderboard data ----------------
+async function ensureLeaderboardData(forceRefresh = false) {
+  if (leaderboardCache && !forceRefresh) return leaderboardCache;
+  const q = query(
+    collection(db, "players"),
+    where("isActive", "==", true),
+    orderBy("ratingPoints", "desc")
+  );
+  const snap = await getDocs(q);
+  leaderboardCache = snap.docs.map((d, i) => ({ id: d.id, rank: i + 1, ...d.data() }));
+  return leaderboardCache;
+}
+
+// ---------------- home tab ----------------
+async function loadHome() {
+  $("home-greeting").textContent = `أهلاً ${(currentPlayer.name || "").split(" ")[0] || ""} 👋`;
+
+  const meta = tierMeta(currentPlayer.currentTier);
+  $("hm-shield").textContent = meta.level || "-";
+  $("hm-shield").className = "tier-shield " + meta.cssClass;
+  $("hm-tier-name").textContent = meta.displayName;
+  $("hm-points").textContent = `${Math.round(currentPlayer.ratingPoints ?? 1000)} نقطة`;
+
+  loadAnnouncement();
+
+  try {
+    const data = await ensureLeaderboardData();
+    const mine = data.find((p) => p.id === currentPlayer.id);
+    $("hm-rank-value").textContent = mine ? `#${mine.rank} من ${data.length}` : "—";
+  } catch (err) {
+    console.error(err);
+    $("hm-rank-value").textContent = "—";
+  }
+}
+
+async function loadAnnouncement() {
+  try {
+    const snap = await getDoc(doc(db, "config", "announcement"));
+    const bar = $("announcement-bar");
+    if (snap.exists() && snap.data().active && snap.data().text) {
+      $("announcement-text").textContent = snap.data().text;
+      bar.classList.remove("hidden");
+    } else {
+      bar.classList.add("hidden");
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// ---------------- leaderboard tab ----------------
 async function loadLeaderboard() {
   const loadingEl = $("lb-loading");
   const listEl = $("lb-list");
@@ -76,29 +131,17 @@ async function loadLeaderboard() {
   listEl.classList.add("hidden");
 
   try {
-    const q = query(
-      collection(db, "players"),
-      where("isActive", "==", true),
-      orderBy("ratingPoints", "desc")
-    );
-    const snap = await getDocs(q);
-
+    const data = await ensureLeaderboardData();
     listEl.innerHTML = "";
-    let rank = 0;
-    let myRank = null;
 
-    snap.forEach((d) => {
-      rank++;
-      const p = d.data();
-      const isMe = d.id === currentPlayer.id;
-      if (isMe) myRank = rank;
-
+    data.forEach((p) => {
+      const isMe = p.id === currentPlayer.id;
       const meta = tierMeta(p.currentTier);
       const li = document.createElement("li");
       li.className = "lb-row" + (isMe ? " me" : "");
-      const rankClass = rank === 1 ? "top1" : rank === 2 ? "top2" : rank === 3 ? "top3" : "";
+      const rankClass = p.rank === 1 ? "top1" : p.rank === 2 ? "top2" : p.rank === 3 ? "top3" : "";
       li.innerHTML = `
-        <span class="lb-rank ${rankClass}">${rank}</span>
+        <span class="lb-rank ${rankClass}">${p.rank}</span>
         <span class="lb-avatar">${(p.name || "؟").trim().charAt(0)}</span>
         <span class="lb-mid">
           <div class="lb-name">${p.name || "—"}${isMe ? " (انت)" : ""}</div>
@@ -109,9 +152,9 @@ async function loadLeaderboard() {
       listEl.appendChild(li);
     });
 
-    $("my-rank-value").textContent = myRank ? `#${myRank} من ${rank}` : "—";
+    const mine = data.find((p) => p.id === currentPlayer.id);
+    $("my-rank-value").textContent = mine ? `#${mine.rank} من ${data.length}` : "—";
 
-    leaderboardLoaded = true;
     loadingEl.classList.add("hidden");
     listEl.classList.remove("hidden");
   } catch (err) {
@@ -238,7 +281,7 @@ $("change-pass-form").addEventListener("submit", async (e) => {
 // ---------------- logout ----------------
 $("logout-btn").addEventListener("click", () => {
   clearSession();
-  leaderboardLoaded = false;
+  leaderboardCache = null;
   showLogin();
 });
 

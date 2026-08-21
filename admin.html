@@ -80,6 +80,23 @@
       <button class="btn btn-ghost" id="copy-creds" type="button">نسخ الرسالة الجاهزة للواتساب</button>
     </div>
 
+    <div class="card admin-card" id="announcement-card" style="margin-top:16px;">
+      <h1>الإعلان في صفحة الرئيسية</h1>
+      <p class="sub">هيظهر لكل اللاعبين فوق تاب الرئيسية. سيبه فاضي وشيّله لو مفيش إعلان.</p>
+      <div class="msg success" id="ann-success"></div>
+      <form id="announcement-form">
+        <div class="field">
+          <label for="ann-text">نص الإعلان</label>
+          <input type="text" id="ann-text" placeholder="مثال: تسجيل بطولة الأربعاء فتح لحد الثلاثاء">
+        </div>
+        <div class="field" style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="ann-active" style="width:auto;">
+          <label for="ann-active" style="margin:0;">الإعلان ده ظاهر دلوقتي</label>
+        </div>
+        <button type="submit" class="btn btn-primary" id="ann-btn">حفظ الإعلان</button>
+      </form>
+    </div>
+
     <div class="card admin-card" style="margin-top:16px;">
       <h1>كل اللاعبين</h1>
       <div id="players-loading" style="font-size:13px; color:var(--ink-soft);">
