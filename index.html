@@ -78,7 +78,7 @@
 
         <div class="my-rank-strip" id="hm-rank-strip">
           <span data-i18n="home_your_rank">Your leaderboard rank</span>
-          <strong id="hm-rank-value">—</strong>
+          <span><strong id="hm-rank-value">—</strong><span class="rank-trend hidden" id="hm-rank-trend"></span></span>
         </div>
 
         <div class="section-head">
@@ -154,6 +154,8 @@
           </div>
         </div>
 
+        <div class="badge-row" id="pf-badges"></div>
+
         <div class="tier-badge">
           <div class="tier-shield" id="pf-shield">—</div>
           <div class="tier-info">
@@ -162,7 +164,7 @@
           </div>
         </div>
 
-        <div class="stat-row">
+        <div class="stat-row stat-grid-4">
           <div class="stat-box">
             <div class="num" id="pf-matches">0</div>
             <div class="lbl" data-i18n="profile_matches">Matches</div>
@@ -175,12 +177,19 @@
             <div class="num" id="pf-losses">0</div>
             <div class="lbl" data-i18n="profile_losses">Losses</div>
           </div>
+          <div class="stat-box">
+            <div class="num" id="pf-winrate">0%</div>
+            <div class="lbl" data-i18n="profile_winrate">Win rate</div>
+          </div>
         </div>
 
         <div class="my-rank-strip" id="pf-member-since-strip">
           <span data-i18n="profile_member_since">Member since</span>
           <strong id="pf-member-since">—</strong>
         </div>
+
+        <button class="btn btn-ghost share-card-btn" id="share-card-btn" type="button" data-i18n="profile_share_btn">Share profile card</button>
+        <canvas id="share-canvas" width="1080" height="1350" class="hidden"></canvas>
       </div>
 
     </div>

@@ -339,6 +339,11 @@ body {
   gap: 10px;
   margin-bottom: 18px;
 }
+.stat-row.stat-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
 .stat-box {
   flex: 1;
   background: var(--panel);
@@ -564,7 +569,30 @@ body {
 .tab-btn.active { color: var(--ball); }
 .tab-btn:hover { color: var(--text); }
 
-/* ---------- admin table ---------- */
+/* ---------- badges ---------- */
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+.badge-pill.founding { background: rgba(227,183,78,0.18); color: var(--gold); }
+.badge-pill.activity { background: rgba(201,242,76,0.14); color: var(--ball); }
+
+/* ---------- rank trend ---------- */
+.rank-trend {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  margin-left: 6px;
+}
+[dir="rtl"] .rank-trend { margin-left: 0; margin-right: 6px; }
+.rank-trend.up { color: var(--live); }
+.rank-trend.down { color: var(--danger); }
+.rank-trend.flat { color: var(--text-soft); }
+
+/* ---------- share card ---------- */
+.share-card-btn { margin-top: 4px; }
 table.players {
   width: 100%;
   border-collapse: collapse;

@@ -42,11 +42,16 @@ function renderProfile(player) {
   $("pf-matches").textContent = player.matchesPlayed ?? 0;
   $("pf-wins").textContent = player.wins ?? 0;
   $("pf-losses").textContent = player.losses ?? 0;
+  const matches = player.matchesPlayed ?? 0;
+  const wins = player.wins ?? 0;
+  $("pf-winrate").textContent = matches > 0 ? `${Math.round((wins / matches) * 100)}%` : "—";
 
   const memberSince = player.createdAt?.toDate ? player.createdAt.toDate() : null;
   $("pf-member-since").textContent = memberSince
     ? memberSince.toLocaleDateString(getLang() === "ar" ? "ar-EG" : "en-US", { month: "short", year: "numeric" })
     : "—";
+
+  renderBadges(player);
 
   // settings mini profile
   $("st-avatar").innerHTML = avatarHtml(player);
@@ -59,6 +64,23 @@ function renderProfile(player) {
   settingsBtn.classList.remove("hidden");
   switchTab("home");
   loadHome();
+}
+
+// ---------------- badges ----------------
+function renderBadges(player) {
+  const el = $("pf-badges");
+  el.innerHTML = "";
+
+  const codeNum = parseInt((player.playerCode || "").replace(/\D/g, ""), 10);
+  if (codeNum && codeNum <= 20) {
+    el.innerHTML += `<span class="badge-pill founding">🌟 ${t("badge_founding")}</span>`;
+  }
+
+  const matches = player.matchesPlayed ?? 0;
+  let activityKey = "badge_new";
+  if (matches >= 15) activityKey = "badge_veteran";
+  else if (matches >= 3) activityKey = "badge_regular";
+  el.innerHTML += `<span class="badge-pill activity">${t(activityKey)}</span>`;
 }
 
 function showLogin() {
@@ -214,9 +236,48 @@ async function loadHome() {
     const mine = data.find((p) => p.id === currentPlayer.id);
     $("hm-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : "—";
     renderTopPlayers(data.slice(0, 3));
+    if (mine) updateRankTrend(mine.rank);
   } catch (err) {
     console.error(err);
     $("hm-rank-value").textContent = "—";
+  }
+}
+
+// ---------------- rank trend (weekly snapshot, purely client-driven) ----------------
+async function updateRankTrend(currentRank) {
+  const trendEl = $("hm-rank-trend");
+  const snapshot = currentPlayer.rankSnapshot;
+  const now = Date.now();
+  const snapshotDate = snapshot?.capturedAt?.toDate ? snapshot.capturedAt.toDate().getTime() : null;
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+
+  if (snapshot && typeof snapshot.rank === "number") {
+    const diff = snapshot.rank - currentRank; // positive = moved up (better)
+    trendEl.classList.remove("hidden", "up", "down", "flat");
+    if (diff > 0) {
+      trendEl.textContent = `▲${diff}`;
+      trendEl.classList.add("up");
+    } else if (diff < 0) {
+      trendEl.textContent = `▼${Math.abs(diff)}`;
+      trendEl.classList.add("down");
+    } else {
+      trendEl.textContent = t("rank_no_change");
+      trendEl.classList.add("flat");
+    }
+  } else {
+    trendEl.classList.add("hidden");
+  }
+
+  // refresh the snapshot once a week so the next login shows a fresh comparison
+  if (!snapshotDate || (now - snapshotDate) > weekMs) {
+    try {
+      await updateDoc(doc(db, "players", currentPlayer.id), {
+        rankSnapshot: { rank: currentRank, capturedAt: new Date() }
+      });
+      currentPlayer.rankSnapshot = { rank: currentRank, capturedAt: { toDate: () => new Date() } };
+    } catch (err) {
+      console.error(err);
+    }
   }
 }
 
@@ -459,7 +520,7 @@ $("login-form").addEventListener("submit", async (e) => {
   hideMsg(errEl);
 
   const codeRaw = $("login-code").value.trim().toUpperCase();
-  const pass = $("login-pass").value;
+  const pass = $("login-pass").value.trim();
   const btn = $("login-btn");
   btn.disabled = true;
   btn.textContent = t("login_signing_in");
@@ -494,9 +555,9 @@ $("change-pass-form").addEventListener("submit", async (e) => {
   hideMsg(errEl);
   hideMsg(okEl);
 
-  const current = $("cp-current").value;
-  const next = $("cp-new").value;
-  const confirm = $("cp-confirm").value;
+  const current = $("cp-current").value.trim();
+  const next = $("cp-new").value.trim();
+  const confirm = $("cp-confirm").value.trim();
 
   if (next !== confirm) {
     showMsg(errEl, t("pass_err_mismatch"));
@@ -537,6 +598,146 @@ $("change-pass-form").addEventListener("submit", async (e) => {
     btn.textContent = t("settings_save_pass");
   }
 });
+
+// ---------------- share profile card ----------------
+$("share-card-btn").addEventListener("click", generateAndShareProfileCard);
+
+async function generateAndShareProfileCard() {
+  const btn = $("share-card-btn");
+  btn.disabled = true;
+  const originalLabel = btn.textContent;
+  btn.textContent = t("profile_share_generating");
+
+  try {
+    await document.fonts.ready;
+    const canvas = $("share-canvas");
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+
+    // background
+    const grad = ctx.createLinearGradient(0, 0, W, H);
+    grad.addColorStop(0, "#10201f");
+    grad.addColorStop(1, "#040a09");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.textAlign = "center";
+
+    // brand
+    ctx.fillStyle = "#c9f24c";
+    ctx.beginPath();
+    ctx.arc(W / 2 - 92, 96, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = "700 30px 'Space Mono', monospace";
+    ctx.fillStyle = "rgba(245,243,234,0.85)";
+    ctx.fillText("KFS PADEL RANKING", W / 2 + 30, 106);
+
+    // avatar
+    const avatarSize = 260;
+    const avatarY = 240;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(W / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    if (currentPlayer.avatarUrl) {
+      const img = await loadImage(currentPlayer.avatarUrl);
+      ctx.drawImage(img, W / 2 - avatarSize / 2, avatarY, avatarSize, avatarSize);
+    } else {
+      ctx.fillStyle = "#16302d";
+      ctx.fillRect(W / 2 - avatarSize / 2, avatarY, avatarSize, avatarSize);
+      ctx.fillStyle = "#c9f24c";
+      ctx.font = "800 110px 'Cairo', sans-serif";
+      ctx.fillText((currentPlayer.name || "?").trim().charAt(0).toUpperCase(), W / 2, avatarY + avatarSize / 2 + 38);
+    }
+    ctx.restore();
+
+    // name
+    ctx.fillStyle = "#f5f3ea";
+    ctx.font = "900 62px 'Cairo', sans-serif";
+    ctx.fillText(currentPlayer.name || "—", W / 2, avatarY + avatarSize + 90);
+
+    // code
+    ctx.font = "700 30px 'Space Mono', monospace";
+    ctx.fillStyle = "rgba(245,243,234,0.5)";
+    ctx.fillText(currentPlayer.playerCode || "", W / 2, avatarY + avatarSize + 140);
+
+    // tier pill
+    const meta = tierMeta(currentPlayer.currentTier);
+    const tierColors = { gold: "#e3b74e", silver: "#b9c2c8", bronze: "#b98a5a" };
+    const pillY = avatarY + avatarSize + 200;
+    ctx.font = "800 34px 'Cairo', sans-serif";
+    const pillText = meta.displayName;
+    const pillWidth = ctx.measureText(pillText).width + 80;
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    roundRect(ctx, W / 2 - pillWidth / 2, pillY - 44, pillWidth, 76, 38);
+    ctx.fill();
+    ctx.fillStyle = tierColors[meta.cssClass] || "#c9f24c";
+    ctx.fillText(pillText, W / 2, pillY + 8);
+
+    // stats row
+    const statsY = pillY + 150;
+    const stats = [
+      [`${Math.round(currentPlayer.ratingPoints ?? 1000)}`, t("pts")],
+      [`${currentPlayer.matchesPlayed ?? 0}`, t("profile_matches")],
+      [(currentPlayer.matchesPlayed ?? 0) > 0 ? `${Math.round(((currentPlayer.wins ?? 0) / currentPlayer.matchesPlayed) * 100)}%` : "—", t("profile_winrate")]
+    ];
+    const colWidth = W / 3;
+    stats.forEach((s, i) => {
+      const cx = colWidth * i + colWidth / 2;
+      ctx.font = "800 52px 'Space Mono', monospace";
+      ctx.fillStyle = "#f5f3ea";
+      ctx.fillText(s[0], cx, statsY);
+      ctx.font = "600 26px 'Cairo', sans-serif";
+      ctx.fillStyle = "rgba(245,243,234,0.55)";
+      ctx.fillText(s[1], cx, statsY + 46);
+    });
+
+    // footer
+    ctx.font = "600 26px 'Cairo', sans-serif";
+    ctx.fillStyle = "rgba(245,243,234,0.35)";
+    ctx.fillText("kfspadel", W / 2, H - 60);
+
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png", 0.95));
+    const fileName = `kfs-padel-${(currentPlayer.playerCode || "profile").toLowerCase()}.png`;
+    const file = new File([blob], fileName, { type: "image/png" });
+
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: "KFS Padel Ranking" });
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  } catch (err) {
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
 
 // ---------------- logout ----------------
 $("logout-btn").addEventListener("click", () => {
