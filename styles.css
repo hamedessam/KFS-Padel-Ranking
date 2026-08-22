@@ -275,6 +275,20 @@ body {
   gap: 14px;
   margin-bottom: 22px;
 }
+.avatar-wrap { position: relative; flex-shrink: 0; }
+.avatar-edit-btn {
+  position: absolute;
+  bottom: -2px; right: -2px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--ball);
+  color: #0a1615;
+  border: 2px solid var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.avatar-edit-btn svg { width: 12px; height: 12px; }
+[dir="rtl"] .avatar-edit-btn { right: auto; left: -2px; }
 .avatar {
   width: 54px; height: 54px;
   border-radius: 50%;
@@ -286,7 +300,9 @@ body {
   font-size: 19px;
   flex-shrink: 0;
   border: 1.5px solid var(--border);
+  overflow: hidden;
 }
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .profile-name { font-family: var(--font-display); font-weight: 800; font-size: 18px; color: var(--text); }
 .profile-code { font-family: var(--font-mono); font-size: 12px; color: var(--text-soft); letter-spacing: 1.5px; }
 
@@ -401,7 +417,9 @@ body {
   font-weight: 800;
   font-size: 13px;
   flex-shrink: 0;
+  overflow: hidden;
 }
+.lb-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .lb-mid { flex: 1; min-width: 0; }
 .lb-name {
   font-weight: 700;
@@ -581,6 +599,53 @@ table.players tr:last-child td { border-bottom: none; }
 .badge-pill.bronze { background: rgba(185,138,90,0.18); color: var(--bronze); }
 
 .hidden { display: none !important; }
+
+/* ---------- settings screen ---------- */
+.settings-mini-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 22px;
+}
+.lang-switch {
+  display: flex;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  margin-bottom: 22px;
+}
+.lang-option {
+  flex: 1;
+  text-align: center;
+  padding: 10px 8px;
+  border-radius: 8px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--text-soft);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.lang-option.active { background: var(--ball); color: #0a1615; }
+
+.back-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+}
+.back-btn svg { width: 19px; height: 19px; }
+[dir="rtl"] .back-btn svg { transform: scaleX(-1); }
 
 .spinner {
   display: inline-block;

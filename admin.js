@@ -177,7 +177,11 @@ async function loadPlayers() {
       const p = d.data();
       const meta = tierMeta(p.currentTier);
       const tr = document.createElement("tr");
+      const avatarCell = p.avatarUrl
+        ? `<img src="${p.avatarUrl}" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block;">`
+        : `<div style="width:28px;height:28px;border-radius:50%;background:var(--panel-alt);color:var(--ball);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800;font-size:11px;">${(p.name || "?").trim().charAt(0)}</div>`;
       tr.innerHTML = `
+        <td>${avatarCell}</td>
         <td>${escapeHtml(p.name || "—")}</td>
         <td class="code">${escapeHtml(p.playerCode || "—")}</td>
         <td><span class="badge-pill ${meta.cssClass}">${meta.displayName}</span></td>

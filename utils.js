@@ -26,14 +26,31 @@ export function playerCodeFromSeq(seq) {
   return `KFS-${String(seq).padStart(3, "0")}`;
 }
 
+import { getLang } from "./i18n.js";
+
 export function tierMeta(tierId) {
   // tierId format: "silver_3", "gold_1", "bronze_2" etc.
   const [family, level] = (tierId || "bronze_3").split("_");
-  const names = { bronze: "Bronze", silver: "Silver", gold: "Gold" };
+  const names = {
+    ar: { bronze: "برونزي", silver: "فضي", gold: "ذهبي" },
+    en: { bronze: "Bronze", silver: "Silver", gold: "Gold" }
+  };
+  const lang = getLang();
+  const familyNames = names[lang] || names.en;
   return {
     family,
     level,
-    displayName: `${names[family] || family} ${level || ""}`.trim(),
+    displayName: `${familyNames[family] || family} ${level || ""}`.trim(),
     cssClass: family
   };
+}
+
+// Renders inner content for an avatar container (a div/span already carrying
+// the .avatar or .lb-avatar class): either the player's uploaded photo or a
+// fallback initial letter. Caller just does `container.innerHTML = avatarHtml(player)`.
+export function avatarHtml(player) {
+  if (player.avatarUrl) {
+    return `<img src="${player.avatarUrl}" alt="">`;
+  }
+  return (player.name || "?").trim().charAt(0).toUpperCase();
 }

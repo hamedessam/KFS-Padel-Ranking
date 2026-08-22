@@ -1,14 +1,18 @@
 import { db, collection, doc, getDoc, getDocs, updateDoc, query, where, limit, orderBy, arrayUnion } from "./firebase-config.js";
-import { hashPassword, randomSalt, tierMeta } from "./utils.js";
+import { hashPassword, randomSalt, tierMeta, avatarHtml } from "./utils.js";
+import { t, getLang, setLang, applyStaticTranslations } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
 
 const viewLogin = $("view-login");
 const viewApp = $("view-app");
+const viewSettings = $("view-settings");
 const tabbar = $("tabbar");
 const settingsBtn = $("settings-btn");
+const settingsBackBtn = $("settings-back-btn");
 
 let currentPlayer = null; // { id, ...data }
+let lastTabBeforeSettings = "home";
 
 // ---------------- session ----------------
 function saveSession(playerId) {
@@ -24,7 +28,8 @@ function getSession() {
 // ---------------- rendering ----------------
 function renderProfile(player) {
   currentPlayer = player;
-  $("pf-avatar").textContent = (player.name || "?").trim().charAt(0);
+
+  $("pf-avatar").innerHTML = avatarHtml(player);
   $("pf-name").textContent = player.name || "—";
   $("pf-code").textContent = player.playerCode || "—";
 
@@ -32,11 +37,21 @@ function renderProfile(player) {
   $("pf-shield").textContent = meta.level || "-";
   $("pf-shield").className = "tier-shield " + meta.cssClass;
   $("pf-tier-name").textContent = meta.displayName;
-  $("pf-points").textContent = `${Math.round(player.ratingPoints ?? 1000)} pts`;
+  $("pf-points").textContent = `${Math.round(player.ratingPoints ?? 1000)} ${t("pts")}`;
 
   $("pf-matches").textContent = player.matchesPlayed ?? 0;
   $("pf-wins").textContent = player.wins ?? 0;
   $("pf-losses").textContent = player.losses ?? 0;
+
+  const memberSince = player.createdAt?.toDate ? player.createdAt.toDate() : null;
+  $("pf-member-since").textContent = memberSince
+    ? memberSince.toLocaleDateString(getLang() === "ar" ? "ar-EG" : "en-US", { month: "short", year: "numeric" })
+    : "—";
+
+  // settings mini profile
+  $("st-avatar").innerHTML = avatarHtml(player);
+  $("st-name").textContent = player.name || "—";
+  $("st-code").textContent = player.playerCode || "—";
 
   viewLogin.classList.add("hidden");
   viewApp.classList.remove("hidden");
@@ -49,21 +64,103 @@ function renderProfile(player) {
 function showLogin() {
   currentPlayer = null;
   viewApp.classList.add("hidden");
+  viewSettings.classList.add("hidden");
   tabbar.classList.add("hidden");
   settingsBtn.classList.add("hidden");
+  settingsBackBtn.classList.add("hidden");
   viewLogin.classList.remove("hidden");
 }
 
-settingsBtn.addEventListener("click", () => switchTab("profile"));
+// ---------------- settings screen ----------------
+settingsBtn.addEventListener("click", () => {
+  lastTabBeforeSettings = document.querySelector(".tab-btn.active")?.dataset.tab || "home";
+  viewApp.classList.add("hidden");
+  viewSettings.classList.remove("hidden");
+  tabbar.classList.add("hidden");
+  settingsBtn.classList.add("hidden");
+  settingsBackBtn.classList.remove("hidden");
+  updateLangButtons();
+});
+
+settingsBackBtn.addEventListener("click", () => {
+  viewSettings.classList.add("hidden");
+  viewApp.classList.remove("hidden");
+  tabbar.classList.remove("hidden");
+  settingsBtn.classList.remove("hidden");
+  settingsBackBtn.classList.add("hidden");
+  switchTab(lastTabBeforeSettings);
+});
+
+function updateLangButtons() {
+  const lang = getLang();
+  $("lang-ar-btn").classList.toggle("active", lang === "ar");
+  $("lang-en-btn").classList.toggle("active", lang === "en");
+}
+
+$("lang-ar-btn").addEventListener("click", () => switchLanguage("ar"));
+$("lang-en-btn").addEventListener("click", () => switchLanguage("en"));
+
+function switchLanguage(lang) {
+  if (getLang() === lang) return;
+  setLang(lang);
+  applyStaticTranslations();
+  updateLangButtons();
+  // re-render dynamic content so translated labels (tier names, statuses, etc.) refresh
+  if (currentPlayer) {
+    renderProfile(currentPlayer);
+    loadHome();
+  }
+}
+
+// ---------------- avatar upload ----------------
+$("avatar-edit-btn").addEventListener("click", () => $("avatar-input").click());
+
+$("avatar-input").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const dataUrl = await resizeImageToDataUrl(file, 200);
+    await updateDoc(doc(db, "players", currentPlayer.id), { avatarUrl: dataUrl });
+    currentPlayer.avatarUrl = dataUrl;
+    renderProfile(currentPlayer);
+    leaderboardCache = null; // photo should show next time leaderboard loads
+  } catch (err) {
+    console.error(err);
+  } finally {
+    e.target.value = "";
+  }
+});
+
+function resizeImageToDataUrl(file, size) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = () => { img.src = reader.result; };
+    reader.onerror = reject;
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      const minSide = Math.min(img.width, img.height);
+      const sx = (img.width - minSide) / 2;
+      const sy = (img.height - minSide) / 2;
+      ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+      resolve(canvas.toDataURL("image/jpeg", 0.72));
+    };
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 // ---------------- tabs ----------------
 const tabButtons = document.querySelectorAll(".tab-btn");
 const tabPanels = {
   home: $("tab-home"),
   tournaments: $("tab-tournaments"),
+  marketplace: $("tab-marketplace"),
   leaderboard: $("tab-leaderboard"),
-  profile: $("tab-profile"),
-  marketplace: $("tab-marketplace")
+  profile: $("tab-profile")
 };
 let leaderboardCache = null; // array of {id, rank, ...data}, shared between Home + Leaderboard tabs
 let tournamentsCache = null; // array of {id, ...data}, shared between Home + Tournaments tabs
@@ -100,13 +197,14 @@ async function ensureLeaderboardData(forceRefresh = false) {
 
 // ---------------- home tab ----------------
 async function loadHome() {
-  $("home-greeting").textContent = `Hey ${(currentPlayer.name || "").split(" ")[0] || ""} 👋`;
+  $("home-greeting").textContent = `${t("home_greeting_prefix")} ${(currentPlayer.name || "").split(" ")[0] || ""} 👋`;
+  $("hm-code").textContent = currentPlayer.playerCode || "—";
 
   const meta = tierMeta(currentPlayer.currentTier);
   $("hm-shield").textContent = meta.level || "-";
   $("hm-shield").className = "tier-shield " + meta.cssClass;
   $("hm-tier-name").textContent = meta.displayName;
-  $("hm-points").textContent = `${Math.round(currentPlayer.ratingPoints ?? 1000)} pts`;
+  $("hm-points").textContent = `${Math.round(currentPlayer.ratingPoints ?? 1000)} ${t("pts")}`;
 
   loadAnnouncement();
   loadHomeTournaments();
@@ -114,7 +212,7 @@ async function loadHome() {
   try {
     const data = await ensureLeaderboardData();
     const mine = data.find((p) => p.id === currentPlayer.id);
-    $("hm-rank-value").textContent = mine ? `#${mine.rank} of ${data.length}` : "—";
+    $("hm-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : "—";
     renderTopPlayers(data.slice(0, 3));
   } catch (err) {
     console.error(err);
@@ -133,9 +231,9 @@ function renderTopPlayers(list) {
     row.className = "lb-row" + (isMe ? " me" : "");
     row.innerHTML = `
       <span class="lb-rank ${rankClass}">${p.rank}</span>
-      <span class="lb-avatar">${(p.name || "?").trim().charAt(0)}</span>
+      <span class="lb-avatar">${avatarHtml(p)}</span>
       <span class="lb-mid">
-        <div class="lb-name">${p.name || "—"}${isMe ? " (you)" : ""}</div>
+        <div class="lb-name">${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
         <div class="lb-tier">${meta.displayName}</div>
       </span>
       <span class="lb-points">${Math.round(p.ratingPoints ?? 1000)}</span>
@@ -163,6 +261,12 @@ async function loadAnnouncement() {
 const PIN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.5-7-11a7 7 0 0 1 14 0c0 4.5-7 11-7 11Z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>';
 const CAL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg>';
 
+function statusLabel(status) {
+  if (status === "live") return t("status_live");
+  if (status === "upcoming") return t("status_upcoming");
+  return t("status_completed");
+}
+
 async function ensureTournamentsData(forceRefresh = false) {
   if (tournamentsCache && !forceRefresh) return tournamentsCache;
   const q = query(collection(db, "tournaments"), orderBy("createdAt", "desc"));
@@ -171,14 +275,13 @@ async function ensureTournamentsData(forceRefresh = false) {
   return tournamentsCache;
 }
 
-function tourneyCardHtml(t) {
-  const statusLabel = t.status === "live" ? "Live" : t.status === "upcoming" ? "Upcoming" : "Completed";
-  const statusDot = t.status === "live" ? '<span class="dot-live"></span>' : "";
+function tourneyCardHtml(tr) {
+  const statusDot = tr.status === "live" ? '<span class="dot-live"></span>' : "";
   return `
-    <span class="tourney-status ${t.status || "upcoming"}">${statusDot}${statusLabel}</span>
-    <div class="tourney-name">${t.name || "Untitled tournament"}</div>
-    ${t.location ? `<div class="tourney-meta">${PIN_SVG}${t.location}</div>` : ""}
-    ${t.dateLabel ? `<div class="tourney-meta">${CAL_SVG}${t.dateLabel}</div>` : ""}
+    <span class="tourney-status ${tr.status || "upcoming"}">${statusDot}${statusLabel(tr.status)}</span>
+    <div class="tourney-name">${tr.name || "—"}</div>
+    ${tr.location ? `<div class="tourney-meta">${PIN_SVG}${tr.location}</div>` : ""}
+    ${tr.dateLabel ? `<div class="tourney-meta">${CAL_SVG}${tr.dateLabel}</div>` : ""}
   `;
 }
 
@@ -198,17 +301,17 @@ async function loadHomeTournaments() {
       return;
     }
     scrollEl.innerHTML = "";
-    data.slice(0, 8).forEach((t) => {
+    data.slice(0, 8).forEach((tr) => {
       const card = document.createElement("div");
       card.className = "tourney-card";
-      card.innerHTML = tourneyCardHtml(t);
+      card.innerHTML = tourneyCardHtml(tr);
       card.addEventListener("click", () => switchTab("tournaments"));
       scrollEl.appendChild(card);
     });
     scrollEl.classList.remove("hidden");
   } catch (err) {
     console.error(err);
-    loadingEl.textContent = "Couldn't load tournaments.";
+    loadingEl.textContent = t("leaderboard_err");
   }
 }
 
@@ -228,26 +331,26 @@ async function loadTournamentsTab() {
       return;
     }
     listEl.innerHTML = "";
-    data.forEach((t) => {
+    data.forEach((tr) => {
       const row = document.createElement("div");
       row.className = "tourney-row";
-      const isRegistered = (t.participantIds || []).includes(currentPlayer.id);
+      const isRegistered = (tr.participantIds || []).includes(currentPlayer.id);
       let actionHtml = "";
-      if (t.status === "upcoming") {
+      if (tr.status === "upcoming") {
         actionHtml = isRegistered
-          ? `<div class="tourney-actions"><button class="btn btn-ghost btn-sm" disabled>Registered ✓</button></div>`
-          : `<div class="tourney-actions"><button class="btn btn-primary btn-sm" data-register="${t.id}">Register</button></div>`;
+          ? `<div class="tourney-actions"><button class="btn btn-ghost btn-sm" disabled>${t("registered_btn")}</button></div>`
+          : `<div class="tourney-actions"><button class="btn btn-primary btn-sm" data-register="${tr.id}">${t("register_btn")}</button></div>`;
       }
       row.innerHTML = `
         <div class="tourney-row-top">
           <div>
-            <span class="tourney-status ${t.status || "upcoming"}">${t.status === "live" ? '<span class="dot-live"></span>Live' : t.status === "upcoming" ? "Upcoming" : "Completed"}</span>
-            <div class="tourney-name">${t.name || "Untitled tournament"}</div>
+            <span class="tourney-status ${tr.status || "upcoming"}">${tr.status === "live" ? '<span class="dot-live"></span>' : ""}${statusLabel(tr.status)}</span>
+            <div class="tourney-name">${tr.name || "—"}</div>
           </div>
         </div>
-        ${t.location ? `<div class="tourney-meta">${PIN_SVG}${t.location}</div>` : ""}
-        ${t.dateLabel ? `<div class="tourney-meta">${CAL_SVG}${t.dateLabel}</div>` : ""}
-        ${t.championName ? `<div class="tourney-champion">🏆 Champion: ${t.championName}</div>` : ""}
+        ${tr.location ? `<div class="tourney-meta">${PIN_SVG}${tr.location}</div>` : ""}
+        ${tr.dateLabel ? `<div class="tourney-meta">${CAL_SVG}${tr.dateLabel}</div>` : ""}
+        ${tr.championName ? `<div class="tourney-champion">🏆 ${t("champion_label")}: ${tr.championName}</div>` : ""}
         ${actionHtml}
       `;
       listEl.appendChild(row);
@@ -259,28 +362,28 @@ async function loadTournamentsTab() {
     });
   } catch (err) {
     console.error(err);
-    loadingEl.textContent = "Couldn't load tournaments.";
+    loadingEl.textContent = t("leaderboard_err");
   }
 }
 
 async function registerForTournament(tournamentId, btn) {
   btn.disabled = true;
-  btn.textContent = "Registering...";
+  btn.textContent = t("registering");
   try {
     await updateDoc(doc(db, "tournaments", tournamentId), {
       participantIds: arrayUnion(currentPlayer.id)
     });
-    btn.textContent = "Registered ✓";
+    btn.textContent = t("registered_btn");
     btn.classList.remove("btn-primary");
     btn.classList.add("btn-ghost");
-    const cached = tournamentsCache?.find((t) => t.id === tournamentId);
+    const cached = tournamentsCache?.find((tr) => tr.id === tournamentId);
     if (cached) {
       cached.participantIds = [...(cached.participantIds || []), currentPlayer.id];
     }
   } catch (err) {
     console.error(err);
     btn.disabled = false;
-    btn.textContent = "Register";
+    btn.textContent = t("register_btn");
   }
 }
 
@@ -303,9 +406,9 @@ async function loadLeaderboard() {
       const rankClass = p.rank === 1 ? "top1" : p.rank === 2 ? "top2" : p.rank === 3 ? "top3" : "";
       li.innerHTML = `
         <span class="lb-rank ${rankClass}">${p.rank}</span>
-        <span class="lb-avatar">${(p.name || "?").trim().charAt(0)}</span>
+        <span class="lb-avatar">${avatarHtml(p)}</span>
         <span class="lb-mid">
-          <div class="lb-name">${p.name || "—"}${isMe ? " (you)" : ""}</div>
+          <div class="lb-name">${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
           <div class="lb-tier">${meta.displayName}</div>
         </span>
         <span class="lb-points">${Math.round(p.ratingPoints ?? 1000)}</span>
@@ -314,13 +417,13 @@ async function loadLeaderboard() {
     });
 
     const mine = data.find((p) => p.id === currentPlayer.id);
-    $("my-rank-value").textContent = mine ? `#${mine.rank} of ${data.length}` : "—";
+    $("my-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : "—";
 
     loadingEl.classList.add("hidden");
     listEl.classList.remove("hidden");
   } catch (err) {
     console.error(err);
-    loadingEl.textContent = "Couldn't load the leaderboard.";
+    loadingEl.textContent = t("leaderboard_err");
   }
 }
 
@@ -359,35 +462,31 @@ $("login-form").addEventListener("submit", async (e) => {
   const pass = $("login-pass").value;
   const btn = $("login-btn");
   btn.disabled = true;
-  btn.textContent = "Signing in...";
+  btn.textContent = t("login_signing_in");
 
   try {
     const player = await findPlayerByCode(codeRaw);
     if (!player) {
-      showMsg(errEl, "That code doesn't exist. Double-check it and try again.");
+      showMsg(errEl, t("login_err_no_code"));
       return;
     }
     const computedHash = await hashPassword(pass, player.passwordSalt || "");
     if (computedHash !== player.passwordHash) {
-      showMsg(errEl, "Wrong password. Try again.");
+      showMsg(errEl, t("login_err_wrong_pass"));
       return;
     }
     saveSession(player.id);
     renderProfile(player);
   } catch (err) {
     console.error(err);
-    showMsg(errEl, "Something went wrong. Try again.");
+    showMsg(errEl, t("login_err_generic"));
   } finally {
     btn.disabled = false;
-    btn.textContent = "Sign in";
+    btn.textContent = t("login_btn");
   }
 });
 
-// ---------------- change password ----------------
-$("toggle-change-pass").addEventListener("click", () => {
-  $("change-pass-form").classList.toggle("hidden");
-});
-
+// ---------------- change password (in Settings) ----------------
 $("change-pass-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const errEl = $("pass-error");
@@ -400,22 +499,22 @@ $("change-pass-form").addEventListener("submit", async (e) => {
   const confirm = $("cp-confirm").value;
 
   if (next !== confirm) {
-    showMsg(errEl, "New password and confirmation don't match.");
+    showMsg(errEl, t("pass_err_mismatch"));
     return;
   }
   if (next.length < 6) {
-    showMsg(errEl, "New password must be at least 6 characters.");
+    showMsg(errEl, t("pass_err_short"));
     return;
   }
 
   const btn = $("cp-btn");
   btn.disabled = true;
-  btn.textContent = "Saving...";
+  btn.textContent = t("settings_saving");
 
   try {
     const computedCurrentHash = await hashPassword(current, currentPlayer.passwordSalt || "");
     if (computedCurrentHash !== currentPlayer.passwordHash) {
-      showMsg(errEl, "Current password is wrong.");
+      showMsg(errEl, t("pass_err_wrong_current"));
       return;
     }
     const newSalt = randomSalt();
@@ -426,16 +525,16 @@ $("change-pass-form").addEventListener("submit", async (e) => {
     });
     currentPlayer.passwordSalt = newSalt;
     currentPlayer.passwordHash = newHash;
-    showMsg(okEl, "Password changed successfully.");
+    showMsg(okEl, t("pass_success"));
     $("cp-current").value = "";
     $("cp-new").value = "";
     $("cp-confirm").value = "";
   } catch (err) {
     console.error(err);
-    showMsg(errEl, "Something went wrong. Try again.");
+    showMsg(errEl, t("pass_err_generic"));
   } finally {
     btn.disabled = false;
-    btn.textContent = "Save new password";
+    btn.textContent = t("settings_save_pass");
   }
 });
 
@@ -443,10 +542,13 @@ $("change-pass-form").addEventListener("submit", async (e) => {
 $("logout-btn").addEventListener("click", () => {
   clearSession();
   leaderboardCache = null;
+  tournamentsCache = null;
   showLogin();
 });
 
-// ---------------- bootstrap: restore session ----------------
+// ---------------- bootstrap ----------------
+applyStaticTranslations();
+
 (async function init() {
   const savedId = getSession();
   if (!savedId) return;
