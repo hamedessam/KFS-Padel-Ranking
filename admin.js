@@ -1,8 +1,8 @@
 import {
-  db, collection, doc, getDoc, getDocs, setDoc, addDoc,
+  db, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc,
   query, orderBy, runTransaction, serverTimestamp
 } from "./firebase-config.js";
-import { hashPassword, randomSalt, generatePassword, playerCodeFromSeq, tierMeta } from "./utils.js";
+import { hashPassword, randomSalt, generatePassword, playerCodeFromSeq, tierMeta, isFoundingMember } from "./utils.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -45,7 +45,7 @@ gateForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const errEl = $("gate-error");
   hideMsg(errEl);
-  const pass = $("gate-pass").value;
+  const pass = $("gate-pass").value.trim();
 
   try {
     if (isSetupMode) {
@@ -182,19 +182,60 @@ async function loadPlayers() {
         : `<div style="width:28px;height:28px;border-radius:50%;background:var(--panel-alt);color:var(--ball);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800;font-size:11px;">${(p.name || "?").trim().charAt(0)}</div>`;
       tr.innerHTML = `
         <td>${avatarCell}</td>
-        <td>${escapeHtml(p.name || "—")}</td>
+        <td>${isFoundingMember(p) ? "🌟 " : ""}${escapeHtml(p.name || "—")}</td>
         <td class="code">${escapeHtml(p.playerCode || "—")}</td>
         <td><span class="badge-pill ${meta.cssClass}">${meta.displayName}</span></td>
         <td>${Math.round(p.ratingPoints ?? 1000)}</td>
         <td>${p.matchesPlayed ?? 0}</td>
+        <td><button class="link-btn" data-reset-player="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" type="button" style="font-size:12px;">Reset password</button></td>
       `;
       tbody.appendChild(tr);
     });
     loadingEl.classList.add("hidden");
     tableEl.classList.remove("hidden");
+
+    tbody.querySelectorAll("[data-reset-player]").forEach((btn) => {
+      btn.addEventListener("click", () => resetPlayerPassword(btn.dataset.resetPlayer, btn.dataset.playerName, btn));
+    });
   } catch (err) {
     console.error(err);
     loadingEl.textContent = "Couldn't load the players.";
+  }
+}
+
+// ---------------- reset player password ----------------
+async function resetPlayerPassword(playerId, playerName, btn) {
+  const confirmed = confirm(`Reset the password for ${playerName}? Their old password will stop working immediately.`);
+  if (!confirmed) return;
+
+  btn.disabled = true;
+  btn.textContent = "Resetting...";
+
+  try {
+    const newPassword = generatePassword(8);
+    const salt = randomSalt();
+    const passwordHash = await hashPassword(newPassword, salt);
+    await updateDoc(doc(db, "players", playerId), {
+      passwordSalt: salt,
+      passwordHash
+    });
+
+    $("reset-name").textContent = playerName;
+    $("reset-pass").textContent = newPassword;
+    $("reset-credentials-card").classList.remove("hidden");
+    $("reset-credentials-card").scrollIntoView({ behavior: "smooth", block: "center" });
+    $("copy-reset-creds").onclick = () => {
+      const msg = `Hey ${playerName}! Your KFS Padel Ranking password was reset:\nPassword: ${newPassword}`;
+      navigator.clipboard.writeText(msg);
+      $("copy-reset-creds").textContent = "Copied ✓";
+      setTimeout(() => { $("copy-reset-creds").textContent = "Copy WhatsApp-ready message"; }, 1800);
+    };
+  } catch (err) {
+    console.error(err);
+    alert("Something went wrong resetting the password. Try again.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Reset password";
   }
 }
 

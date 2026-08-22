@@ -165,10 +165,25 @@
               <th>Tier</th>
               <th>Points</th>
               <th>Matches</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="players-tbody"></tbody>
         </table>
+      </div>
+
+      <div class="panel hidden" id="reset-credentials-card" style="margin-top:16px;">
+        <h1>New password</h1>
+        <p class="sub">Send this to the player — the old password stops working now.</p>
+        <div class="field">
+          <label>Player</label>
+          <div class="code-tag" id="reset-name">—</div>
+        </div>
+        <div class="field">
+          <label>New password</label>
+          <div class="code-tag" id="reset-pass">—</div>
+        </div>
+        <button class="btn btn-ghost" id="copy-reset-creds" type="button">Copy WhatsApp-ready message</button>
       </div>
 
       <div class="foot-link" style="margin-top:16px; margin-bottom: 16px;">

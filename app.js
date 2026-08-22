@@ -1,5 +1,5 @@
 import { db, collection, doc, getDoc, getDocs, updateDoc, query, where, limit, orderBy, arrayUnion } from "./firebase-config.js";
-import { hashPassword, randomSalt, tierMeta, avatarHtml } from "./utils.js";
+import { hashPassword, randomSalt, tierMeta, avatarHtml, isFoundingMember } from "./utils.js";
 import { t, getLang, setLang, applyStaticTranslations } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
@@ -26,10 +26,11 @@ function getSession() {
 }
 
 // ---------------- rendering ----------------
-function renderProfile(player) {
-  currentPlayer = player;
-
+// Pure DOM update — safe to call any time (login, avatar change, language switch)
+// without touching which view/tab is currently visible.
+function refreshProfileDisplay(player) {
   $("pf-avatar").innerHTML = avatarHtml(player);
+  $("pf-avatar").classList.toggle("founding-ring", isFoundingMember(player));
   $("pf-name").textContent = player.name || "—";
   $("pf-code").textContent = player.playerCode || "—";
 
@@ -57,6 +58,12 @@ function renderProfile(player) {
   $("st-avatar").innerHTML = avatarHtml(player);
   $("st-name").textContent = player.name || "—";
   $("st-code").textContent = player.playerCode || "—";
+}
+
+// Login entry point: updates the display AND navigates into the app.
+function renderProfile(player) {
+  currentPlayer = player;
+  refreshProfileDisplay(player);
 
   viewLogin.classList.add("hidden");
   viewApp.classList.remove("hidden");
@@ -71,8 +78,7 @@ function renderBadges(player) {
   const el = $("pf-badges");
   el.innerHTML = "";
 
-  const codeNum = parseInt((player.playerCode || "").replace(/\D/g, ""), 10);
-  if (codeNum && codeNum <= 20) {
+  if (isFoundingMember(player)) {
     el.innerHTML += `<span class="badge-pill founding">🌟 ${t("badge_founding")}</span>`;
   }
 
@@ -127,10 +133,11 @@ function switchLanguage(lang) {
   setLang(lang);
   applyStaticTranslations();
   updateLangButtons();
-  // re-render dynamic content so translated labels (tier names, statuses, etc.) refresh
+  // re-render dynamic content in place (no navigation) so translated labels refresh
+  // even while the Settings screen stays open.
   if (currentPlayer) {
-    renderProfile(currentPlayer);
-    loadHome();
+    refreshProfileDisplay(currentPlayer);
+    loadHome(); // safe: only updates Home tab content, no view/tab navigation
   }
 }
 
@@ -144,7 +151,7 @@ $("avatar-input").addEventListener("change", async (e) => {
     const dataUrl = await resizeImageToDataUrl(file, 200);
     await updateDoc(doc(db, "players", currentPlayer.id), { avatarUrl: dataUrl });
     currentPlayer.avatarUrl = dataUrl;
-    renderProfile(currentPlayer);
+    refreshProfileDisplay(currentPlayer);
     leaderboardCache = null; // photo should show next time leaderboard loads
   } catch (err) {
     console.error(err);
@@ -287,14 +294,15 @@ function renderTopPlayers(list) {
   list.forEach((p) => {
     const isMe = p.id === currentPlayer.id;
     const meta = tierMeta(p.currentTier);
+    const founding = isFoundingMember(p);
     const rankClass = p.rank === 1 ? "top1" : p.rank === 2 ? "top2" : p.rank === 3 ? "top3" : "";
     const row = document.createElement("div");
     row.className = "lb-row" + (isMe ? " me" : "");
     row.innerHTML = `
       <span class="lb-rank ${rankClass}">${p.rank}</span>
-      <span class="lb-avatar">${avatarHtml(p)}</span>
+      <span class="lb-avatar${founding ? " founding-ring" : ""}">${avatarHtml(p)}</span>
       <span class="lb-mid">
-        <div class="lb-name">${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
+        <div class="lb-name">${founding ? '<span class="founding-star" title="Founding Member">🌟</span> ' : ""}${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
         <div class="lb-tier">${meta.displayName}</div>
       </span>
       <span class="lb-points">${Math.round(p.ratingPoints ?? 1000)}</span>
@@ -462,14 +470,15 @@ async function loadLeaderboard() {
     data.forEach((p) => {
       const isMe = p.id === currentPlayer.id;
       const meta = tierMeta(p.currentTier);
+      const founding = isFoundingMember(p);
       const li = document.createElement("li");
       li.className = "lb-row" + (isMe ? " me" : "");
       const rankClass = p.rank === 1 ? "top1" : p.rank === 2 ? "top2" : p.rank === 3 ? "top3" : "";
       li.innerHTML = `
         <span class="lb-rank ${rankClass}">${p.rank}</span>
-        <span class="lb-avatar">${avatarHtml(p)}</span>
+        <span class="lb-avatar${founding ? " founding-ring" : ""}">${avatarHtml(p)}</span>
         <span class="lb-mid">
-          <div class="lb-name">${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
+          <div class="lb-name">${founding ? '<span class="founding-star" title="Founding Member">🌟</span> ' : ""}${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
           <div class="lb-tier">${meta.displayName}</div>
         </span>
         <span class="lb-points">${Math.round(p.ratingPoints ?? 1000)}</span>

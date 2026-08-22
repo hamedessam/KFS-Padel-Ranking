@@ -54,3 +54,9 @@ export function avatarHtml(player) {
   }
   return (player.name || "?").trim().charAt(0).toUpperCase();
 }
+
+// First 20 registered players (by sequential player code) are Founding Members.
+export function isFoundingMember(player) {
+  const codeNum = parseInt((player.playerCode || "").replace(/\D/g, ""), 10);
+  return Boolean(codeNum) && codeNum <= 20;
+}

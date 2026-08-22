@@ -579,6 +579,12 @@ body {
 .badge-pill.founding { background: rgba(227,183,78,0.18); color: var(--gold); }
 .badge-pill.activity { background: rgba(201,242,76,0.14); color: var(--ball); }
 
+.lb-avatar.founding-ring,
+.avatar.founding-ring {
+  box-shadow: 0 0 0 2px var(--gold);
+}
+.founding-star { font-size: 11px; }
+
 /* ---------- rank trend ---------- */
 .rank-trend {
   font-family: var(--font-mono);
