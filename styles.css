@@ -695,15 +695,10 @@ table.players tr:last-child td { border-bottom: none; }
    Scoped to min-width: 640px — phones never reach that width,
    so mobile is completely unaffected by anything below. */
 @media (min-width: 640px) {
-  body {
-    align-items: center;
+  html, body {
+    background: var(--bg);
   }
   .app-frame {
-    height: calc(100vh - 48px);
-    height: calc(100dvh - 48px);
-    max-height: 860px;
-    margin: 24px 0;
-    border-radius: 28px;
-    border: 1px solid var(--border);
+    max-width: 560px;
   }
 }
