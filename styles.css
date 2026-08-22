@@ -279,7 +279,7 @@ body {
 .avatar-edit-btn {
   position: absolute;
   bottom: -2px; right: -2px;
-  width: 22px; height: 22px;
+  width: 26px; height: 26px;
   border-radius: 50%;
   background: var(--ball);
   color: #0a1615;
@@ -287,7 +287,7 @@ body {
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
 }
-.avatar-edit-btn svg { width: 12px; height: 12px; }
+.avatar-edit-btn svg { width: 14px; height: 14px; }
 [dir="rtl"] .avatar-edit-btn { right: auto; left: -2px; }
 .avatar {
   width: 54px; height: 54px;
@@ -690,3 +690,21 @@ table.players tr:last-child td { border-bottom: none; }
   animation: spin 0.7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- desktop/laptop presentation only ----------
+   Everything below is scoped to min-width: 640px, so phones
+   (which never reach that width) are completely unaffected —
+   the .app-frame rules above still apply exactly as before. */
+@media (min-width: 640px) {
+  body {
+    align-items: center;
+    padding: 36px 16px;
+  }
+  .app-frame {
+    height: auto;
+    max-height: 860px;
+    aspect-ratio: 9 / 18.5;
+    border-radius: 28px;
+    border: 1px solid var(--border);
+  }
+}

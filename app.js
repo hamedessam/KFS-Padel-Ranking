@@ -143,6 +143,7 @@ function switchLanguage(lang) {
 
 // ---------------- avatar upload ----------------
 $("avatar-edit-btn").addEventListener("click", () => $("avatar-input").click());
+$("change-photo-link").addEventListener("click", () => $("avatar-input").click());
 
 $("avatar-input").addEventListener("change", async (e) => {
   const file = e.target.files[0];
