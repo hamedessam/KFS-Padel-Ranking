@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>KFS Padel — Admin</title>
-<meta name="theme-color" content="#0a2b2c">
+<meta name="theme-color" content="#0a1615">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -99,9 +99,61 @@
         </form>
       </div>
 
+      <div class="panel" id="tournament-card" style="margin-top:16px;">
+        <h1>Add a tournament</h1>
+        <p class="sub">Appears in the Tournaments tab and the Home preview for every player.</p>
+        <div class="msg error" id="tr-error"></div>
+        <div class="msg success" id="tr-success"></div>
+        <form id="tournament-form">
+          <div class="field">
+            <label for="tr-name">Tournament name</label>
+            <input type="text" id="tr-name" required placeholder="Beginners - Aug Week 4">
+          </div>
+          <div class="field">
+            <label for="tr-location">Location</label>
+            <input type="text" id="tr-location" placeholder="KFS, Kafr El-Sheikh">
+          </div>
+          <div class="field">
+            <label for="tr-date">Date label</label>
+            <input type="text" id="tr-date" placeholder="Aug 26 - 8:00 PM">
+          </div>
+          <div class="field">
+            <label for="tr-status">Status</label>
+            <select id="tr-status">
+              <option value="upcoming" selected>Upcoming (open for registration)</option>
+              <option value="live">Live</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="tr-champion">Champion (only if completed)</label>
+            <input type="text" id="tr-champion" placeholder="Leave empty if not finished yet">
+          </div>
+          <button type="submit" class="btn btn-primary" id="tr-btn">Add tournament</button>
+        </form>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <h1>All tournaments</h1>
+        <div id="tournaments-loading" style="font-size:13px; color:var(--text-soft);">
+          <span class="spinner"></span> Loading...
+        </div>
+        <table class="players hidden" id="tournaments-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Status</th>
+              <th>Date</th>
+              <th>Registered</th>
+            </tr>
+          </thead>
+          <tbody id="tournaments-tbody"></tbody>
+        </table>
+      </div>
+
       <div class="panel" style="margin-top:16px;">
         <h1>All players</h1>
-        <div id="players-loading" style="font-size:13px; color:var(--ink-soft);">
+        <div id="players-loading" style="font-size:13px; color:var(--text-soft);">
           <span class="spinner"></span> Loading...
         </div>
         <table class="players hidden" id="players-table">
@@ -119,7 +171,7 @@
       </div>
 
       <div class="foot-link" style="margin-top:16px; margin-bottom: 16px;">
-        <button class="link-btn" id="admin-logout" type="button" style="color:var(--white); opacity:.8;">Log out</button>
+        <button class="link-btn" id="admin-logout" type="button" style="color:var(--text-soft); opacity:.8;">Log out</button>
       </div>
     </div>
 

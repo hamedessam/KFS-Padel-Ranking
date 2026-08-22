@@ -1,5 +1,5 @@
 import {
-  db, collection, doc, getDoc, getDocs, setDoc,
+  db, collection, doc, getDoc, getDocs, setDoc, addDoc,
   query, orderBy, runTransaction, serverTimestamp
 } from "./firebase-config.js";
 import { hashPassword, randomSalt, generatePassword, playerCodeFromSeq, tierMeta } from "./utils.js";
@@ -81,6 +81,7 @@ function enterAdmin() {
   viewAdmin.classList.remove("hidden");
   loadPlayers();
   loadAnnouncementForm();
+  loadTournaments();
 }
 
 $("admin-logout").addEventListener("click", () => {
@@ -238,3 +239,77 @@ $("announcement-form").addEventListener("submit", async (e) => {
 });
 
 initGate();
+
+// ---------------- tournaments ----------------
+$("tournament-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errEl = $("tr-error");
+  const okEl = $("tr-success");
+  hideMsg(errEl);
+  hideMsg(okEl);
+
+  const name = $("tr-name").value.trim();
+  const location = $("tr-location").value.trim();
+  const dateLabel = $("tr-date").value.trim();
+  const status = $("tr-status").value;
+  const championName = $("tr-champion").value.trim();
+  const btn = $("tr-btn");
+
+  if (!name) return;
+
+  btn.disabled = true;
+  btn.textContent = "Adding...";
+
+  try {
+    await addDoc(collection(db, "tournaments"), {
+      name,
+      location,
+      dateLabel,
+      status,
+      championName: status === "completed" ? championName : "",
+      participantIds: [],
+      createdAt: serverTimestamp()
+    });
+    showMsg(okEl, `${name} added.`);
+    $("tournament-form").reset();
+    $("tr-status").value = "upcoming";
+    loadTournaments();
+  } catch (err) {
+    console.error(err);
+    showMsg(errEl, "Something went wrong while adding the tournament. Try again.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Add tournament";
+  }
+});
+
+async function loadTournaments() {
+  const loadingEl = $("tournaments-loading");
+  const tableEl = $("tournaments-table");
+  const tbody = $("tournaments-tbody");
+  loadingEl.classList.remove("hidden");
+  tableEl.classList.add("hidden");
+
+  try {
+    const q = query(collection(db, "tournaments"), orderBy("createdAt", "desc"));
+    const snap = await getDocs(q);
+    tbody.innerHTML = "";
+    snap.forEach((d) => {
+      const t = d.data();
+      const tr = document.createElement("tr");
+      const statusClass = t.status === "live" ? "gold" : t.status === "upcoming" ? "silver" : "bronze";
+      tr.innerHTML = `
+        <td>${escapeHtml(t.name || "—")}</td>
+        <td><span class="badge-pill ${statusClass}">${t.status || "upcoming"}</span></td>
+        <td>${escapeHtml(t.dateLabel || "—")}</td>
+        <td>${(t.participantIds || []).length}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    loadingEl.classList.add("hidden");
+    tableEl.classList.remove("hidden");
+  } catch (err) {
+    console.error(err);
+    loadingEl.textContent = "Couldn't load tournaments.";
+  }
+}

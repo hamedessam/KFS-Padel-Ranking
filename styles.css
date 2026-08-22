@@ -1,6 +1,6 @@
 /* ==========================================================================
-   KFS Padel Ranking — Design tokens
-   Palette: deep court teal + padel-ball lime, sand paper panels, tier metals
+   KFS Padel Ranking — Design tokens (dark theme)
+   Palette: near-black teal background, lifted dark-teal panels, lime accent
    Type: Cairo (display/body) + Space Mono (codes/scoreboard)
    Layout: full-screen "app frame" (phone-shaped on desktop, edge-to-edge on mobile)
    ========================================================================== */
@@ -8,26 +8,28 @@
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Space+Mono:wght@400;700&display=swap');
 
 :root {
-  --court: #0f3d3e;
-  --court-dark: #0a2b2c;
-  --court-line: rgba(201, 242, 76, 0.14);
+  --bg: #0a1615;
+  --panel: #10201f;
+  --panel-alt: #16302d;
+  --border: rgba(245,243,234,0.09);
+
   --ball: #c9f24c;
   --ball-dim: #a6cc3c;
-  --sand: #f2ebda;
-  --sand-dim: #e4d9bf;
-  --ink: #142023;
-  --ink-soft: rgba(20, 32, 35, 0.62);
-  --white: #fbfaf6;
+
+  --text: #f5f3ea;
+  --text-soft: rgba(245,243,234,0.58);
+  --text-faint: rgba(245,243,234,0.38);
 
   --gold: #e3b74e;
   --silver: #b9c2c8;
   --bronze: #b98a5a;
 
   --danger: #e0654f;
+  --live: #33d17a;
 
   --radius: 18px;
-  --radius-sm: 10px;
-  --shadow: 0 24px 60px -20px rgba(10, 43, 44, 0.6);
+  --radius-sm: 12px;
+  --shadow: 0 24px 60px -20px rgba(0,0,0,0.6);
 
   --font-display: 'Cairo', system-ui, sans-serif;
   --font-body: 'Cairo', system-ui, sans-serif;
@@ -40,16 +42,13 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: var(--court-dark);
-  color: var(--ink);
+  background: #040a09;
+  color: var(--text);
   font-family: var(--font-body);
   direction: ltr;
 }
 
 body {
-  background-image:
-    radial-gradient(circle at 15% 0%, rgba(201,242,76,0.10), transparent 45%),
-    linear-gradient(160deg, var(--court) 0%, var(--court-dark) 70%);
   display: flex;
   justify-content: center;
 }
@@ -64,7 +63,7 @@ body {
   max-width: 480px;
   height: 100vh;
   height: 100dvh;
-  background: var(--sand);
+  background: var(--bg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -76,9 +75,10 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 16px 20px;
-  background: var(--ink);
-  color: var(--white);
+  padding: 16px 18px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
 }
 .topbar .dot {
   width: 9px; height: 9px; border-radius: 50%;
@@ -87,17 +87,30 @@ body {
   flex-shrink: 0;
 }
 .topbar .brand {
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  letter-spacing: 2.5px;
-  opacity: 0.85;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.2px;
 }
+.topbar-spacer { flex: 1; }
+.icon-btn {
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.icon-btn:hover { background: var(--panel-alt); color: var(--text); }
+.icon-btn svg { width: 19px; height: 19px; }
 
 .content-scroll {
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 22px 20px 24px;
+  padding: 20px 18px 24px;
 }
 
 .login-fill {
@@ -110,22 +123,47 @@ body {
 .panel h1 {
   font-family: var(--font-display);
   font-weight: 900;
-  font-size: 23px;
+  font-size: 21px;
   margin: 0 0 4px;
+  color: var(--text);
 }
 .panel p.sub {
-  margin: 0 0 22px;
-  color: var(--ink-soft);
-  font-size: 14px;
+  margin: 0 0 20px;
+  color: var(--text-soft);
+  font-size: 13.5px;
   line-height: 1.6;
 }
 
+/* ---------- section headers (for Home groupings) ---------- */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 26px 0 12px;
+}
+.section-head h2 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 16.5px;
+  margin: 0;
+  color: var(--text);
+}
+.section-head .view-all {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ball);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* ---------- fields ---------- */
 .field { margin-bottom: 16px; }
 .field label {
   display: block;
   font-size: 12.5px;
   font-weight: 700;
-  color: var(--ink-soft);
+  color: var(--text-soft);
   margin-bottom: 6px;
   letter-spacing: 0.2px;
 }
@@ -133,30 +171,31 @@ body {
   width: 100%;
   padding: 13px 14px;
   border-radius: var(--radius-sm);
-  border: 1.5px solid rgba(20,32,35,0.14);
-  background: var(--white);
-  color: var(--ink);
+  border: 1.5px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
   font-family: var(--font-body);
   font-size: 15px;
   outline: none;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
+.field input::placeholder { color: var(--text-faint); }
 .field input:focus, .field select:focus {
-  border-color: var(--court);
-  box-shadow: 0 0 0 3px rgba(15,61,62,0.14);
+  border-color: var(--ball-dim);
+  box-shadow: 0 0 0 3px rgba(201,242,76,0.12);
 }
 .field input.mono {
   font-family: var(--font-mono);
   letter-spacing: 2px;
   text-transform: uppercase;
 }
-.field .hint { font-size: 12px; color: var(--ink-soft); margin-top: 6px; }
+.field .hint { font-size: 12px; color: var(--text-soft); margin-top: 6px; }
 
 .code-tag {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: var(--ink);
+  background: var(--panel-alt);
   color: var(--ball);
   font-family: var(--font-mono);
   font-weight: 700;
@@ -166,6 +205,7 @@ body {
   font-size: 17px;
 }
 
+/* ---------- buttons ---------- */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -176,27 +216,30 @@ body {
   border: none;
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 15.5px;
+  font-size: 15px;
   cursor: pointer;
-  transition: transform .12s ease, filter .12s ease;
+  transition: transform .12s ease, filter .12s ease, opacity .12s ease;
 }
 .btn:active { transform: scale(0.98); }
-.btn-primary { background: var(--ink); color: var(--ball); }
-.btn-primary:hover { filter: brightness(1.15); }
+.btn-primary { background: var(--ball); color: #0a1615; }
+.btn-primary:hover { filter: brightness(1.08); }
 .btn-ghost {
   background: transparent;
-  color: var(--ink);
-  border: 1.5px solid rgba(20,32,35,0.18);
+  color: var(--text);
+  border: 1.5px solid var(--border);
 }
-.btn-danger { background: var(--danger); color: var(--white); }
+.btn-ghost:hover { background: var(--panel-alt); }
+.btn-danger { background: var(--danger); color: var(--text); }
+.btn-sm { padding: 9px 14px; font-size: 12.5px; width: auto; }
 .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
 
 .link-btn {
   background: none; border: none; cursor: pointer;
-  color: var(--court); font-family: var(--font-body); font-weight: 700;
+  color: var(--ball); font-family: var(--font-body); font-weight: 700;
   font-size: 13.5px; text-decoration: underline; padding: 4px;
 }
 
+/* ---------- messages ---------- */
 .msg {
   border-radius: var(--radius-sm);
   padding: 12px 14px;
@@ -206,17 +249,17 @@ body {
   line-height: 1.6;
 }
 .msg.show { display: block; }
-.msg.error { background: rgba(224,101,79,0.12); color: #a33d29; border: 1px solid rgba(224,101,79,0.3); }
-.msg.success { background: rgba(201,242,76,0.18); color: #3c5a10; border: 1px solid rgba(166,204,60,0.4); }
-.msg.info { background: rgba(15,61,62,0.08); color: var(--ink); border: 1px solid rgba(15,61,62,0.16); }
+.msg.error { background: rgba(224,101,79,0.14); color: #f2a598; border: 1px solid rgba(224,101,79,0.3); }
+.msg.success { background: rgba(201,242,76,0.14); color: var(--ball); border: 1px solid rgba(166,204,60,0.3); }
+.msg.info { background: var(--panel-alt); color: var(--text); border: 1px solid var(--border); }
 
 .announcement-bar {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  background: rgba(201,242,76,0.18);
-  border: 1px solid rgba(166,204,60,0.4);
-  color: #3c5a10;
+  background: rgba(201,242,76,0.12);
+  border: 1px solid rgba(166,204,60,0.28);
+  color: var(--ball);
   border-radius: var(--radius-sm);
   padding: 11px 13px;
   font-size: 13px;
@@ -225,6 +268,7 @@ body {
 }
 .announcement-bar .ann-ico { flex-shrink: 0; }
 
+/* ---------- profile ---------- */
 .profile-head {
   display: flex;
   align-items: center;
@@ -232,75 +276,80 @@ body {
   margin-bottom: 22px;
 }
 .avatar {
-  width: 58px; height: 58px;
+  width: 54px; height: 54px;
   border-radius: 50%;
-  background: var(--ink);
+  background: var(--panel-alt);
   color: var(--ball);
   display: flex; align-items: center; justify-content: center;
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 20px;
+  font-size: 19px;
   flex-shrink: 0;
+  border: 1.5px solid var(--border);
 }
-.profile-name { font-family: var(--font-display); font-weight: 800; font-size: 19px; }
-.profile-code { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink-soft); letter-spacing: 1.5px; }
+.profile-name { font-family: var(--font-display); font-weight: 800; font-size: 18px; color: var(--text); }
+.profile-code { font-family: var(--font-mono); font-size: 12px; color: var(--text-soft); letter-spacing: 1.5px; }
 
+/* tier badge — shield shape */
 .tier-badge {
   display: flex;
   align-items: center;
   gap: 14px;
-  background: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 16px 18px;
-  margin-bottom: 20px;
+  padding: 15px 17px;
+  margin-bottom: 18px;
 }
 .tier-shield {
-  width: 46px; height: 52px;
+  width: 44px; height: 50px;
   clip-path: polygon(50% 0%, 100% 18%, 100% 62%, 50% 100%, 0% 62%, 0% 18%);
   display: flex; align-items: center; justify-content: center;
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 13px;
-  color: var(--ink);
+  font-size: 12.5px;
+  color: #0a1615;
   flex-shrink: 0;
 }
 .tier-shield.gold { background: linear-gradient(160deg, #f3d178, var(--gold)); }
 .tier-shield.silver { background: linear-gradient(160deg, #e4e9eb, var(--silver)); }
 .tier-shield.bronze { background: linear-gradient(160deg, #d5a878, var(--bronze)); }
-.tier-info { color: var(--white); }
-.tier-name { font-family: var(--font-display); font-weight: 800; font-size: 16.5px; }
-.tier-points { font-family: var(--font-mono); font-size: 12.5px; color: rgba(251,250,246,0.65); margin-top: 2px; }
+.tier-info { color: var(--text); }
+.tier-name { font-family: var(--font-display); font-weight: 800; font-size: 16px; }
+.tier-points { font-family: var(--font-mono); font-size: 12px; color: var(--text-soft); margin-top: 2px; }
 
 .stat-row {
   display: flex;
   gap: 10px;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 .stat-box {
   flex: 1;
-  background: var(--white);
-  border: 1.5px solid rgba(20,32,35,0.1);
+  background: var(--panel);
+  border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 12px 10px;
   text-align: center;
 }
-.stat-box .num { font-family: var(--font-mono); font-weight: 700; font-size: 19px; }
-.stat-box .lbl { font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; }
+.stat-box .num { font-family: var(--font-mono); font-weight: 700; font-size: 18px; color: var(--text); }
+.stat-box .lbl { font-size: 11px; color: var(--text-soft); margin-top: 2px; }
 
-.divider { height: 1px; background: rgba(20,32,35,0.1); margin: 20px 0; }
+.divider { height: 1px; background: var(--border); margin: 18px 0; }
 
 .foot-link { text-align: center; margin-top: 16px; }
-.foot-link a, .foot-link button { color: var(--white); opacity: 0.8; font-size: 13px; }
+.foot-link a, .foot-link button { color: var(--text-soft); font-size: 13px; }
 
+/* ---------- leaderboard ---------- */
 .my-rank-strip {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--ink);
-  color: var(--white);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
   border-radius: var(--radius-sm);
   padding: 12px 16px;
-  font-size: 13.5px;
+  font-size: 13px;
   margin-bottom: 4px;
 }
 .my-rank-strip strong {
@@ -323,19 +372,19 @@ body {
   gap: 12px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
-  background: var(--white);
-  border: 1.5px solid rgba(20,32,35,0.08);
+  background: var(--panel);
+  border: 1.5px solid var(--border);
 }
 .lb-row.me {
-  border-color: var(--court);
-  background: rgba(15,61,62,0.06);
+  border-color: var(--ball-dim);
+  background: rgba(201,242,76,0.08);
 }
 .lb-rank {
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 13.5px;
-  color: var(--ink-soft);
-  width: 26px;
+  font-size: 13px;
+  color: var(--text-soft);
+  width: 24px;
   text-align: center;
   flex-shrink: 0;
 }
@@ -343,41 +392,118 @@ body {
 .lb-rank.top2 { color: var(--silver); }
 .lb-rank.top3 { color: var(--bronze); }
 .lb-avatar {
-  width: 34px; height: 34px;
+  width: 32px; height: 32px;
   border-radius: 50%;
-  background: var(--ink);
+  background: var(--panel-alt);
   color: var(--ball);
   display: flex; align-items: center; justify-content: center;
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 14px;
+  font-size: 13px;
   flex-shrink: 0;
 }
 .lb-mid { flex: 1; min-width: 0; }
 .lb-name {
   font-weight: 700;
-  font-size: 13.5px;
+  font-size: 13px;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .lb-tier {
-  font-size: 11px;
-  color: var(--ink-soft);
+  font-size: 10.5px;
+  color: var(--text-soft);
   margin-top: 1px;
 }
 .lb-points {
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13.5px;
+  color: var(--text);
   flex-shrink: 0;
+}
+
+/* compact top-players list (Home) */
+.top-players { display: flex; flex-direction: column; gap: 8px; }
+.top-players .lb-row { padding: 9px 11px; }
+
+/* ---------- tournament cards (horizontal scroll + list) ---------- */
+.tourney-scroll {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.tourney-scroll::-webkit-scrollbar { display: none; }
+
+.tourney-card {
+  flex: 0 0 auto;
+  width: 168px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 14px 13px;
+  position: relative;
+}
+.tourney-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  margin-bottom: 10px;
+}
+.tourney-status.live { background: rgba(51,209,122,0.16); color: var(--live); }
+.tourney-status.live .dot-live {
+  width: 5px; height: 5px; border-radius: 50%; background: var(--live);
+  display: inline-block; animation: pulse 1.4s infinite;
+}
+.tourney-status.upcoming { background: rgba(201,242,76,0.14); color: var(--ball); }
+.tourney-status.completed { background: var(--panel-alt); color: var(--text-soft); }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.tourney-name { font-family: var(--font-display); font-weight: 800; font-size: 14px; color: var(--text); line-height: 1.3; margin-bottom: 8px; }
+.tourney-meta { font-size: 11px; color: var(--text-soft); display: flex; align-items: center; gap: 5px; margin-bottom: 3px; }
+.tourney-meta svg { width: 11px; height: 11px; flex-shrink: 0; opacity: 0.7; }
+
+/* full list view (Tournaments tab) */
+.tourney-list { display: flex; flex-direction: column; gap: 12px; }
+.tourney-row {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px 16px 14px;
+}
+.tourney-row-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.tourney-row .tourney-name { font-size: 15.5px; margin-bottom: 0; }
+.tourney-champion {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.tourney-actions { margin-top: 12px; }
+.tourney-empty {
+  text-align: center;
+  padding: 30px 10px;
+  color: var(--text-soft);
+  font-size: 13px;
 }
 
 .coming-soon { text-align: center; padding: 30px 6px 10px; }
 .coming-soon-badge {
   display: inline-block;
   background: var(--ball);
-  color: var(--ink);
+  color: #0a1615;
   font-family: var(--font-mono);
   font-weight: 700;
   font-size: 11px;
@@ -388,53 +514,56 @@ body {
 }
 .coming-soon h1 { margin-top: 0; }
 
+/* ---------- bottom tab bar ---------- */
 .tabbar {
   flex-shrink: 0;
   display: flex;
   justify-content: center;
-  gap: 6px;
-  background: var(--ink);
-  border-top: 1px solid rgba(251,250,246,0.08);
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  gap: 2px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
 }
 .tab-btn {
   flex: 1;
-  max-width: 140px;
+  max-width: 110px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   background: none;
   border: none;
-  color: rgba(251,250,246,0.5);
+  color: var(--text-faint);
   font-family: var(--font-body);
-  font-size: 11.5px;
+  font-size: 10.5px;
   font-weight: 700;
   cursor: pointer;
-  padding: 6px 4px;
+  padding: 6px 2px;
   border-radius: 10px;
   transition: color .15s ease;
 }
-.tab-btn .tab-ico { font-size: 13px; color: inherit; }
+.tab-btn svg { width: 21px; height: 21px; stroke: currentColor; }
 .tab-btn.active { color: var(--ball); }
-.tab-btn:hover { color: var(--white); }
+.tab-btn:hover { color: var(--text); }
 
+/* ---------- admin table ---------- */
 table.players {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13.5px;
+  font-size: 13px;
   margin-top: 10px;
 }
 table.players th, table.players td {
   padding: 10px 8px;
   text-align: left;
-  border-bottom: 1px solid rgba(20,32,35,0.08);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
 }
 table.players th {
   font-family: var(--font-display);
   font-weight: 700;
-  color: var(--ink-soft);
-  font-size: 12px;
+  color: var(--text-soft);
+  font-size: 11.5px;
 }
 table.players td.code { font-family: var(--font-mono); letter-spacing: 1px; }
 table.players tr:last-child td { border-bottom: none; }
@@ -443,20 +572,20 @@ table.players tr:last-child td { border-bottom: none; }
   display: inline-block;
   padding: 3px 10px;
   border-radius: 20px;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   font-family: var(--font-mono);
 }
-.badge-pill.gold { background: rgba(227,183,78,0.2); color: #8a6516; }
-.badge-pill.silver { background: rgba(185,194,200,0.3); color: #566268; }
-.badge-pill.bronze { background: rgba(185,138,90,0.22); color: #7a4f26; }
+.badge-pill.gold { background: rgba(227,183,78,0.18); color: var(--gold); }
+.badge-pill.silver { background: rgba(185,194,200,0.18); color: var(--silver); }
+.badge-pill.bronze { background: rgba(185,138,90,0.18); color: var(--bronze); }
 
 .hidden { display: none !important; }
 
 .spinner {
   display: inline-block;
   width: 16px; height: 16px;
-  border: 2px solid rgba(201,242,76,0.3);
+  border: 2px solid rgba(201,242,76,0.25);
   border-top-color: var(--ball);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
