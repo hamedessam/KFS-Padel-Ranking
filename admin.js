@@ -1,8 +1,8 @@
 import {
   db, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc,
-  query, orderBy, runTransaction, serverTimestamp
+  query, orderBy, runTransaction, writeBatch, increment, serverTimestamp
 } from "./firebase-config.js";
-import { hashPassword, randomSalt, generatePassword, playerCodeFromSeq, tierMeta, isFoundingMember } from "./utils.js";
+import { hashPassword, randomSalt, generatePassword, playerCodeFromSeq, tierMeta, tierFromPoints, isFoundingMember, computeMatchPointChanges } from "./utils.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -82,6 +82,8 @@ function enterAdmin() {
   loadPlayers();
   loadAnnouncementForm();
   loadTournaments();
+  loadTiersToggle();
+  loadMatchFormOptions();
 }
 
 $("admin-logout").addEventListener("click", () => {
@@ -99,7 +101,7 @@ $("add-form").addEventListener("submit", async (e) => {
 
   const name = $("ap-name").value.trim();
   const phone = $("ap-phone").value.trim();
-  const tier = $("ap-tier").value;
+  const startingPoints = parseInt($("ap-points").value, 10) || 1000;
   const btn = $("add-btn");
 
   if (!name || !phone) return;
@@ -130,8 +132,7 @@ $("add-form").addEventListener("submit", async (e) => {
       passwordSalt: salt,
       passwordHash,
       avatarUrl: "",
-      currentTier: tier,
-      ratingPoints: 1000,
+      ratingPoints: startingPoints,
       matchesPlayed: 0,
       wins: 0,
       losses: 0,
@@ -175,7 +176,7 @@ async function loadPlayers() {
     tbody.innerHTML = "";
     snap.forEach((d) => {
       const p = d.data();
-      const meta = tierMeta(p.currentTier);
+      const meta = tierMeta(tierFromPoints(p.ratingPoints));
       const tr = document.createElement("tr");
       const avatarCell = p.avatarUrl
         ? `<img src="${p.avatarUrl}" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block;">`
@@ -285,6 +286,30 @@ $("announcement-form").addEventListener("submit", async (e) => {
 
 initGate();
 
+// ---------------- tiers visibility ----------------
+const APP_SETTINGS_REF = doc(db, "config", "appSettings");
+
+async function loadTiersToggle() {
+  try {
+    const snap = await getDoc(APP_SETTINGS_REF);
+    $("tiers-enabled-toggle").checked = snap.exists() ? !!snap.data().tiersEnabled : false;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+$("tiers-enabled-toggle").addEventListener("change", async (e) => {
+  const okEl = $("tiers-success");
+  hideMsg(okEl);
+  try {
+    await setDoc(APP_SETTINGS_REF, { tiersEnabled: e.target.checked }, { merge: true });
+    showMsg(okEl, e.target.checked ? "Tier badges are now visible to players." : "Tier badges are now hidden from players.");
+  } catch (err) {
+    console.error(err);
+    e.target.checked = !e.target.checked; // revert on failure
+  }
+});
+
 // ---------------- tournaments ----------------
 $("tournament-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -358,3 +383,166 @@ async function loadTournaments() {
     loadingEl.textContent = "Couldn't load tournaments.";
   }
 }
+
+// ---------------- record match result (rating engine) ----------------
+let activePlayersCache = [];
+
+async function loadMatchFormOptions() {
+  try {
+    const [tournamentsSnap, playersSnap] = await Promise.all([
+      getDocs(query(collection(db, "tournaments"), orderBy("createdAt", "desc"))),
+      getDocs(query(collection(db, "players"), orderBy("name")))
+    ]);
+
+    const tournamentSelect = $("mt-tournament");
+    tournamentSelect.innerHTML = "";
+    tournamentsSnap.forEach((d) => {
+      const t = d.data();
+      const opt = document.createElement("option");
+      opt.value = d.id;
+      opt.textContent = `${t.name || "Untitled"} (${t.status || "upcoming"})`;
+      tournamentSelect.appendChild(opt);
+    });
+    if (tournamentsSnap.empty) {
+      tournamentSelect.innerHTML = '<option value="">Add a tournament first</option>';
+    }
+
+    activePlayersCache = playersSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((p) => p.isActive !== false);
+
+    const playerSelects = [$("mt-t1p1"), $("mt-t1p2"), $("mt-t2p1"), $("mt-t2p2")];
+    playerSelects.forEach((sel) => {
+      sel.innerHTML = '<option value="">Select player</option>';
+      activePlayersCache.forEach((p) => {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = `${p.name || "—"} (${p.playerCode || "—"}) — ${Math.round(p.ratingPoints ?? 1000)} pts`;
+        sel.appendChild(opt);
+      });
+    });
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+$("match-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errEl = $("match-error");
+  const okEl = $("match-success");
+  hideMsg(errEl);
+  hideMsg(okEl);
+  $("match-result-summary").classList.add("hidden");
+
+  const tournamentId = $("mt-tournament").value;
+  const round = $("mt-round").value.trim();
+  const ids = [$("mt-t1p1").value, $("mt-t1p2").value, $("mt-t2p1").value, $("mt-t2p2").value];
+  const score1 = parseInt($("mt-score1").value, 10);
+  const score2 = parseInt($("mt-score2").value, 10);
+  const btn = $("match-btn");
+
+  if (!tournamentId) {
+    showMsg(errEl, "Pick a tournament first.");
+    return;
+  }
+  if (ids.some((id) => !id)) {
+    showMsg(errEl, "Pick all 4 players.");
+    return;
+  }
+  if (new Set(ids).size !== 4) {
+    showMsg(errEl, "A player can't appear twice in the same match.");
+    return;
+  }
+  if (Number.isNaN(score1) || Number.isNaN(score2) || score1 < 0 || score2 < 0) {
+    showMsg(errEl, "Enter valid game scores for both teams.");
+    return;
+  }
+  if (score1 === score2) {
+    showMsg(errEl, "Scores can't be tied — one team has to have won.");
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Calculating...";
+
+  try {
+    // fetch fresh player docs right before computing, so back-to-back matches
+    // in the same session always use up-to-date ratings, not stale cache
+    const freshDocs = await Promise.all(ids.map((id) => getDoc(doc(db, "players", id))));
+    if (freshDocs.some((d) => !d.exists())) {
+      showMsg(errEl, "One of the selected players no longer exists.");
+      return;
+    }
+    const players = freshDocs.map((d) => ({ id: d.id, ...d.data() }));
+    const team1 = [players[0], players[1]];
+    const team2 = [players[2], players[3]];
+
+    const results = computeMatchPointChanges(team1, team2, score1, score2);
+
+    const batch = writeBatch(db);
+    const matchRef = doc(collection(db, "matches"));
+    batch.set(matchRef, {
+      tournamentId,
+      round: round || "",
+      team1: [team1[0].id, team1[1].id],
+      team2: [team2[0].id, team2[1].id],
+      team1Games: score1,
+      team2Games: score2,
+      createdAt: serverTimestamp()
+    });
+
+    results.forEach((r) => {
+      batch.update(doc(db, "players", r.playerId), {
+        ratingPoints: r.ratingAfter,
+        matchesPlayed: increment(1),
+        wins: increment(r.won ? 1 : 0),
+        losses: increment(r.won ? 0 : 1)
+      });
+      const historyRef = doc(collection(db, "ratingHistory"));
+      batch.set(historyRef, {
+        playerId: r.playerId,
+        matchId: matchRef.id,
+        tournamentId,
+        ratingBefore: r.ratingBefore,
+        opponentAvgRating: r.opponentAvg,
+        expectedScore: r.expectedScore,
+        actualResult: r.actualResult,
+        marginMultiplier: r.marginMultiplier,
+        kFactor: r.kFactor,
+        pointsChange: r.pointsChange,
+        ratingAfter: r.ratingAfter,
+        createdAt: serverTimestamp()
+      });
+    });
+
+    await batch.commit();
+
+    const summaryEl = $("match-result-summary");
+    summaryEl.innerHTML = results.map((r) => {
+      const p = players.find((pl) => pl.id === r.playerId);
+      const sign = r.pointsChange >= 0 ? "+" : "";
+      const color = r.pointsChange >= 0 ? "var(--live)" : "var(--danger)";
+      return `<div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px;">
+        <span>${escapeHtml(p.name || "—")}</span>
+        <span style="color:${color}; font-family:var(--font-mono); font-weight:700;">${sign}${r.pointsChange.toFixed(1)} → ${Math.round(r.ratingAfter)}</span>
+      </div>`;
+    }).join("");
+    summaryEl.classList.remove("hidden");
+
+    showMsg(okEl, "Match recorded and ratings updated.");
+    $("mt-t1p1").value = "";
+    $("mt-t1p2").value = "";
+    $("mt-t2p1").value = "";
+    $("mt-t2p2").value = "";
+    $("mt-score1").value = "";
+    $("mt-score2").value = "";
+    loadMatchFormOptions(); // refresh point totals shown in the dropdowns
+    loadPlayers(); // refresh the roster table too
+  } catch (err) {
+    console.error(err);
+    showMsg(errEl, "Something went wrong recording the match. Try again.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Record match & update ratings";
+  }
+});

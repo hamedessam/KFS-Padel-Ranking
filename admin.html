@@ -51,18 +51,9 @@
             <input type="tel" id="ap-phone" required placeholder="01xxxxxxxxx">
           </div>
           <div class="field">
-            <label for="ap-tier">Starting tier</label>
-            <select id="ap-tier">
-              <option value="bronze_3">Bronze 3 (beginner)</option>
-              <option value="bronze_2">Bronze 2</option>
-              <option value="bronze_1">Bronze 1</option>
-              <option value="silver_3" selected>Silver 3</option>
-              <option value="silver_2">Silver 2</option>
-              <option value="silver_1">Silver 1</option>
-              <option value="gold_3">Gold 3</option>
-              <option value="gold_2">Gold 2</option>
-              <option value="gold_1">Gold 1</option>
-            </select>
+            <label for="ap-points">Starting points</label>
+            <input type="number" id="ap-points" value="1000" min="500" max="2000" step="10">
+            <div class="hint">Everyone starts at 1000 (lands in Silver 3). Only raise this if you already know this player is genuinely strong — the tier badge is always calculated from points, never chosen manually.</div>
           </div>
           <button type="submit" class="btn btn-primary" id="add-btn">Add player &amp; generate code</button>
         </form>
@@ -80,6 +71,16 @@
           <div class="code-tag" id="new-pass">—</div>
         </div>
         <button class="btn btn-ghost" id="copy-creds" type="button">Copy WhatsApp-ready message</button>
+      </div>
+
+      <div class="panel" id="tiers-card" style="margin-top:16px;">
+        <h1>Tiers visibility</h1>
+        <p class="sub">While this is off, players only see their points and rank — no Bronze/Silver/Gold badge. Turn it on once enough tournaments have run for the points to feel earned and fair. Tier badges are always calculated from points automatically, never chosen manually, so there's nothing to configure beyond this switch.</p>
+        <div class="msg success" id="tiers-success"></div>
+        <div class="field" style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="tiers-enabled-toggle" style="width:auto;">
+          <label for="tiers-enabled-toggle" style="margin:0;">Show tier badges to players</label>
+        </div>
       </div>
 
       <div class="panel" id="announcement-card" style="margin-top:16px;">
@@ -131,6 +132,45 @@
           </div>
           <button type="submit" class="btn btn-primary" id="tr-btn">Add tournament</button>
         </form>
+      </div>
+
+      <div class="panel" id="match-card" style="margin-top:16px;">
+        <h1>Record a match result</h1>
+        <p class="sub">Updates both teams' ratings automatically using the ELO formula — the weaker player on the winning team gains more, the stronger player on the losing team loses more.</p>
+        <div class="msg error" id="match-error"></div>
+        <div class="msg success" id="match-success"></div>
+        <form id="match-form">
+          <div class="field">
+            <label for="mt-tournament">Tournament</label>
+            <select id="mt-tournament" required></select>
+          </div>
+          <div class="field">
+            <label for="mt-round">Round (optional)</label>
+            <input type="text" id="mt-round" placeholder="e.g. Group stage, Semifinal, Final">
+          </div>
+          <div class="field">
+            <label>Team 1</label>
+            <select id="mt-t1p1" required></select>
+            <select id="mt-t1p2" required style="margin-top:8px;"></select>
+          </div>
+          <div class="field">
+            <label>Team 2</label>
+            <select id="mt-t2p1" required></select>
+            <select id="mt-t2p2" required style="margin-top:8px;"></select>
+          </div>
+          <div class="field" style="display:flex; gap:12px;">
+            <div style="flex:1;">
+              <label for="mt-score1">Team 1 games</label>
+              <input type="number" id="mt-score1" min="0" max="20" required>
+            </div>
+            <div style="flex:1;">
+              <label for="mt-score2">Team 2 games</label>
+              <input type="number" id="mt-score2" min="0" max="20" required>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary" id="match-btn">Record match &amp; update ratings</button>
+        </form>
+        <div class="hidden" id="match-result-summary" style="margin-top:16px;"></div>
       </div>
 
       <div class="panel" style="margin-top:16px;">

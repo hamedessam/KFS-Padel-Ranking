@@ -1,5 +1,5 @@
 import { db, collection, doc, getDoc, getDocs, updateDoc, query, where, limit, orderBy, arrayUnion } from "./firebase-config.js";
-import { hashPassword, randomSalt, tierMeta, avatarHtml, isFoundingMember } from "./utils.js";
+import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFoundingMember } from "./utils.js";
 import { t, getLang, setLang, applyStaticTranslations } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
@@ -34,10 +34,11 @@ function refreshProfileDisplay(player) {
   $("pf-name").textContent = player.name || "—";
   $("pf-code").textContent = player.playerCode || "—";
 
-  const meta = tierMeta(player.currentTier);
+  const meta = tierMeta(tierFromPoints(player.ratingPoints));
   $("pf-shield").textContent = meta.level || "-";
   $("pf-shield").className = "tier-shield " + meta.cssClass;
-  $("pf-tier-name").textContent = meta.displayName;
+  $("pf-shield").classList.toggle("hidden", !tiersEnabled);
+  $("pf-tier-name").textContent = tierLabelOrHidden(meta);
   $("pf-points").textContent = `${Math.round(player.ratingPoints ?? 1000)} ${t("pts")}`;
 
   $("pf-matches").textContent = player.matchesPlayed ?? 0;
@@ -230,10 +231,11 @@ async function loadHome() {
   $("home-greeting").textContent = `${t("home_greeting_prefix")} ${(currentPlayer.name || "").split(" ")[0] || ""} 👋`;
   $("hm-code").textContent = currentPlayer.playerCode || "—";
 
-  const meta = tierMeta(currentPlayer.currentTier);
+  const meta = tierMeta(tierFromPoints(currentPlayer.ratingPoints));
   $("hm-shield").textContent = meta.level || "-";
   $("hm-shield").className = "tier-shield " + meta.cssClass;
-  $("hm-tier-name").textContent = meta.displayName;
+  $("hm-shield").classList.toggle("hidden", !tiersEnabled);
+  $("hm-tier-name").textContent = tierLabelOrHidden(meta);
   $("hm-points").textContent = `${Math.round(currentPlayer.ratingPoints ?? 1000)} ${t("pts")}`;
 
   loadAnnouncement();
@@ -294,7 +296,7 @@ function renderTopPlayers(list) {
   el.innerHTML = "";
   list.forEach((p) => {
     const isMe = p.id === currentPlayer.id;
-    const meta = tierMeta(p.currentTier);
+    const meta = tierMeta(tierFromPoints(p.ratingPoints));
     const founding = isFoundingMember(p);
     const rankClass = p.rank === 1 ? "top1" : p.rank === 2 ? "top2" : p.rank === 3 ? "top3" : "";
     const row = document.createElement("div");
@@ -304,7 +306,7 @@ function renderTopPlayers(list) {
       <span class="lb-avatar${founding ? " founding-ring" : ""}">${avatarHtml(p)}</span>
       <span class="lb-mid">
         <div class="lb-name">${founding ? '<span class="founding-star" title="Founding Member">🌟</span> ' : ""}${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
-        <div class="lb-tier">${meta.displayName}</div>
+        <div class="lb-tier">${tierLabelOrHidden(meta)}</div>
       </span>
       <span class="lb-points">${Math.round(p.ratingPoints ?? 1000)}</span>
     `;
@@ -470,7 +472,7 @@ async function loadLeaderboard() {
 
     data.forEach((p) => {
       const isMe = p.id === currentPlayer.id;
-      const meta = tierMeta(p.currentTier);
+      const meta = tierMeta(tierFromPoints(p.ratingPoints));
       const founding = isFoundingMember(p);
       const li = document.createElement("li");
       li.className = "lb-row" + (isMe ? " me" : "");
@@ -480,7 +482,7 @@ async function loadLeaderboard() {
         <span class="lb-avatar${founding ? " founding-ring" : ""}">${avatarHtml(p)}</span>
         <span class="lb-mid">
           <div class="lb-name">${founding ? '<span class="founding-star" title="Founding Member">🌟</span> ' : ""}${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
-          <div class="lb-tier">${meta.displayName}</div>
+          <div class="lb-tier">${tierLabelOrHidden(meta)}</div>
         </span>
         <span class="lb-points">${Math.round(p.ratingPoints ?? 1000)}</span>
       `;
@@ -672,17 +674,17 @@ async function generateAndShareProfileCard() {
     ctx.fillStyle = "rgba(245,243,234,0.5)";
     ctx.fillText(currentPlayer.playerCode || "", W / 2, avatarY + avatarSize + 140);
 
-    // tier pill
-    const meta = tierMeta(currentPlayer.currentTier);
+    // tier pill (or plain points pill while tiers are hidden)
+    const meta = tierMeta(tierFromPoints(currentPlayer.ratingPoints));
     const tierColors = { gold: "#e3b74e", silver: "#b9c2c8", bronze: "#b98a5a" };
     const pillY = avatarY + avatarSize + 200;
     ctx.font = "800 34px 'Cairo', sans-serif";
-    const pillText = meta.displayName;
+    const pillText = tierLabelOrHidden(meta);
     const pillWidth = ctx.measureText(pillText).width + 80;
     ctx.fillStyle = "rgba(255,255,255,0.06)";
     roundRect(ctx, W / 2 - pillWidth / 2, pillY - 44, pillWidth, 76, 38);
     ctx.fill();
-    ctx.fillStyle = tierColors[meta.cssClass] || "#c9f24c";
+    ctx.fillStyle = tiersEnabled ? (tierColors[meta.cssClass] || "#c9f24c") : "#c9f24c";
     ctx.fillText(pillText, W / 2, pillY + 8);
 
     // stats row
@@ -757,10 +759,28 @@ $("logout-btn").addEventListener("click", () => {
   showLogin();
 });
 
+// ---------------- app settings (tiers on/off, admin-controlled) ----------------
+let tiersEnabled = false; // default off until admin explicitly turns tiers on
+
+async function loadAppSettings() {
+  try {
+    const snap = await getDoc(doc(db, "config", "appSettings"));
+    tiersEnabled = snap.exists() ? !!snap.data().tiersEnabled : false;
+  } catch (err) {
+    console.error(err);
+    tiersEnabled = false;
+  }
+}
+
+function tierLabelOrHidden(meta) {
+  return tiersEnabled ? meta.displayName : t("tier_hidden_label");
+}
+
 // ---------------- bootstrap ----------------
 applyStaticTranslations();
 
 (async function init() {
+  await loadAppSettings();
   const savedId = getSession();
   if (!savedId) return;
   try {

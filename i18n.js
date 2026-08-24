@@ -65,6 +65,7 @@ const translations = {
     profile_share_btn: "شارك بطاقة البروفايل",
     profile_share_generating: "جاري التجهيز...",
     rank_no_change: "زي ما هو",
+    tier_hidden_label: "تقييمك",
     // settings
     settings_title: "الإعدادات",
     settings_sub: "بيانات حسابك واللغة.",
@@ -141,6 +142,7 @@ const translations = {
     profile_share_btn: "Share profile card",
     profile_share_generating: "Preparing...",
     rank_no_change: "No change",
+    tier_hidden_label: "Your rating",
     settings_title: "Settings",
     settings_sub: "Your account and language.",
     settings_language: "Language",
