@@ -1,8 +1,9 @@
 import {
-  db, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
-  query, orderBy, arrayUnion, runTransaction, writeBatch, increment, serverTimestamp
+  db, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc,
+  query, orderBy, runTransaction, writeBatch, increment, serverTimestamp
 } from "./firebase-config.js";
 import { hashPassword, randomSalt, generatePassword, playerCodeFromSeq, tierMeta, tierFromPoints, isFoundingMember, computeMatchPointChanges } from "./utils.js";
+import { fetchTeams, assignToSlot, removeFromSlot, setTeamGroup } from "./teams.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -84,8 +85,18 @@ function enterAdmin() {
   loadTournaments();
   loadTiersToggle();
   loadMatchFormOptions();
-  loadTournamentSelects();
+  loadTMTournamentSelect();
 }
+
+// ---------------- admin tab switcher ----------------
+document.querySelectorAll(".admin-tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".admin-tab-btn").forEach((b) => b.classList.toggle("active", b === btn));
+    document.querySelectorAll(".admin-tab-panel").forEach((panel) => {
+      panel.classList.toggle("hidden", panel.id !== `admin-tab-${btn.dataset.adminTab}`);
+    });
+  });
+});
 
 $("admin-logout").addEventListener("click", () => {
   localStorage.removeItem(ADMIN_SESSION_KEY);
@@ -141,23 +152,6 @@ $("add-form").addEventListener("submit", async (e) => {
       createdAt: serverTimestamp()
     });
 
-    // optional: register straight into the upcoming tournament (+ pair with a partner)
-    if ($("ap-register-toggle").checked && upcomingTournamentId) {
-      await updateDoc(doc(db, "tournaments", upcomingTournamentId), {
-        participantIds: arrayUnion(newPlayerRef.id)
-      });
-      const partnerId = $("ap-partner").value;
-      if (partnerId) {
-        await addDoc(collection(db, "tournaments", upcomingTournamentId, "teams"), {
-          player1Id: partnerId,
-          player2Id: newPlayerRef.id,
-          group: null,
-          createdAt: serverTimestamp()
-        });
-      }
-      loadTournamentManagerContent(upcomingTournamentId);
-    }
-
     $("new-code").textContent = playerCode;
     $("new-pass").textContent = password;
     $("credentials-card").classList.remove("hidden");
@@ -168,12 +162,10 @@ $("add-form").addEventListener("submit", async (e) => {
       setTimeout(() => { $("copy-creds").textContent = "Copy WhatsApp-ready message"; }, 1800);
     };
 
-    showMsg(okEl, `${name} added successfully.`);
+    showMsg(okEl, `${name} added successfully. Assign them to a team in the Tournament Manager tab whenever you're ready.`);
     $("add-form").reset();
-    $("ap-partner").classList.add("hidden");
     loadPlayers();
     loadMatchFormOptions();
-    refreshAddPlayerTournamentSection();
   } catch (err) {
     console.error(err);
     showMsg(errEl, "Something went wrong while adding the player. Try again.");
@@ -343,6 +335,7 @@ $("tournament-form").addEventListener("submit", async (e) => {
   const location = $("tr-location").value.trim();
   const dateLabel = $("tr-date").value.trim();
   const status = $("tr-status").value;
+  const totalTeams = parseInt($("tr-total-teams").value, 10) || 12;
   const deadlineRaw = $("tr-deadline").value;
   const championName = $("tr-champion").value.trim();
   const btn = $("tr-btn");
@@ -358,6 +351,7 @@ $("tournament-form").addEventListener("submit", async (e) => {
       location,
       dateLabel,
       status,
+      totalTeams,
       registrationDeadline: deadlineRaw ? new Date(deadlineRaw) : null,
       championName: status === "completed" ? championName : "",
       participantIds: [],
@@ -366,8 +360,9 @@ $("tournament-form").addEventListener("submit", async (e) => {
     showMsg(okEl, `${name} added.`);
     $("tournament-form").reset();
     $("tr-status").value = "upcoming";
+    $("tr-total-teams").value = "12";
     loadTournaments();
-    loadTournamentSelects();
+    loadTMTournamentSelect();
   } catch (err) {
     console.error(err);
     showMsg(errEl, "Something went wrong while adding the tournament. Try again.");
@@ -571,208 +566,155 @@ $("match-form").addEventListener("submit", async (e) => {
   }
 });
 
-// ---------------- tournament team management ----------------
-let upcomingTournamentId = null;
-let upcomingTournamentName = "";
-let allTournamentsCache = [];
+// ---------------- tournament team management (numbered slot grid) ----------------
+$("tm-tournament").addEventListener("change", (e) => {
+  if (e.target.value) loadTeamGrid(e.target.value);
+});
 
-// Fetches every registered participant NOT yet placed on a team (no team doc
-// references them as player1Id or player2Id).
-async function getUnassignedParticipants(tournamentId) {
-  const tSnap = await getDoc(doc(db, "tournaments", tournamentId));
-  if (!tSnap.exists()) return [];
-  const participantIds = tSnap.data().participantIds || [];
-  if (participantIds.length === 0) return [];
-
-  const teamsSnap = await getDocs(collection(db, "tournaments", tournamentId, "teams"));
-  const assigned = new Set();
-  teamsSnap.forEach((d) => {
-    const team = d.data();
-    if (team.player1Id) assigned.add(team.player1Id);
-    if (team.player2Id) assigned.add(team.player2Id);
-  });
-
-  const unassignedIds = participantIds.filter((id) => !assigned.has(id));
-  if (unassignedIds.length === 0) return [];
-  const playerDocs = await Promise.all(unassignedIds.map((id) => getDoc(doc(db, "players", id))));
-  return playerDocs.filter((d) => d.exists()).map((d) => ({ id: d.id, ...d.data() }));
-}
-
-// Populates both the "Record match" and "Tournament Manager" tournament
-// dropdowns from one fetch, and figures out which tournament is "upcoming"
-// for the quick-register option on the Add Player form.
-async function loadTournamentSelects() {
+async function loadTMTournamentSelect() {
   try {
     const snap = await getDocs(query(collection(db, "tournaments"), orderBy("createdAt", "desc")));
-    allTournamentsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const tournaments = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
     const tmSelect = $("tm-tournament");
     tmSelect.innerHTML = "";
-    allTournamentsCache.forEach((t) => {
+    tournaments.forEach((t) => {
       const opt = document.createElement("option");
       opt.value = t.id;
       opt.textContent = `${t.name || "Untitled"} (${t.status || "upcoming"})`;
       tmSelect.appendChild(opt);
     });
 
-    const upcoming = allTournamentsCache.find((t) => t.status === "upcoming");
-    upcomingTournamentId = upcoming ? upcoming.id : null;
-    upcomingTournamentName = upcoming ? upcoming.name : "";
-
-    if (allTournamentsCache.length > 0) {
-      tmSelect.value = upcomingTournamentId || allTournamentsCache[0].id;
-      loadTournamentManagerContent(tmSelect.value);
-    } else {
+    if (tournaments.length === 0) {
       $("tm-loading").textContent = "Add a tournament first.";
+      return;
     }
-
-    refreshAddPlayerTournamentSection();
+    const upcoming = tournaments.find((t) => t.status === "upcoming");
+    tmSelect.value = upcoming ? upcoming.id : tournaments[0].id;
+    loadTeamGrid(tmSelect.value);
   } catch (err) {
     console.error(err);
   }
 }
 
-$("tm-tournament").addEventListener("change", (e) => {
-  if (e.target.value) loadTournamentManagerContent(e.target.value);
-});
-
-async function loadTournamentManagerContent(tournamentId) {
+async function loadTeamGrid(tournamentId) {
   const loadingEl = $("tm-loading");
-  const contentEl = $("tm-content");
+  const gridEl = $("tm-grid");
+  const errEl = $("tm-error");
   loadingEl.classList.remove("hidden");
-  contentEl.classList.add("hidden");
+  gridEl.classList.add("hidden");
+  hideMsg(errEl);
 
   try {
-    const unassigned = await getUnassignedParticipants(tournamentId);
-    const teamsSnap = await getDocs(collection(db, "tournaments", tournamentId, "teams"));
+    const [tSnap, teams, allPlayersSnap] = await Promise.all([
+      getDoc(doc(db, "tournaments", tournamentId)),
+      fetchTeams(tournamentId),
+      getDocs(query(collection(db, "players"), orderBy("name")))
+    ]);
+    if (!tSnap.exists()) return;
+    const totalTeams = tSnap.data().totalTeams || 12;
 
-    // resolve names for everyone on a team too, not just the unassigned list
-    const allTeamPlayerIds = new Set();
-    teamsSnap.forEach((d) => {
-      const team = d.data();
-      if (team.player1Id) allTeamPlayerIds.add(team.player1Id);
-      if (team.player2Id) allTeamPlayerIds.add(team.player2Id);
-    });
-    const teamPlayerDocs = await Promise.all(
-      [...allTeamPlayerIds].map((id) => getDoc(doc(db, "players", id)))
-    );
-    const nameById = new Map();
-    teamPlayerDocs.forEach((d) => { if (d.exists()) nameById.set(d.id, d.data().name || "—"); });
-    unassigned.forEach((p) => nameById.set(p.id, p.name || "—"));
+    const allPlayers = allPlayersSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((p) => p.isActive !== false);
+    const nameById = new Map(allPlayers.map((p) => [p.id, `${p.name || "—"} (${p.playerCode || "—"})`]));
 
-    // unassigned list
-    const unassignedListEl = $("tm-unassigned-list");
-    unassignedListEl.textContent = unassigned.length === 0
-      ? "Everyone registered is already on a team."
-      : unassigned.map((p) => `${p.name} (${p.playerCode})`).join(", ");
+    const assignedIds = new Set();
+    teams.forEach((tm) => { if (tm.player1Id) assignedIds.add(tm.player1Id); if (tm.player2Id) assignedIds.add(tm.player2Id); });
+    const availablePlayers = allPlayers.filter((p) => !assignedIds.has(p.id));
 
-    // player selects for team creation
-    [$("tm-player-a"), $("tm-player-b")].forEach((sel) => {
-      sel.innerHTML = '<option value="">Select player</option>';
-      unassigned.forEach((p) => {
-        const opt = document.createElement("option");
-        opt.value = p.id;
-        opt.textContent = `${p.name} (${p.playerCode})`;
-        sel.appendChild(opt);
+    const teamByNumber = new Map(teams.map((tm) => [tm.teamNumber, tm]));
+
+    let html = `
+      <div class="team-slot-grid-header">
+        <span>#</span><span>Player 1</span><span>Player 2</span><span>Group</span>
+      </div>
+    `;
+
+    for (let n = 1; n <= totalTeams; n++) {
+      const team = teamByNumber.get(n);
+      const playerCell = (playerId, slot) => {
+        if (playerId) {
+          return `
+            <div class="team-slot-player">
+              <span class="team-slot-player-name">${escapeHtml(nameById.get(playerId) || "Unknown player")}</span>
+              <button class="team-slot-remove-btn" data-remove-player="${playerId}" data-tournament="${tournamentId}" title="Remove">×</button>
+            </div>`;
+        }
+        const options = availablePlayers.map((p) => `<option value="${p.id}">${escapeHtml(p.name)} (${escapeHtml(p.playerCode || "")})</option>`).join("");
+        return `
+          <select class="team-slot-add-select" data-assign-team="${n}" data-assign-slot="${slot}" data-tournament="${tournamentId}">
+            <option value="">+ Add player</option>
+            ${options}
+          </select>`;
+      };
+
+      const groupOptions = [1, 2, 3].map((g) =>
+        `<option value="${g}" ${team?.group === g ? "selected" : ""}>Group ${g}</option>`
+      ).join("");
+
+      html += `
+        <div class="team-slot-row">
+          <div class="team-slot-number">${n}</div>
+          <div>${playerCell(team?.player1Id, "player1")}</div>
+          <div>${playerCell(team?.player2Id, "player2")}</div>
+          <div>
+            ${team ? `<select class="team-slot-group-select" data-set-group="${team.id}" data-tournament="${tournamentId}">
+                <option value="">—</option>${groupOptions}
+              </select>` : `<select class="team-slot-group-select" disabled><option>—</option></select>`}
+          </div>
+        </div>
+      `;
+    }
+
+    gridEl.innerHTML = html;
+
+    gridEl.querySelectorAll("[data-assign-team]").forEach((sel) => {
+      sel.addEventListener("change", async () => {
+        if (!sel.value) return;
+        sel.disabled = true;
+        try {
+          await assignToSlot(tournamentId, parseInt(sel.dataset.assignTeam, 10), sel.dataset.assignSlot, sel.value);
+          loadTeamGrid(tournamentId);
+        } catch (err) {
+          console.error(err);
+          showMsg(errEl, "Something went wrong assigning that player.");
+          sel.disabled = false;
+        }
       });
     });
 
-    // teams table
-    const tbody = $("tm-teams-tbody");
-    tbody.innerHTML = "";
-    teamsSnap.forEach((d) => {
-      const team = d.data();
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${team.group ? `Group ${team.group}` : "—"}</td>
-        <td>${escapeHtml(nameById.get(team.player1Id) || "—")}</td>
-        <td>${team.player2Id ? escapeHtml(nameById.get(team.player2Id) || "—") : "— needs partner —"}</td>
-        <td><button class="link-btn" data-remove-team="${d.id}" data-tournament="${tournamentId}" type="button" style="font-size:12px; color:var(--danger);">Remove</button></td>
-      `;
-      tbody.appendChild(tr);
-    });
-    tbody.querySelectorAll("[data-remove-team]").forEach((btn) => {
+    gridEl.querySelectorAll("[data-remove-player]").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        if (!confirm("Remove this team? Both players go back to Unassigned.")) return;
-        await deleteDoc(doc(db, "tournaments", btn.dataset.tournament, "teams", btn.dataset.removeTeam));
-        loadTournamentManagerContent(btn.dataset.tournament);
+        btn.disabled = true;
+        try {
+          await removeFromSlot(tournamentId, btn.dataset.removePlayer);
+          loadTeamGrid(tournamentId);
+        } catch (err) {
+          console.error(err);
+          showMsg(errEl, "Something went wrong removing that player.");
+          btn.disabled = false;
+        }
+      });
+    });
+
+    gridEl.querySelectorAll("[data-set-group]").forEach((sel) => {
+      sel.addEventListener("change", async () => {
+        sel.disabled = true;
+        try {
+          await setTeamGroup(tournamentId, sel.dataset.setGroup, sel.value ? Number(sel.value) : null);
+        } catch (err) {
+          console.error(err);
+        } finally {
+          sel.disabled = false;
+        }
       });
     });
 
     loadingEl.classList.add("hidden");
-    contentEl.classList.remove("hidden");
+    gridEl.classList.remove("hidden");
   } catch (err) {
     console.error(err);
     loadingEl.textContent = "Couldn't load tournament data.";
   }
 }
-
-$("tm-create-team-btn").addEventListener("click", async () => {
-  const errEl = $("tm-team-error");
-  hideMsg(errEl);
-
-  const tournamentId = $("tm-tournament").value;
-  const playerA = $("tm-player-a").value;
-  const playerB = $("tm-player-b").value;
-  const group = $("tm-group").value;
-
-  if (!tournamentId) return;
-  if (!playerA || !playerB) {
-    showMsg(errEl, "Pick both players.");
-    return;
-  }
-  if (playerA === playerB) {
-    showMsg(errEl, "Pick two different players.");
-    return;
-  }
-
-  const btn = $("tm-create-team-btn");
-  btn.disabled = true;
-  btn.textContent = "Creating...";
-
-  try {
-    await addDoc(collection(db, "tournaments", tournamentId, "teams"), {
-      player1Id: playerA,
-      player2Id: playerB,
-      group: group ? Number(group) : null,
-      createdAt: serverTimestamp()
-    });
-    $("tm-group").value = "";
-    loadTournamentManagerContent(tournamentId);
-  } catch (err) {
-    console.error(err);
-    showMsg(errEl, "Something went wrong creating the team. Try again.");
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Create team";
-  }
-});
-
-// ---------------- quick-register on the Add Player form ----------------
-async function refreshAddPlayerTournamentSection() {
-  const fieldEl = $("ap-tournament-field");
-  if (!upcomingTournamentId) {
-    fieldEl.classList.add("hidden");
-    return;
-  }
-  fieldEl.classList.remove("hidden");
-  $("ap-tournament-label").textContent = `Also register for "${upcomingTournamentName}"`;
-
-  try {
-    const unassigned = await getUnassignedParticipants(upcomingTournamentId);
-    const partnerSelect = $("ap-partner");
-    partnerSelect.innerHTML = '<option value="">— No partner yet (solo, add later) —</option>';
-    unassigned.forEach((p) => {
-      const opt = document.createElement("option");
-      opt.value = p.id;
-      opt.textContent = `${p.name} (${p.playerCode})`;
-      partnerSelect.appendChild(opt);
-    });
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-$("ap-register-toggle").addEventListener("change", (e) => {
-  $("ap-partner").classList.toggle("hidden", !e.target.checked);
-});

@@ -557,6 +557,20 @@ body {
   line-height: 1.8;
 }
 
+.my-team-status {
+  font-size: 12.5px;
+  color: var(--text-soft);
+  margin-top: 10px;
+}
+.my-team-status strong { color: var(--ball); }
+.my-team-picker {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.my-team-picker select { flex: 1; }
+.my-team-picker .btn-sm { flex-shrink: 0; }
+
 .coming-soon { text-align: center; padding: 30px 6px 10px; }
 .coming-soon-badge {
   display: inline-block;
@@ -668,6 +682,98 @@ table.players tr:last-child td { border-bottom: none; }
 .badge-pill.bronze { background: rgba(185,138,90,0.18); color: var(--bronze); }
 
 .hidden { display: none !important; }
+
+/* ---------- admin tabs ---------- */
+.admin-tabbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 2px;
+}
+.admin-tab-btn {
+  background: none;
+  border: none;
+  color: var(--text-soft);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 4px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.admin-tab-btn.active { color: var(--ball); border-bottom-color: var(--ball); }
+.admin-tab-btn:hover { color: var(--text); }
+
+/* ---------- team slot grid (Tournament Manager) ---------- */
+.team-slot-row {
+  display: grid;
+  grid-template-columns: 52px 1fr 1fr 90px;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.team-slot-number {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+.team-slot-player {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.team-slot-player-name {
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.team-slot-remove-btn {
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 15px;
+  flex-shrink: 0;
+  padding: 0 4px;
+}
+.team-slot-add-select {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--panel);
+  color: var(--text-soft);
+  font-size: 12px;
+}
+.team-slot-group-select {
+  width: 100%;
+  padding: 6px 6px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+}
+.team-slot-grid-header {
+  display: grid;
+  grid-template-columns: 52px 1fr 1fr 90px;
+  gap: 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
 
 /* ---------- settings screen ---------- */
 .settings-mini-profile {

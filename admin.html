@@ -34,259 +34,245 @@
     <!-- ===================== ADMIN VIEW ===================== -->
     <div class="hidden" id="view-admin">
 
-      <div class="panel">
-        <h1>Add a new player</h1>
-        <p class="sub">A code and password are generated automatically — copy them and send to the player on WhatsApp.</p>
-
-        <div class="msg error" id="add-error"></div>
-        <div class="msg success" id="add-success"></div>
-
-        <form id="add-form">
-          <div class="field">
-            <label for="ap-name">Player name</label>
-            <input type="text" id="ap-name" required placeholder="Mohamed Ahmed">
-          </div>
-          <div class="field">
-            <label for="ap-phone">Phone number</label>
-            <input type="tel" id="ap-phone" required placeholder="01xxxxxxxxx">
-          </div>
-          <div class="field">
-            <label for="ap-points">Starting points</label>
-            <input type="number" id="ap-points" value="1000" min="500" max="2000" step="10">
-            <div class="hint">Everyone starts at 1000 (lands in Silver 3). Only raise this if you already know this player is genuinely strong — the tier badge is always calculated from points, never chosen manually.</div>
-          </div>
-
-          <div class="field hidden" id="ap-tournament-field">
-            <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
-              <input type="checkbox" id="ap-register-toggle" style="width:auto;">
-              <span id="ap-tournament-label">Also register for the upcoming tournament</span>
-            </label>
-            <select id="ap-partner" class="hidden">
-              <option value="">— No partner yet (solo, add later) —</option>
-            </select>
-          </div>
-
-          <button type="submit" class="btn btn-primary" id="add-btn">Add player &amp; generate code</button>
-        </form>
+      <div class="admin-tabbar">
+        <button class="admin-tab-btn active" data-admin-tab="overview" type="button">Overview</button>
+        <button class="admin-tab-btn" data-admin-tab="add-tournament" type="button">Add Tournament</button>
+        <button class="admin-tab-btn" data-admin-tab="tournament-manager" type="button">Tournament Manager</button>
       </div>
 
-      <div class="panel hidden" id="credentials-card" style="margin-top:16px;">
-        <h1>Login details</h1>
-        <p class="sub">Send this to the player — it won't be shown again after this.</p>
-        <div class="field">
-          <label>Code</label>
-          <div class="code-tag" id="new-code">—</div>
-        </div>
-        <div class="field">
-          <label>Password</label>
-          <div class="code-tag" id="new-pass">—</div>
-        </div>
-        <button class="btn btn-ghost" id="copy-creds" type="button">Copy WhatsApp-ready message</button>
-      </div>
+      <!-- ============ TAB: OVERVIEW ============ -->
+      <div class="admin-tab-panel" id="admin-tab-overview">
 
-      <div class="panel" id="tiers-card" style="margin-top:16px;">
-        <h1>Tiers visibility</h1>
-        <p class="sub">While this is off, players only see their points and rank — no Bronze/Silver/Gold badge. Turn it on once enough tournaments have run for the points to feel earned and fair. Tier badges are always calculated from points automatically, never chosen manually, so there's nothing to configure beyond this switch.</p>
-        <div class="msg success" id="tiers-success"></div>
-        <div class="field" style="display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="tiers-enabled-toggle" style="width:auto;">
-          <label for="tiers-enabled-toggle" style="margin:0;">Show tier badges to players</label>
-        </div>
-      </div>
+        <div class="panel">
+          <h1>Add a new player</h1>
+          <p class="sub">A code and password are generated automatically — copy them and send to the player on WhatsApp.</p>
 
-      <div class="panel" id="announcement-card" style="margin-top:16px;">
-        <h1>Home screen announcement</h1>
-        <p class="sub">Shown to every player above the Home tab. Leave it off if there's nothing to announce.</p>
-        <div class="msg success" id="ann-success"></div>
-        <form id="announcement-form">
+          <div class="msg error" id="add-error"></div>
+          <div class="msg success" id="add-success"></div>
+
+          <form id="add-form">
+            <div class="field">
+              <label for="ap-name">Player name</label>
+              <input type="text" id="ap-name" required placeholder="Mohamed Ahmed">
+            </div>
+            <div class="field">
+              <label for="ap-phone">Phone number</label>
+              <input type="tel" id="ap-phone" required placeholder="01xxxxxxxxx">
+            </div>
+            <div class="field">
+              <label for="ap-points">Starting points</label>
+              <input type="number" id="ap-points" value="1000" min="500" max="2000" step="10">
+              <div class="hint">Everyone starts at 1000 (lands in Silver 3). Only raise this if you already know this player is genuinely strong — the tier badge is always calculated from points, never chosen manually.</div>
+            </div>
+            <button type="submit" class="btn btn-primary" id="add-btn">Add player &amp; generate code</button>
+          </form>
+        </div>
+
+        <div class="panel hidden" id="credentials-card" style="margin-top:16px;">
+          <h1>Login details</h1>
+          <p class="sub">Send this to the player — it won't be shown again after this.</p>
           <div class="field">
-            <label for="ann-text">Announcement text</label>
-            <input type="text" id="ann-text" placeholder="e.g. Wednesday tournament registration closes Tuesday">
+            <label>Code</label>
+            <div class="code-tag" id="new-code">—</div>
           </div>
+          <div class="field">
+            <label>Password</label>
+            <div class="code-tag" id="new-pass">—</div>
+          </div>
+          <button class="btn btn-ghost" id="copy-creds" type="button">Copy WhatsApp-ready message</button>
+        </div>
+
+        <div class="panel" id="tiers-card" style="margin-top:16px;">
+          <h1>Tiers visibility</h1>
+          <p class="sub">While this is off, players only see their points and rank — no Bronze/Silver/Gold badge. Turn it on once enough tournaments have run for the points to feel earned and fair.</p>
+          <div class="msg success" id="tiers-success"></div>
           <div class="field" style="display:flex; align-items:center; gap:8px;">
-            <input type="checkbox" id="ann-active" style="width:auto;">
-            <label for="ann-active" style="margin:0;">This announcement is live</label>
+            <input type="checkbox" id="tiers-enabled-toggle" style="width:auto;">
+            <label for="tiers-enabled-toggle" style="margin:0;">Show tier badges to players</label>
           </div>
-          <button type="submit" class="btn btn-primary" id="ann-btn">Save announcement</button>
-        </form>
-      </div>
-
-      <div class="panel" id="tournament-card" style="margin-top:16px;">
-        <h1>Add a tournament</h1>
-        <p class="sub">Appears in the Tournaments tab and the Home preview for every player.</p>
-        <div class="msg error" id="tr-error"></div>
-        <div class="msg success" id="tr-success"></div>
-        <form id="tournament-form">
-          <div class="field">
-            <label for="tr-name">Tournament name</label>
-            <input type="text" id="tr-name" required placeholder="Beginners - Aug Week 4">
-          </div>
-          <div class="field">
-            <label for="tr-location">Location</label>
-            <input type="text" id="tr-location" placeholder="KFS, Kafr El-Sheikh">
-          </div>
-          <div class="field">
-            <label for="tr-date">Date label</label>
-            <input type="text" id="tr-date" placeholder="Aug 26 - 8:00 PM">
-          </div>
-          <div class="field">
-            <label for="tr-status">Status</label>
-            <select id="tr-status">
-              <option value="upcoming" selected>Upcoming (open for registration)</option>
-              <option value="live">Live</option>
-              <option value="completed">Completed</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="tr-deadline">Registration deadline (optional)</label>
-            <input type="datetime-local" id="tr-deadline">
-            <div class="hint">Players can Register/Unregister freely until this time. After it, registration locks — players can still see who's in, but can't change it themselves. Leave empty for no deadline.</div>
-          </div>
-          <div class="field">
-            <label for="tr-champion">Champion (only if completed)</label>
-            <input type="text" id="tr-champion" placeholder="Leave empty if not finished yet">
-          </div>
-          <button type="submit" class="btn btn-primary" id="tr-btn">Add tournament</button>
-        </form>
-      </div>
-
-      <div class="panel" id="tournament-manager-card" style="margin-top:16px;">
-        <h1>Tournament Manager</h1>
-        <p class="sub">Pick a tournament to see who's registered and build doubles teams by group.</p>
-
-        <div class="field">
-          <label for="tm-tournament">Tournament</label>
-          <select id="tm-tournament"></select>
         </div>
 
-        <div id="tm-loading" style="font-size:13px; color:var(--text-soft);">
-          <span class="spinner"></span> Loading...
+        <div class="panel" id="announcement-card" style="margin-top:16px;">
+          <h1>Home screen announcement</h1>
+          <p class="sub">Shown to every player above the Home tab. Leave it off if there's nothing to announce.</p>
+          <div class="msg success" id="ann-success"></div>
+          <form id="announcement-form">
+            <div class="field">
+              <label for="ann-text">Announcement text</label>
+              <input type="text" id="ann-text" placeholder="e.g. Wednesday tournament registration closes Tuesday">
+            </div>
+            <div class="field" style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" id="ann-active" style="width:auto;">
+              <label for="ann-active" style="margin:0;">This announcement is live</label>
+            </div>
+            <button type="submit" class="btn btn-primary" id="ann-btn">Save announcement</button>
+          </form>
         </div>
 
-        <div class="hidden" id="tm-content">
-          <h1 style="font-size:15px; margin-top:20px;">Unassigned players</h1>
-          <p class="sub" style="margin-bottom:10px;">Registered but not on a team yet.</p>
-          <div id="tm-unassigned-list" style="font-size:13px; color:var(--text-soft); margin-bottom:16px;"></div>
+        <div class="panel" id="match-card" style="margin-top:16px;">
+          <h1>Record a match result</h1>
+          <p class="sub">Updates both teams' ratings automatically using the ELO formula — the weaker player on the winning team gains more, the stronger player on the losing team loses more.</p>
+          <div class="msg error" id="match-error"></div>
+          <div class="msg success" id="match-success"></div>
+          <form id="match-form">
+            <div class="field">
+              <label for="mt-tournament">Tournament</label>
+              <select id="mt-tournament" required></select>
+            </div>
+            <div class="field">
+              <label for="mt-round">Round (optional)</label>
+              <input type="text" id="mt-round" placeholder="e.g. Group stage, Semifinal, Final">
+            </div>
+            <div class="field">
+              <label>Team 1</label>
+              <select id="mt-t1p1" required></select>
+              <select id="mt-t1p2" required style="margin-top:8px;"></select>
+            </div>
+            <div class="field">
+              <label>Team 2</label>
+              <select id="mt-t2p1" required></select>
+              <select id="mt-t2p2" required style="margin-top:8px;"></select>
+            </div>
+            <div class="field" style="display:flex; gap:12px;">
+              <div style="flex:1;">
+                <label for="mt-score1">Team 1 games</label>
+                <input type="number" id="mt-score1" min="0" max="20" required>
+              </div>
+              <div style="flex:1;">
+                <label for="mt-score2">Team 2 games</label>
+                <input type="number" id="mt-score2" min="0" max="20" required>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary" id="match-btn">Record match &amp; update ratings</button>
+          </form>
+          <div class="hidden" id="match-result-summary" style="margin-top:16px;"></div>
+        </div>
 
-          <div class="msg error" id="tm-team-error"></div>
-          <div class="field">
-            <label>Create a team</label>
-            <select id="tm-player-a" style="margin-bottom:8px;"></select>
-            <select id="tm-player-b" style="margin-bottom:8px;"></select>
-            <select id="tm-group">
-              <option value="">No group yet</option>
-              <option value="1">Group 1</option>
-              <option value="2">Group 2</option>
-              <option value="3">Group 3</option>
-            </select>
+        <div class="panel" style="margin-top:16px;">
+          <h1>All tournaments</h1>
+          <div id="tournaments-loading" style="font-size:13px; color:var(--text-soft);">
+            <span class="spinner"></span> Loading...
           </div>
-          <button class="btn btn-ghost" id="tm-create-team-btn" type="button" style="margin-bottom:20px;">Create team</button>
-
-          <h1 style="font-size:15px;">Teams</h1>
-          <table class="players" id="tm-teams-table">
+          <table class="players hidden" id="tournaments-table">
             <thead>
-              <tr><th>Group</th><th>Player 1</th><th>Player 2</th><th></th></tr>
+              <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Date</th>
+                <th>Registered</th>
+              </tr>
             </thead>
-            <tbody id="tm-teams-tbody"></tbody>
+            <tbody id="tournaments-tbody"></tbody>
           </table>
         </div>
+
+        <div class="panel" style="margin-top:16px;">
+          <h1>All players</h1>
+          <div id="players-loading" style="font-size:13px; color:var(--text-soft);">
+            <span class="spinner"></span> Loading...
+          </div>
+          <table class="players hidden" id="players-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Name</th>
+                <th>Code</th>
+                <th>Tier</th>
+                <th>Points</th>
+                <th>Matches</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="players-tbody"></tbody>
+          </table>
+        </div>
+
+        <div class="panel hidden" id="reset-credentials-card" style="margin-top:16px;">
+          <h1>New password</h1>
+          <p class="sub">Send this to the player — the old password stops working now.</p>
+          <div class="field">
+            <label>Player</label>
+            <div class="code-tag" id="reset-name">—</div>
+          </div>
+          <div class="field">
+            <label>New password</label>
+            <div class="code-tag" id="reset-pass">—</div>
+          </div>
+          <button class="btn btn-ghost" id="copy-reset-creds" type="button">Copy WhatsApp-ready message</button>
+        </div>
+
+        <div class="foot-link" style="margin-top:16px; margin-bottom: 16px;">
+          <button class="link-btn" id="admin-logout" type="button" style="color:var(--text-soft); opacity:.8;">Log out</button>
+        </div>
       </div>
 
-      <div class="panel" id="match-card" style="margin-top:16px;">
-        <h1>Record a match result</h1>
-        <p class="sub">Updates both teams' ratings automatically using the ELO formula — the weaker player on the winning team gains more, the stronger player on the losing team loses more.</p>
-        <div class="msg error" id="match-error"></div>
-        <div class="msg success" id="match-success"></div>
-        <form id="match-form">
-          <div class="field">
-            <label for="mt-tournament">Tournament</label>
-            <select id="mt-tournament" required></select>
-          </div>
-          <div class="field">
-            <label for="mt-round">Round (optional)</label>
-            <input type="text" id="mt-round" placeholder="e.g. Group stage, Semifinal, Final">
-          </div>
-          <div class="field">
-            <label>Team 1</label>
-            <select id="mt-t1p1" required></select>
-            <select id="mt-t1p2" required style="margin-top:8px;"></select>
-          </div>
-          <div class="field">
-            <label>Team 2</label>
-            <select id="mt-t2p1" required></select>
-            <select id="mt-t2p2" required style="margin-top:8px;"></select>
-          </div>
-          <div class="field" style="display:flex; gap:12px;">
-            <div style="flex:1;">
-              <label for="mt-score1">Team 1 games</label>
-              <input type="number" id="mt-score1" min="0" max="20" required>
+      <!-- ============ TAB: ADD TOURNAMENT ============ -->
+      <div class="admin-tab-panel hidden" id="admin-tab-add-tournament">
+        <div class="panel">
+          <h1>Add a tournament</h1>
+          <p class="sub">Appears in the Tournaments tab and the Home preview for every player.</p>
+          <div class="msg error" id="tr-error"></div>
+          <div class="msg success" id="tr-success"></div>
+          <form id="tournament-form">
+            <div class="field">
+              <label for="tr-name">Tournament name</label>
+              <input type="text" id="tr-name" required placeholder="Beginners - Aug Week 4">
             </div>
-            <div style="flex:1;">
-              <label for="mt-score2">Team 2 games</label>
-              <input type="number" id="mt-score2" min="0" max="20" required>
+            <div class="field">
+              <label for="tr-location">Location</label>
+              <input type="text" id="tr-location" placeholder="KFS, Kafr El-Sheikh">
             </div>
+            <div class="field">
+              <label for="tr-date">Date label</label>
+              <input type="text" id="tr-date" placeholder="Aug 26 - 8:00 PM">
+            </div>
+            <div class="field">
+              <label for="tr-status">Status</label>
+              <select id="tr-status">
+                <option value="upcoming" selected>Upcoming (open for registration)</option>
+                <option value="live">Live</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="tr-total-teams">Number of teams</label>
+              <input type="number" id="tr-total-teams" value="12" min="2" max="64" step="1">
+              <div class="hint">The Tournament Manager will show this many numbered team slots.</div>
+            </div>
+            <div class="field">
+              <label for="tr-deadline">Registration deadline (optional)</label>
+              <input type="datetime-local" id="tr-deadline">
+              <div class="hint">Players can Register/Unregister freely until this time. After it, registration locks. Leave empty for no deadline.</div>
+            </div>
+            <div class="field">
+              <label for="tr-champion">Champion (only if completed)</label>
+              <input type="text" id="tr-champion" placeholder="Leave empty if not finished yet">
+            </div>
+            <button type="submit" class="btn btn-primary" id="tr-btn">Add tournament</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- ============ TAB: TOURNAMENT MANAGER ============ -->
+      <div class="admin-tab-panel hidden" id="admin-tab-tournament-manager">
+        <div class="panel">
+          <h1>Tournament Manager</h1>
+          <p class="sub">Pick a tournament to see every team slot. Fill empty spots, remove players, and assign groups — updates instantly for the player too, whether they add their own partner or you add one for them.</p>
+
+          <div class="field">
+            <label for="tm-tournament">Tournament</label>
+            <select id="tm-tournament"></select>
           </div>
-          <button type="submit" class="btn btn-primary" id="match-btn">Record match &amp; update ratings</button>
-        </form>
-        <div class="hidden" id="match-result-summary" style="margin-top:16px;"></div>
+
+          <div id="tm-loading" style="font-size:13px; color:var(--text-soft);">
+            <span class="spinner"></span> Loading...
+          </div>
+
+          <div class="msg error hidden" id="tm-error"></div>
+          <div id="tm-grid" class="hidden"></div>
+        </div>
       </div>
 
-      <div class="panel" style="margin-top:16px;">
-        <h1>All tournaments</h1>
-        <div id="tournaments-loading" style="font-size:13px; color:var(--text-soft);">
-          <span class="spinner"></span> Loading...
-        </div>
-        <table class="players hidden" id="tournaments-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Status</th>
-              <th>Date</th>
-              <th>Registered</th>
-            </tr>
-          </thead>
-          <tbody id="tournaments-tbody"></tbody>
-        </table>
-      </div>
-
-      <div class="panel" style="margin-top:16px;">
-        <h1>All players</h1>
-        <div id="players-loading" style="font-size:13px; color:var(--text-soft);">
-          <span class="spinner"></span> Loading...
-        </div>
-        <table class="players hidden" id="players-table">
-          <thead>
-            <tr>
-              <th></th>
-              <th>Name</th>
-              <th>Code</th>
-              <th>Tier</th>
-              <th>Points</th>
-              <th>Matches</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="players-tbody"></tbody>
-        </table>
-      </div>
-
-      <div class="panel hidden" id="reset-credentials-card" style="margin-top:16px;">
-        <h1>New password</h1>
-        <p class="sub">Send this to the player — the old password stops working now.</p>
-        <div class="field">
-          <label>Player</label>
-          <div class="code-tag" id="reset-name">—</div>
-        </div>
-        <div class="field">
-          <label>New password</label>
-          <div class="code-tag" id="reset-pass">—</div>
-        </div>
-        <button class="btn btn-ghost" id="copy-reset-creds" type="button">Copy WhatsApp-ready message</button>
-      </div>
-
-      <div class="foot-link" style="margin-top:16px; margin-bottom: 16px;">
-        <button class="link-btn" id="admin-logout" type="button" style="color:var(--text-soft); opacity:.8;">Log out</button>
-      </div>
     </div>
 
   </div>

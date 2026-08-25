@@ -1,5 +1,5 @@
 // Bump CACHE_NAME on every deploy to bust stale caches (lesson learned from previous PWAs)
-const CACHE_NAME = "kfs-padel-v14";
+const CACHE_NAME = "kfs-padel-v15";
 const ASSETS = [
   "./index.html",
   "./styles.css",
@@ -7,6 +7,7 @@ const ASSETS = [
   "./firebase-config.js",
   "./utils.js",
   "./i18n.js",
+  "./teams.js",
   "./manifest.json"
 ];
 

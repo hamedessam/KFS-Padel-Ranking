@@ -1,4 +1,5 @@
-import { db, collection, doc, getDoc, getDocs, updateDoc, query, where, limit, orderBy, arrayUnion, arrayRemove } from "./firebase-config.js";
+import { db, collection, doc, getDoc, getDocs, updateDoc, query, where, limit, orderBy } from "./firebase-config.js";
+import { registerPlayer, unregisterPlayer, addPartner, fetchTeams, findTeamOf } from "./teams.js";
 import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFoundingMember } from "./utils.js";
 import { t, getLang, setLang, applyStaticTranslations } from "./i18n.js";
 
@@ -435,6 +436,7 @@ async function loadTournamentsTab() {
         ${deadline ? `<div class="tourney-meta">${CAL_SVG}${t("deadline_label")}: ${deadline.toLocaleString(getLang() === "ar" ? "ar-EG" : "en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>` : ""}
         ${tr.championName ? `<div class="tourney-champion">🏆 ${t("champion_label")}: ${tr.championName}</div>` : ""}
         ${actionHtml}
+        <div id="myteam-${tr.id}"></div>
         <div style="margin-top:10px;">
           <button class="link-btn" data-view-participants="${tr.id}" type="button" style="padding:0; font-size:12.5px;">${t("view_players_btn")} (${(tr.participantIds || []).length})</button>
         </div>
@@ -453,6 +455,14 @@ async function loadTournamentsTab() {
     listEl.querySelectorAll("[data-view-participants]").forEach((btn) => {
       btn.addEventListener("click", () => toggleParticipantsView(btn.dataset.viewParticipants));
     });
+
+    // fill in "your team" status for rows where the player is registered — done
+    // as a lazy follow-up so the row list itself isn't blocked on extra fetches
+    data.forEach((tr) => {
+      if (tr.status === "upcoming" && (tr.participantIds || []).includes(currentPlayer.id)) {
+        loadMyTeamStatus(tr.id);
+      }
+    });
   } catch (err) {
     console.error(err);
     loadingEl.textContent = t("leaderboard_err");
@@ -463,14 +473,15 @@ async function registerForTournament(tournamentId, btn) {
   btn.disabled = true;
   btn.textContent = t("registering");
   try {
-    await updateDoc(doc(db, "tournaments", tournamentId), {
-      participantIds: arrayUnion(currentPlayer.id)
-    });
-    const cached = tournamentsCache?.find((tr) => tr.id === tournamentId);
-    if (cached) cached.participantIds = [...(cached.participantIds || []), currentPlayer.id];
+    const tr = tournamentsCache?.find((x) => x.id === tournamentId);
+    await registerPlayer(tournamentId, currentPlayer.id, tr?.totalTeams || 12);
+    if (tr) tr.participantIds = [...(tr.participantIds || []), currentPlayer.id];
     loadTournamentsTab();
   } catch (err) {
     console.error(err);
+    if (err.code === "FULL") {
+      alert(t("tournament_full"));
+    }
     btn.disabled = false;
     btn.textContent = t("register_btn");
   }
@@ -480,9 +491,7 @@ async function unregisterFromTournament(tournamentId, btn) {
   btn.disabled = true;
   btn.textContent = t("unregistering");
   try {
-    await updateDoc(doc(db, "tournaments", tournamentId), {
-      participantIds: arrayRemove(currentPlayer.id)
-    });
+    await unregisterPlayer(tournamentId, currentPlayer.id);
     const cached = tournamentsCache?.find((tr) => tr.id === tournamentId);
     if (cached) cached.participantIds = (cached.participantIds || []).filter((id) => id !== currentPlayer.id);
     loadTournamentsTab();
@@ -490,6 +499,66 @@ async function unregisterFromTournament(tournamentId, btn) {
     console.error(err);
     btn.disabled = false;
     btn.textContent = t("unregister_btn");
+  }
+}
+
+// ---------------- "your team" status + self-service partner picking ----------------
+async function loadMyTeamStatus(tournamentId) {
+  const el = $(`myteam-${tournamentId}`);
+  if (!el) return;
+  try {
+    const teams = await fetchTeams(tournamentId);
+    const myTeam = findTeamOf(teams, currentPlayer.id);
+    if (!myTeam) return; // shouldn't happen right after registering, but stay quiet if so
+
+    const partnerId = myTeam.player1Id === currentPlayer.id ? myTeam.player2Id : myTeam.player1Id;
+
+    if (partnerId) {
+      const partnerDoc = await getDoc(doc(db, "players", partnerId));
+      const partnerName = partnerDoc.exists() ? (partnerDoc.data().name || "—") : "—";
+      el.innerHTML = `<div class="my-team-status">${t("your_team_label")}: <strong>${partnerName}</strong></div>`;
+      return;
+    }
+
+    // no partner yet — offer a self-service picker of anyone not already on a team here
+    const tr = tournamentsCache?.find((x) => x.id === tournamentId);
+    const assignedIds = new Set();
+    teams.forEach((tm) => { if (tm.player1Id) assignedIds.add(tm.player1Id); if (tm.player2Id) assignedIds.add(tm.player2Id); });
+
+    const allActiveSnap = await getDocs(query(collection(db, "players"), orderBy("name")));
+    const candidates = allActiveSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((p) => p.isActive !== false && !assignedIds.has(p.id));
+
+    const options = candidates.map((p) => `<option value="${p.id}">${p.name} (${p.playerCode})</option>`).join("");
+    el.innerHTML = `
+      <div class="my-team-status">${t("no_partner_yet_label")}</div>
+      <div class="my-team-picker">
+        <select id="partner-select-${tournamentId}" class="team-slot-add-select">
+          <option value="">${t("choose_partner_placeholder")}</option>
+          ${options}
+        </select>
+        <button class="btn btn-ghost btn-sm" data-add-partner="${tournamentId}" data-team="${myTeam.id}" type="button">${t("add_partner_btn")}</button>
+      </div>
+    `;
+    el.querySelector(`[data-add-partner="${tournamentId}"]`).addEventListener("click", async (e) => {
+      const select = $(`partner-select-${tournamentId}`);
+      const chosenId = select.value;
+      if (!chosenId) return;
+      const addBtn = e.target;
+      addBtn.disabled = true;
+      addBtn.textContent = t("registering");
+      try {
+        await addPartner(tournamentId, myTeam.id, chosenId);
+        loadMyTeamStatus(tournamentId);
+      } catch (err) {
+        console.error(err);
+        addBtn.disabled = false;
+        addBtn.textContent = t("add_partner_btn");
+      }
+    });
+  } catch (err) {
+    console.error(err);
   }
 }
 
