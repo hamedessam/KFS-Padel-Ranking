@@ -25,6 +25,11 @@ service cloud.firestore {
     match /tournaments/{id} {
       allow read: if true;
       allow write: if true;
+
+      match /teams/{teamId} {
+        allow read: if true;
+        allow write: if true;
+      }
     }
 
     match /matches/{id} {

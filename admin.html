@@ -55,6 +55,17 @@
             <input type="number" id="ap-points" value="1000" min="500" max="2000" step="10">
             <div class="hint">Everyone starts at 1000 (lands in Silver 3). Only raise this if you already know this player is genuinely strong — the tier badge is always calculated from points, never chosen manually.</div>
           </div>
+
+          <div class="field hidden" id="ap-tournament-field">
+            <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+              <input type="checkbox" id="ap-register-toggle" style="width:auto;">
+              <span id="ap-tournament-label">Also register for the upcoming tournament</span>
+            </label>
+            <select id="ap-partner" class="hidden">
+              <option value="">— No partner yet (solo, add later) —</option>
+            </select>
+          </div>
+
           <button type="submit" class="btn btn-primary" id="add-btn">Add player &amp; generate code</button>
         </form>
       </div>
@@ -127,11 +138,58 @@
             </select>
           </div>
           <div class="field">
+            <label for="tr-deadline">Registration deadline (optional)</label>
+            <input type="datetime-local" id="tr-deadline">
+            <div class="hint">Players can Register/Unregister freely until this time. After it, registration locks — players can still see who's in, but can't change it themselves. Leave empty for no deadline.</div>
+          </div>
+          <div class="field">
             <label for="tr-champion">Champion (only if completed)</label>
             <input type="text" id="tr-champion" placeholder="Leave empty if not finished yet">
           </div>
           <button type="submit" class="btn btn-primary" id="tr-btn">Add tournament</button>
         </form>
+      </div>
+
+      <div class="panel" id="tournament-manager-card" style="margin-top:16px;">
+        <h1>Tournament Manager</h1>
+        <p class="sub">Pick a tournament to see who's registered and build doubles teams by group.</p>
+
+        <div class="field">
+          <label for="tm-tournament">Tournament</label>
+          <select id="tm-tournament"></select>
+        </div>
+
+        <div id="tm-loading" style="font-size:13px; color:var(--text-soft);">
+          <span class="spinner"></span> Loading...
+        </div>
+
+        <div class="hidden" id="tm-content">
+          <h1 style="font-size:15px; margin-top:20px;">Unassigned players</h1>
+          <p class="sub" style="margin-bottom:10px;">Registered but not on a team yet.</p>
+          <div id="tm-unassigned-list" style="font-size:13px; color:var(--text-soft); margin-bottom:16px;"></div>
+
+          <div class="msg error" id="tm-team-error"></div>
+          <div class="field">
+            <label>Create a team</label>
+            <select id="tm-player-a" style="margin-bottom:8px;"></select>
+            <select id="tm-player-b" style="margin-bottom:8px;"></select>
+            <select id="tm-group">
+              <option value="">No group yet</option>
+              <option value="1">Group 1</option>
+              <option value="2">Group 2</option>
+              <option value="3">Group 3</option>
+            </select>
+          </div>
+          <button class="btn btn-ghost" id="tm-create-team-btn" type="button" style="margin-bottom:20px;">Create team</button>
+
+          <h1 style="font-size:15px;">Teams</h1>
+          <table class="players" id="tm-teams-table">
+            <thead>
+              <tr><th>Group</th><th>Player 1</th><th>Player 2</th><th></th></tr>
+            </thead>
+            <tbody id="tm-teams-tbody"></tbody>
+          </table>
+        </div>
       </div>
 
       <div class="panel" id="match-card" style="margin-top:16px;">

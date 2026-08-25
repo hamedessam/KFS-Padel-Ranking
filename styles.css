@@ -531,6 +531,32 @@ body {
   font-size: 13px;
 }
 
+.tourney-participants {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.tourney-participants-group {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-soft);
+  letter-spacing: 1px;
+  margin: 10px 0 6px;
+  text-transform: uppercase;
+}
+.tourney-participants-group:first-child { margin-top: 0; }
+.tourney-team-row {
+  font-size: 12.5px;
+  color: var(--text);
+  padding: 4px 0;
+}
+.tourney-solo-list {
+  font-size: 12.5px;
+  color: var(--text-soft);
+  line-height: 1.8;
+}
+
 .coming-soon { text-align: center; padding: 30px 6px 10px; }
 .coming-soon-badge {
   display: inline-block;

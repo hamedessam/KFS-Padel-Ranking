@@ -2,10 +2,10 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
   getFirestore,
-  collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc,
-  query, where, limit, orderBy, arrayUnion,
+  collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc,
+  query, where, limit, orderBy, arrayUnion, arrayRemove,
   runTransaction, writeBatch, increment,
-  serverTimestamp
+  serverTimestamp, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -21,6 +21,6 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
 export {
-  collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc,
-  query, where, limit, orderBy, arrayUnion, runTransaction, writeBatch, increment, serverTimestamp
+  collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc,
+  query, where, limit, orderBy, arrayUnion, arrayRemove, runTransaction, writeBatch, increment, serverTimestamp, Timestamp
 };
