@@ -190,18 +190,23 @@ async function loadPlayers() {
     snap.forEach((d) => {
       const p = d.data();
       const meta = tierMeta(tierFromPoints(p.ratingPoints));
+      const isInactive = p.isActive === false;
       const tr = document.createElement("tr");
+      if (isInactive) tr.style.opacity = "0.5";
       const avatarCell = p.avatarUrl
         ? `<img src="${p.avatarUrl}" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block;">`
         : `<div style="width:28px;height:28px;border-radius:50%;background:var(--panel-alt);color:var(--ball);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800;font-size:11px;">${(p.name || "?").trim().charAt(0)}</div>`;
       tr.innerHTML = `
         <td>${avatarCell}</td>
-        <td>${isFoundingMember(p) ? "🌟 " : ""}${escapeHtml(p.name || "—")}</td>
+        <td>${isFoundingMember(p) ? "🌟 " : ""}${escapeHtml(p.name || "—")}${isInactive ? ' <span class="badge-pill bronze">Inactive</span>' : ""}</td>
         <td class="code">${escapeHtml(p.playerCode || "—")}</td>
         <td><span class="badge-pill ${meta.cssClass}">${meta.displayName}</span></td>
         <td>${Math.round(p.ratingPoints ?? 1000)}</td>
         <td>${p.matchesPlayed ?? 0}</td>
-        <td><button class="link-btn" data-reset-player="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" type="button" style="font-size:12px;">Reset password</button></td>
+        <td style="white-space:nowrap;">
+          <button class="link-btn" data-reset-player="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" type="button" style="font-size:12px;">Reset password</button>
+          <button class="link-btn" data-toggle-active="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" data-currently-active="${!isInactive}" type="button" style="font-size:12px; color:${isInactive ? "var(--ball)" : "var(--danger)"};">${isInactive ? "Reactivate" : "Deactivate"}</button>
+        </td>
       `;
       tbody.appendChild(tr);
     });
@@ -211,9 +216,46 @@ async function loadPlayers() {
     tbody.querySelectorAll("[data-reset-player]").forEach((btn) => {
       btn.addEventListener("click", () => resetPlayerPassword(btn.dataset.resetPlayer, btn.dataset.playerName, btn));
     });
+    tbody.querySelectorAll("[data-toggle-active]").forEach((btn) => {
+      btn.addEventListener("click", () => togglePlayerActive(btn.dataset.toggleActive, btn.dataset.playerName, btn.dataset.currentlyActive === "true"));
+    });
   } catch (err) {
     console.error(err);
     loadingEl.textContent = "Couldn't load the players.";
+  }
+}
+
+// ---------------- deactivate / reactivate a player ----------------
+// Deactivating is a soft-delete: their account, stats, and rating history all
+// stay intact, but they disappear from the leaderboard, match-recording
+// dropdowns, and Tournament Manager's available-players list. If they were
+// still on a team in an upcoming tournament, they're pulled out of that slot
+// too (their partner keeps their spot).
+async function togglePlayerActive(playerId, playerName, currentlyActive) {
+  const action = currentlyActive ? "deactivate" : "reactivate";
+  const warning = currentlyActive
+    ? `Deactivate ${playerName}? They'll disappear from the leaderboard and won't be selectable for new matches or teams. Their stats and history are kept — you can reactivate them anytime.`
+    : `Reactivate ${playerName}? They'll show up again on the leaderboard and be selectable for matches and teams.`;
+  if (!confirm(warning)) return;
+
+  try {
+    await updateDoc(doc(db, "players", playerId), { isActive: !currentlyActive });
+
+    if (currentlyActive) {
+      // pull them out of any team slots across all tournaments so Tournament
+      // Manager doesn't keep showing a now-inactive player as "assigned"
+      const tournamentsSnap = await getDocs(collection(db, "tournaments"));
+      for (const tDoc of tournamentsSnap.docs) {
+        await removeFromSlot(tDoc.id, playerId);
+      }
+    }
+
+    loadPlayers();
+    loadMatchFormOptions();
+    loadTMTournamentSelect();
+  } catch (err) {
+    console.error(err);
+    alert(`Something went wrong trying to ${action} ${playerName}. Try again.`);
   }
 }
 
@@ -638,7 +680,7 @@ async function loadTeamGrid(tournamentId) {
           return `
             <div class="team-slot-player">
               <span class="team-slot-player-name">${escapeHtml(nameById.get(playerId) || "Unknown player")}</span>
-              <button class="team-slot-remove-btn" data-remove-player="${playerId}" data-tournament="${tournamentId}" title="Remove">×</button>
+              <button class="team-slot-remove-btn" data-remove-player="${playerId}" data-tournament="${tournamentId}" title="Remove from this team slot only — the player stays in the app and roster">×</button>
             </div>`;
         }
         const options = availablePlayers.map((p) => `<option value="${p.id}">${escapeHtml(p.name)} (${escapeHtml(p.playerCode || "")})</option>`).join("");

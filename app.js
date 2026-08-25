@@ -1,5 +1,5 @@
 import { db, collection, doc, getDoc, getDocs, updateDoc, query, where, limit, orderBy } from "./firebase-config.js";
-import { registerPlayer, unregisterPlayer, addPartner, fetchTeams, findTeamOf } from "./teams.js";
+import { registerPlayer, unregisterPlayer, addPartner, fetchTeams } from "./teams.js";
 import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFoundingMember } from "./utils.js";
 import { t, getLang, setLang, applyStaticTranslations } from "./i18n.js";
 
@@ -436,7 +436,6 @@ async function loadTournamentsTab() {
         ${deadline ? `<div class="tourney-meta">${CAL_SVG}${t("deadline_label")}: ${deadline.toLocaleString(getLang() === "ar" ? "ar-EG" : "en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>` : ""}
         ${tr.championName ? `<div class="tourney-champion">🏆 ${t("champion_label")}: ${tr.championName}</div>` : ""}
         ${actionHtml}
-        <div id="myteam-${tr.id}"></div>
         <div style="margin-top:10px;">
           <button class="link-btn" data-view-participants="${tr.id}" type="button" style="padding:0; font-size:12.5px;">${t("view_players_btn")} (${(tr.participantIds || []).length})</button>
         </div>
@@ -453,15 +452,7 @@ async function loadTournamentsTab() {
       btn.addEventListener("click", () => unregisterFromTournament(btn.dataset.unregister, btn));
     });
     listEl.querySelectorAll("[data-view-participants]").forEach((btn) => {
-      btn.addEventListener("click", () => toggleParticipantsView(btn.dataset.viewParticipants));
-    });
-
-    // fill in "your team" status for rows where the player is registered — done
-    // as a lazy follow-up so the row list itself isn't blocked on extra fetches
-    data.forEach((tr) => {
-      if (tr.status === "upcoming" && (tr.participantIds || []).includes(currentPlayer.id)) {
-        loadMyTeamStatus(tr.id);
-      }
+      btn.addEventListener("click", () => toggleTeamGridView(btn.dataset.viewParticipants));
     });
   } catch (err) {
     console.error(err);
@@ -502,135 +493,93 @@ async function unregisterFromTournament(tournamentId, btn) {
   }
 }
 
-// ---------------- "your team" status + self-service partner picking ----------------
-async function loadMyTeamStatus(tournamentId) {
-  const el = $(`myteam-${tournamentId}`);
-  if (!el) return;
-  try {
-    const teams = await fetchTeams(tournamentId);
-    const myTeam = findTeamOf(teams, currentPlayer.id);
-    if (!myTeam) return; // shouldn't happen right after registering, but stay quiet if so
-
-    const partnerId = myTeam.player1Id === currentPlayer.id ? myTeam.player2Id : myTeam.player1Id;
-
-    if (partnerId) {
-      const partnerDoc = await getDoc(doc(db, "players", partnerId));
-      const partnerName = partnerDoc.exists() ? (partnerDoc.data().name || "—") : "—";
-      el.innerHTML = `<div class="my-team-status">${t("your_team_label")}: <strong>${partnerName}</strong></div>`;
-      return;
-    }
-
-    // no partner yet — offer a self-service picker of anyone not already on a team here
-    const tr = tournamentsCache?.find((x) => x.id === tournamentId);
-    const assignedIds = new Set();
-    teams.forEach((tm) => { if (tm.player1Id) assignedIds.add(tm.player1Id); if (tm.player2Id) assignedIds.add(tm.player2Id); });
-
-    const allActiveSnap = await getDocs(query(collection(db, "players"), orderBy("name")));
-    const candidates = allActiveSnap.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
-      .filter((p) => p.isActive !== false && !assignedIds.has(p.id));
-
-    const options = candidates.map((p) => `<option value="${p.id}">${p.name} (${p.playerCode})</option>`).join("");
-    el.innerHTML = `
-      <div class="my-team-status">${t("no_partner_yet_label")}</div>
-      <div class="my-team-picker">
-        <select id="partner-select-${tournamentId}" class="team-slot-add-select">
-          <option value="">${t("choose_partner_placeholder")}</option>
-          ${options}
-        </select>
-        <button class="btn btn-ghost btn-sm" data-add-partner="${tournamentId}" data-team="${myTeam.id}" type="button">${t("add_partner_btn")}</button>
-      </div>
-    `;
-    el.querySelector(`[data-add-partner="${tournamentId}"]`).addEventListener("click", async (e) => {
-      const select = $(`partner-select-${tournamentId}`);
-      const chosenId = select.value;
-      if (!chosenId) return;
-      const addBtn = e.target;
-      addBtn.disabled = true;
-      addBtn.textContent = t("registering");
-      try {
-        await addPartner(tournamentId, myTeam.id, chosenId);
-        loadMyTeamStatus(tournamentId);
-      } catch (err) {
-        console.error(err);
-        addBtn.disabled = false;
-        addBtn.textContent = t("add_partner_btn");
-      }
-    });
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-// cache resolved participant/team info per tournament so repeated toggles don't re-fetch
-const participantsViewCache = new Map();
-
-async function toggleParticipantsView(tournamentId) {
+// ---------------- full team grid (read-only for everyone, except your own open slot) ----------------
+async function toggleTeamGridView(tournamentId) {
   const container = $(`participants-${tournamentId}`);
   if (!container.classList.contains("hidden")) {
     container.classList.add("hidden");
     return;
   }
   container.classList.remove("hidden");
+  await renderTeamGrid(tournamentId, container);
+}
 
-  if (participantsViewCache.has(tournamentId)) {
-    container.innerHTML = participantsViewCache.get(tournamentId);
-    return;
-  }
-
+async function renderTeamGrid(tournamentId, container) {
   container.innerHTML = `<span class="spinner"></span> ${t("loading")}`;
 
   try {
     const tr = tournamentsCache?.find((x) => x.id === tournamentId);
-    const participantIds = tr?.participantIds || [];
-    if (participantIds.length === 0) {
-      container.innerHTML = `<div class="tourney-solo-list">${t("no_participants")}</div>`;
-      participantsViewCache.set(tournamentId, container.innerHTML);
-      return;
-    }
+    const totalTeams = tr?.totalTeams || 12;
+    const teams = await fetchTeams(tournamentId);
 
-    const [teamsSnap, playerDocs] = await Promise.all([
-      getDocs(collection(db, "tournaments", tournamentId, "teams")),
-      Promise.all(participantIds.map((id) => getDoc(doc(db, "players", id))))
-    ]);
-
-    const nameById = new Map();
-    playerDocs.forEach((d) => { if (d.exists()) nameById.set(d.id, d.data().name || "—"); });
-
-    const teams = teamsSnap.docs.map((d) => d.data());
     const assignedIds = new Set();
     teams.forEach((tm) => { if (tm.player1Id) assignedIds.add(tm.player1Id); if (tm.player2Id) assignedIds.add(tm.player2Id); });
 
-    const byGroup = {};
-    const noGroup = [];
-    teams.forEach((tm) => {
-      const label = `${nameById.get(tm.player1Id) || "—"} / ${tm.player2Id ? (nameById.get(tm.player2Id) || "—") : t("no_team_yet")}`;
-      if (tm.group) {
-        byGroup[tm.group] = byGroup[tm.group] || [];
-        byGroup[tm.group].push(label);
-      } else {
-        noGroup.push(label);
-      }
-    });
+    // resolve names for everyone currently on a team
+    const playerDocs = await Promise.all([...assignedIds].map((id) => getDoc(doc(db, "players", id))));
+    const nameById = new Map();
+    playerDocs.forEach((d) => { if (d.exists()) nameById.set(d.id, d.data().name || "—"); });
 
-    const soloIds = participantIds.filter((id) => !assignedIds.has(id));
+    // candidates for the partner picker: active players not on any team here yet
+    const allActiveSnap = await getDocs(query(collection(db, "players"), orderBy("name")));
+    const candidates = allActiveSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((p) => p.isActive !== false && !assignedIds.has(p.id) && p.id !== currentPlayer.id);
+    const candidateOptions = candidates.map((p) => `<option value="${p.id}">${p.name} (${p.playerCode})</option>`).join("");
 
-    let html = "";
-    Object.keys(byGroup).sort().forEach((g) => {
-      html += `<div class="tourney-participants-group">${t("group_label")} ${g}</div>`;
-      byGroup[g].forEach((label) => { html += `<div class="tourney-team-row">${label}</div>`; });
-    });
-    if (noGroup.length > 0) {
-      html += `<div class="tourney-participants-group">${t("no_team_yet")}</div>`;
-      noGroup.forEach((label) => { html += `<div class="tourney-team-row">${label}</div>`; });
+    const teamByNumber = new Map(teams.map((tm) => [tm.teamNumber, tm]));
+
+    let html = `<div class="team-slot-grid-header"><span>#</span><span>${t("team_slot_player1")}</span><span>${t("team_slot_player2")}</span><span>${t("group_label")}</span></div>`;
+
+    for (let n = 1; n <= totalTeams; n++) {
+      const team = teamByNumber.get(n);
+      const cellHtml = (playerId, otherId) => {
+        if (playerId) {
+          return `<span class="team-slot-player-name">${nameById.get(playerId) || "—"}</span>`;
+        }
+        const isMyOpenSlot = team && otherId === currentPlayer.id;
+        if (isMyOpenSlot) {
+          return `
+            <div class="my-team-picker">
+              <select class="team-slot-add-select" id="grid-partner-select-${tournamentId}-${n}">
+                <option value="">${t("choose_partner_placeholder")}</option>
+                ${candidateOptions}
+              </select>
+              <button class="btn btn-ghost btn-sm" data-add-partner-grid="${team.id}" data-select-id="grid-partner-select-${tournamentId}-${n}" data-tournament="${tournamentId}" type="button">${t("add_partner_btn")}</button>
+            </div>`;
+        }
+        return `<span class="team-slot-player-name" style="opacity:.4;">—</span>`;
+      };
+
+      html += `
+        <div class="team-slot-row">
+          <div class="team-slot-number">${n}</div>
+          <div>${cellHtml(team?.player1Id, team?.player2Id)}</div>
+          <div>${cellHtml(team?.player2Id, team?.player1Id)}</div>
+          <div>${team?.group ? `${t("group_label")} ${team.group}` : "—"}</div>
+        </div>
+      `;
     }
-    if (soloIds.length > 0) {
-      html += `<div class="tourney-participants-group">${t("no_team_yet")}</div>`;
-      html += `<div class="tourney-solo-list">${soloIds.map((id) => nameById.get(id) || "—").join(", ")}</div>`;
-    }
 
-    container.innerHTML = html || `<div class="tourney-solo-list">${t("no_participants")}</div>`;
-    participantsViewCache.set(tournamentId, container.innerHTML);
+    container.innerHTML = html;
+
+    container.querySelectorAll("[data-add-partner-grid]").forEach((addBtn) => {
+      addBtn.addEventListener("click", async () => {
+        const select = $(addBtn.dataset.selectId);
+        const chosenId = select.value;
+        if (!chosenId) return;
+        addBtn.disabled = true;
+        addBtn.textContent = t("registering");
+        try {
+          await addPartner(addBtn.dataset.tournament, addBtn.dataset.addPartnerGrid, chosenId);
+          renderTeamGrid(tournamentId, container);
+        } catch (err) {
+          console.error(err);
+          addBtn.disabled = false;
+          addBtn.textContent = t("add_partner_btn");
+        }
+      });
+    });
   } catch (err) {
     console.error(err);
     container.innerHTML = t("leaderboard_err");

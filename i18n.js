@@ -55,6 +55,8 @@ const translations = {
     choose_partner_placeholder: "اختار الشريك",
     add_partner_btn: "إضافة الشريك",
     tournament_full: "البطولة اكتملت، مفيش أماكن فاضية.",
+    team_slot_player1: "لاعب 1",
+    team_slot_player2: "لاعب 2",
     // leaderboard
     leaderboard_title: "الترتيب العام",
     leaderboard_sub: "ترتيب كل لاعيبة KFS حسب النقط.",
@@ -149,6 +151,8 @@ const translations = {
     choose_partner_placeholder: "Choose a partner",
     add_partner_btn: "Add partner",
     tournament_full: "This tournament is full — no open team slots left.",
+    team_slot_player1: "Player 1",
+    team_slot_player2: "Player 2",
     leaderboard_title: "Leaderboard",
     leaderboard_sub: "Every KFS player, ranked by rating points.",
     your_rank: "Your rank",
