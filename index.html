@@ -103,11 +103,31 @@
         <h1 data-i18n="tournaments_title">Tournaments</h1>
         <p class="sub" data-i18n="tournaments_sub">Browse past results and register for what's coming up.</p>
 
-        <div id="tr-loading" style="font-size:13px; color:var(--text-soft);">
-          <span class="spinner"></span> <span data-i18n="loading">Loading...</span>
+        <div class="subtab-bar">
+          <button class="subtab-btn active" data-subtab="list" type="button">
+            <span data-i18n="subtab_tournaments">Tournaments</span>
+          </button>
+          <button class="subtab-btn" data-subtab="requests" type="button">
+            <span data-i18n="subtab_requests">Requests</span>
+            <span class="subtab-badge hidden" id="requests-badge">0</span>
+          </button>
         </div>
-        <div class="tourney-list hidden" id="tr-list"></div>
-        <div class="tourney-empty hidden" id="tr-empty" data-i18n="tournaments_empty">No tournaments have been added yet.</div>
+
+        <div id="tournaments-subtab-list">
+          <div id="tr-loading" style="font-size:13px; color:var(--text-soft);">
+            <span class="spinner"></span> <span data-i18n="loading">Loading...</span>
+          </div>
+          <div class="tourney-list hidden" id="tr-list"></div>
+          <div class="tourney-empty hidden" id="tr-empty" data-i18n="tournaments_empty">No tournaments have been added yet.</div>
+        </div>
+
+        <div class="hidden" id="tournaments-subtab-requests">
+          <div id="requests-loading" style="font-size:13px; color:var(--text-soft);">
+            <span class="spinner"></span> <span data-i18n="loading">Loading...</span>
+          </div>
+          <div id="requests-list" class="hidden"></div>
+          <div class="tourney-empty hidden" id="requests-empty" data-i18n="requests_empty">No one has asked to join your team yet.</div>
+        </div>
       </div>
 
       <!-- ---- tab: marketplace ---- -->

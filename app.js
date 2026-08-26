@@ -1,5 +1,5 @@
 import { db, collection, doc, getDoc, getDocs, updateDoc, query, where, limit, orderBy } from "./firebase-config.js";
-import { registerPlayer, unregisterPlayer, addPartner, fetchTeams } from "./teams.js";
+import { registerPlayer, unregisterPlayer, addPartner, fetchTeams, requestToJoinTeam, cancelJoinRequest, acceptJoinRequest, declineJoinRequest, getOpenTeams, myPendingRequestTeams, myIncomingRequests } from "./teams.js";
 import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFoundingMember } from "./utils.js";
 import { t, getLang, setLang, applyStaticTranslations } from "./i18n.js";
 
@@ -214,6 +214,128 @@ document.querySelectorAll(".view-all[data-goto]").forEach((btn) => {
   btn.addEventListener("click", () => switchTab(btn.dataset.goto));
 });
 
+// ---------------- tournaments sub-tabs (list / requests) ----------------
+document.querySelectorAll(".subtab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".subtab-btn").forEach((b) => b.classList.toggle("active", b === btn));
+    $("tournaments-subtab-list").classList.toggle("hidden", btn.dataset.subtab !== "list");
+    $("tournaments-subtab-requests").classList.toggle("hidden", btn.dataset.subtab !== "requests");
+    if (btn.dataset.subtab === "requests") loadRequestsSubtab();
+  });
+});
+
+async function loadRequestsSubtab() {
+  const loadingEl = $("requests-loading");
+  const listEl = $("requests-list");
+  const emptyEl = $("requests-empty");
+  loadingEl.classList.remove("hidden");
+  listEl.classList.add("hidden");
+  emptyEl.classList.add("hidden");
+
+  try {
+    const tournaments = await ensureTournamentsData();
+    const relevant = tournaments.filter((tr) => tr.status !== "completed");
+
+    const incomingByTournament = await Promise.all(
+      relevant.map(async (tr) => {
+        const teams = await fetchTeams(tr.id);
+        return myIncomingRequests(teams, currentPlayer.id).map((team) => ({ tournamentId: tr.id, team }));
+      })
+    );
+    const allIncoming = incomingByTournament.flat();
+
+    loadingEl.classList.add("hidden");
+
+    const totalRequests = allIncoming.reduce((sum, x) => sum + (x.team.joinRequests || []).length, 0);
+    const badge = $("requests-badge");
+    if (totalRequests > 0) {
+      badge.textContent = totalRequests;
+      badge.classList.remove("hidden");
+    } else {
+      badge.classList.add("hidden");
+    }
+
+    if (allIncoming.length === 0) {
+      emptyEl.classList.remove("hidden");
+      return;
+    }
+
+    listEl.innerHTML = "";
+    for (const { tournamentId, team } of allIncoming) {
+      for (const requesterId of team.joinRequests || []) {
+        const card = await buildRequestCard(tournamentId, team, requesterId);
+        listEl.appendChild(card);
+      }
+    }
+    listEl.classList.remove("hidden");
+  } catch (err) {
+    console.error(err);
+    loadingEl.textContent = t("leaderboard_err");
+  }
+}
+
+async function buildRequestCard(tournamentId, team, requesterId) {
+  const pDoc = await getDoc(doc(db, "players", requesterId));
+  const p = pDoc.exists() ? { id: requesterId, ...pDoc.data() } : { id: requesterId, name: "—" };
+
+  const matches = p.matchesPlayed ?? 0;
+  const wins = p.wins ?? 0;
+  const winRate = matches > 0 ? `${Math.round((wins / matches) * 100)}%` : "—";
+  const meta = tierMeta(tierFromPoints(p.ratingPoints));
+
+  const card = document.createElement("div");
+  card.className = "request-card";
+  card.innerHTML = `
+    <div class="request-card-head" data-toggle-stats>
+      <div class="avatar" style="width:44px;height:44px;font-size:16px;">${avatarHtml(p)}</div>
+      <div>
+        <div class="request-card-name">${p.name || "—"}</div>
+        <div class="request-card-sub">#${team.teamNumber} · ${t("wants_to_join_your_team")}${tiersEnabled ? ` · ${meta.displayName}` : ""}</div>
+      </div>
+    </div>
+    <div class="request-card-stats">
+      <div class="stat-box"><div class="num">${Math.round(p.ratingPoints ?? 1000)}</div><div class="lbl">${t("pts")}</div></div>
+      <div class="stat-box"><div class="num">${matches}</div><div class="lbl">${t("profile_matches")}</div></div>
+      <div class="stat-box"><div class="num">${winRate}</div><div class="lbl">${t("profile_winrate")}</div></div>
+    </div>
+    <div class="request-card-actions">
+      <button class="btn btn-primary btn-sm" data-accept type="button">${t("accept_btn")}</button>
+      <button class="btn btn-ghost btn-sm" data-decline type="button">${t("decline_btn")}</button>
+    </div>
+  `;
+
+  card.querySelector("[data-toggle-stats]").addEventListener("click", () => {
+    card.querySelector(".request-card-stats").classList.toggle("show");
+  });
+  card.querySelector("[data-accept]").addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    e.target.textContent = t("accepting");
+    try {
+      await acceptJoinRequest(tournamentId, team.id, requesterId);
+      leaderboardCache = null; // roster changed
+      loadRequestsSubtab();
+    } catch (err) {
+      console.error(err);
+      e.target.disabled = false;
+      e.target.textContent = t("accept_btn");
+    }
+  });
+  card.querySelector("[data-decline]").addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    e.target.textContent = t("declining");
+    try {
+      await declineJoinRequest(tournamentId, team.id, requesterId);
+      loadRequestsSubtab();
+    } catch (err) {
+      console.error(err);
+      e.target.disabled = false;
+      e.target.textContent = t("decline_btn");
+    }
+  });
+
+  return card;
+}
+
 // ---------------- shared leaderboard data ----------------
 async function ensureLeaderboardData(forceRefresh = false) {
   if (leaderboardCache && !forceRefresh) return leaderboardCache;
@@ -415,14 +537,15 @@ async function loadTournamentsTab() {
       if (tr.status === "upcoming") {
         if (isRegistered) {
           actionHtml = isPastDeadline
-            ? `<div class="tourney-actions"><button class="btn btn-ghost btn-sm" disabled>${t("registered_btn")}</button><div class="hint" style="margin-top:6px;">${t("registration_locked_hint")}</div></div>`
-            : `<div class="tourney-actions"><button class="btn btn-ghost btn-sm" data-unregister="${tr.id}">${t("unregister_btn")}</button></div>`;
+            ? `<button class="btn btn-ghost btn-sm" disabled>${t("registered_btn")}</button>`
+            : `<button class="btn btn-ghost btn-sm" data-unregister="${tr.id}">${t("unregister_btn")}</button>`;
+        } else if (isPastDeadline) {
+          actionHtml = `<span class="hint">${t("registration_closed")}</span>`;
         } else {
-          actionHtml = isPastDeadline
-            ? `<div class="tourney-actions"><span class="hint">${t("registration_closed")}</span></div>`
-            : `<div class="tourney-actions"><button class="btn btn-primary btn-sm" data-register="${tr.id}">${t("register_btn")}</button></div>`;
+          actionHtml = `<span class="spinner"></span>`; // resolved async right after render
         }
       }
+      const viewParticipantsHtml = `<button class="btn btn-ghost btn-sm" data-view-participants="${tr.id}" type="button">${t("view_players_btn")} (${(tr.participantIds || []).length})</button>`;
 
       row.innerHTML = `
         <div class="tourney-row-top">
@@ -435,29 +558,136 @@ async function loadTournamentsTab() {
         ${tr.dateLabel ? `<div class="tourney-meta">${CAL_SVG}${tr.dateLabel}</div>` : ""}
         ${deadline ? `<div class="tourney-meta">${CAL_SVG}${t("deadline_label")}: ${deadline.toLocaleString(getLang() === "ar" ? "ar-EG" : "en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>` : ""}
         ${tr.championName ? `<div class="tourney-champion">🏆 ${t("champion_label")}: ${tr.championName}</div>` : ""}
-        ${actionHtml}
-        <div style="margin-top:10px;">
-          <button class="link-btn" data-view-participants="${tr.id}" type="button" style="padding:0; font-size:12.5px;">${t("view_players_btn")} (${(tr.participantIds || []).length})</button>
+        <div class="tourney-actions" id="actions-${tr.id}">
+          ${actionHtml}
+          ${viewParticipantsHtml}
         </div>
+        ${isPastDeadline && isRegistered ? `<div class="hint" style="margin-top:6px;">${t("registration_locked_hint")}</div>` : ""}
         <div class="tourney-participants hidden" id="participants-${tr.id}"></div>
       `;
       listEl.appendChild(row);
     });
     listEl.classList.remove("hidden");
 
-    listEl.querySelectorAll("[data-register]").forEach((btn) => {
-      btn.addEventListener("click", () => registerForTournament(btn.dataset.register, btn));
-    });
     listEl.querySelectorAll("[data-unregister]").forEach((btn) => {
       btn.addEventListener("click", () => unregisterFromTournament(btn.dataset.unregister, btn));
     });
     listEl.querySelectorAll("[data-view-participants]").forEach((btn) => {
       btn.addEventListener("click", () => toggleTeamGridView(btn.dataset.viewParticipants));
     });
+
+    // resolve the register/join/pending state for each open, unregistered tournament
+    data.forEach((tr) => {
+      const isRegistered = (tr.participantIds || []).includes(currentPlayer.id);
+      const deadline = tr.registrationDeadline?.toDate ? tr.registrationDeadline.toDate() : null;
+      const isPastDeadline = deadline ? deadline.getTime() < Date.now() : false;
+      if (tr.status === "upcoming" && !isRegistered && !isPastDeadline) {
+        resolveRegisterActions(tr.id);
+      }
+    });
+
+    loadRequestsSubtab(); // keeps the "Requests" badge fresh in the background
   } catch (err) {
     console.error(err);
     loadingEl.textContent = t("leaderboard_err");
   }
+}
+
+// ---------------- register / join-a-team / pending-request states ----------------
+async function resolveRegisterActions(tournamentId) {
+  const el = $(`actions-${tournamentId}`);
+  if (!el) return;
+
+  try {
+    const teams = await fetchTeams(tournamentId);
+    const pending = myPendingRequestTeams(teams, currentPlayer.id);
+
+    if (pending.length > 0) {
+      el.innerHTML = `
+        <button class="btn btn-ghost btn-sm" disabled>${t("request_sent_label")}</button>
+        <button class="link-btn" data-cancel-request type="button" style="font-size:12px;">${t("cancel_request_btn")}</button>
+      `;
+      el.querySelector("[data-cancel-request]").addEventListener("click", async (e) => {
+        e.target.disabled = true;
+        try {
+          await cancelJoinRequest(tournamentId, pending[0].id, currentPlayer.id);
+          resolveRegisterActions(tournamentId);
+        } catch (err) {
+          console.error(err);
+          e.target.disabled = false;
+        }
+      });
+      return;
+    }
+
+    el.innerHTML = `
+      <button class="btn btn-primary btn-sm" data-register type="button">${t("register_own_team_btn")}</button>
+      <button class="btn btn-ghost btn-sm" data-join type="button">${t("join_team_btn")}</button>
+    `;
+    el.querySelector("[data-register]").addEventListener("click", (e) => registerForTournament(tournamentId, e.target));
+    el.querySelector("[data-join]").addEventListener("click", () => toggleJoinTeamPicker(tournamentId, teams));
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function toggleJoinTeamPicker(tournamentId, teams) {
+  const containerId = `jointeams-${tournamentId}`;
+  const existing = document.getElementById(containerId);
+  if (existing) {
+    existing.remove();
+    return;
+  }
+
+  const actionsEl = $(`actions-${tournamentId}`);
+  const div = document.createElement("div");
+  div.id = containerId;
+  div.style.marginTop = "12px";
+
+  const openTeams = getOpenTeams(teams).filter((tm) => tm.player1Id !== currentPlayer.id && tm.player2Id !== currentPlayer.id);
+
+  if (openTeams.length === 0) {
+    div.innerHTML = `<div class="hint">${t("no_open_teams")}</div>`;
+  } else {
+    div.innerHTML = `
+      <div class="section-head" style="margin:0 0 8px;"><h2 style="font-size:13px;">${t("open_teams_title")}</h2></div>
+      ${openTeams.map((tm) => `
+        <div class="open-team-row" data-team-row="${tm.id}">
+          <span data-team-name="${tm.id}">…</span>
+          <button class="btn btn-primary btn-sm" data-send-request="${tm.id}" type="button">${t("send_request_btn")}</button>
+        </div>
+      `).join("")}
+    `;
+  }
+
+  actionsEl.insertAdjacentElement("afterend", div);
+
+  openTeams.forEach(async (tm) => {
+    const existingId = tm.player1Id || tm.player2Id;
+    try {
+      const pDoc = await getDoc(doc(db, "players", existingId));
+      const nameEl = div.querySelector(`[data-team-name="${tm.id}"]`);
+      if (nameEl && pDoc.exists()) nameEl.textContent = `#${tm.teamNumber} — ${pDoc.data().name || "—"}`;
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  div.querySelectorAll("[data-send-request]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.textContent = t("sending_request");
+      try {
+        await requestToJoinTeam(tournamentId, btn.dataset.sendRequest, currentPlayer.id);
+        div.remove();
+        resolveRegisterActions(tournamentId);
+      } catch (err) {
+        console.error(err);
+        btn.disabled = false;
+        btn.textContent = t("send_request_btn");
+      }
+    });
+  });
 }
 
 async function registerForTournament(tournamentId, btn) {
@@ -479,6 +709,7 @@ async function registerForTournament(tournamentId, btn) {
 }
 
 async function unregisterFromTournament(tournamentId, btn) {
+  if (!confirm(t("unregister_confirm"))) return;
   btn.disabled = true;
   btn.textContent = t("unregistering");
   try {
@@ -518,7 +749,12 @@ async function renderTeamGrid(tournamentId, container) {
     // resolve names for everyone currently on a team
     const playerDocs = await Promise.all([...assignedIds].map((id) => getDoc(doc(db, "players", id))));
     const nameById = new Map();
-    playerDocs.forEach((d) => { if (d.exists()) nameById.set(d.id, d.data().name || "—"); });
+    playerDocs.forEach((d) => {
+      if (d.exists()) {
+        const pd = d.data();
+        nameById.set(d.id, `${pd.name || "—"} (${pd.playerCode || "—"})`);
+      }
+    });
 
     // candidates for the partner picker: active players not on any team here yet
     const allActiveSnap = await getDocs(query(collection(db, "players"), orderBy("name")));

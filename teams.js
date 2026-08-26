@@ -117,3 +117,63 @@ export async function assignToSlot(tournamentId, teamNumber, slot, playerId) {
 export async function setTeamGroup(tournamentId, teamId, group) {
   await updateDoc(doc(db, "tournaments", tournamentId, "teams", teamId), { group: group || null });
 }
+
+// ---------------- join requests (join someone else's team, needs their OK) ----------------
+
+// Player asks to join an existing team that has one open slot.
+export async function requestToJoinTeam(tournamentId, teamId, requesterId) {
+  const teams = await fetchTeams(tournamentId);
+  const team = teams.find((t) => t.id === teamId);
+  if (!team) throw new Error("Team not found");
+  if (team.player1Id && team.player2Id) {
+    const err = new Error("That team is already full");
+    err.code = "FULL_TEAM";
+    throw err;
+  }
+  if (findTeamOf(teams, requesterId)) {
+    const err = new Error("You're already on a team in this tournament");
+    err.code = "ALREADY_ON_TEAM";
+    throw err;
+  }
+  await updateDoc(doc(db, "tournaments", tournamentId, "teams", teamId), {
+    joinRequests: arrayUnion(requesterId)
+  });
+}
+
+export async function cancelJoinRequest(tournamentId, teamId, requesterId) {
+  await updateDoc(doc(db, "tournaments", tournamentId, "teams", teamId), {
+    joinRequests: arrayRemove(requesterId)
+  });
+}
+
+// Team owner accepts: fills the open slot (via addPartner, which also frees up
+// the requester's old solo slot elsewhere if they had one) and clears every
+// other pending request that requester had sent to other teams.
+export async function acceptJoinRequest(tournamentId, teamId, requesterId) {
+  await addPartner(tournamentId, teamId, requesterId);
+  await updateDoc(doc(db, "tournaments", tournamentId, "teams", teamId), { joinRequests: [] });
+
+  const teams = await fetchTeams(tournamentId);
+  await Promise.all(
+    teams
+      .filter((t) => t.id !== teamId && (t.joinRequests || []).includes(requesterId))
+      .map((t) => updateDoc(doc(db, "tournaments", tournamentId, "teams", t.id), { joinRequests: arrayRemove(requesterId) }))
+  );
+}
+
+export async function declineJoinRequest(tournamentId, teamId, requesterId) {
+  await cancelJoinRequest(tournamentId, teamId, requesterId);
+}
+
+// Pure helpers over an already-fetched teams array (no extra reads).
+export function getOpenTeams(teams) {
+  return teams.filter((t) => (t.player1Id && !t.player2Id) || (!t.player1Id && t.player2Id));
+}
+
+export function myPendingRequestTeams(teams, myId) {
+  return teams.filter((t) => (t.joinRequests || []).includes(myId));
+}
+
+export function myIncomingRequests(teams, myId) {
+  return teams.filter((t) => (t.player1Id === myId || t.player2Id === myId) && (t.joinRequests || []).length > 0);
+}
