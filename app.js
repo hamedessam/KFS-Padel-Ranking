@@ -599,7 +599,23 @@ async function resolveRegisterActions(tournamentId) {
   if (!el) return;
 
   try {
-    const teams = await fetchTeams(tournamentId);
+    const [teams, tSnap] = await Promise.all([
+      fetchTeams(tournamentId),
+      getDoc(doc(db, "tournaments", tournamentId))
+    ]);
+
+    const waitingList = tSnap.exists() ? (tSnap.data().waitingList || []) : [];
+    const myWaitPos = waitingList.indexOf(currentPlayer.id);
+
+    if (myWaitPos !== -1) {
+      el.innerHTML = `
+        <button class="btn btn-ghost btn-sm" disabled>${t("waiting_list_label")} #${myWaitPos + 1}</button>
+        <button class="link-btn" data-leave-waitlist type="button" style="font-size:12px;">${t("leave_waitlist_btn")}</button>
+      `;
+      el.querySelector("[data-leave-waitlist]").addEventListener("click", (e) => unregisterFromTournament(tournamentId, e.target));
+      return;
+    }
+
     const pending = myPendingRequestTeams(teams, currentPlayer.id);
 
     if (pending.length > 0) {
@@ -700,11 +716,8 @@ async function registerForTournament(tournamentId, btn) {
     loadTournamentsTab();
   } catch (err) {
     console.error(err);
-    if (err.code === "FULL") {
-      alert(t("tournament_full"));
-    }
     btn.disabled = false;
-    btn.textContent = t("register_btn");
+    btn.textContent = t("register_own_team_btn");
   }
 }
 
@@ -765,18 +778,18 @@ async function renderTeamGrid(tournamentId, container) {
 
     const teamByNumber = new Map(teams.map((tm) => [tm.teamNumber, tm]));
 
-    let html = `<div class="team-slot-grid-header"><span>#</span><span>${t("team_slot_player1")}</span><span>${t("team_slot_player2")}</span><span>${t("group_label")}</span></div>`;
+    let html = "";
 
     for (let n = 1; n <= totalTeams; n++) {
       const team = teamByNumber.get(n);
       const cellHtml = (playerId, otherId) => {
         if (playerId) {
-          return `<span class="team-slot-player-name">${nameById.get(playerId) || "—"}</span>`;
+          return `<div class="team-slot-player"><span class="team-slot-player-name">${nameById.get(playerId) || "—"}</span></div>`;
         }
         const isMyOpenSlot = team && otherId === currentPlayer.id;
         if (isMyOpenSlot) {
           return `
-            <div class="my-team-picker">
+            <div class="team-slot-player my-team-picker">
               <select class="team-slot-add-select" id="grid-partner-select-${tournamentId}-${n}">
                 <option value="">${t("choose_partner_placeholder")}</option>
                 ${candidateOptions}
@@ -784,15 +797,19 @@ async function renderTeamGrid(tournamentId, container) {
               <button class="btn btn-ghost btn-sm" data-add-partner-grid="${team.id}" data-select-id="grid-partner-select-${tournamentId}-${n}" data-tournament="${tournamentId}" type="button">${t("add_partner_btn")}</button>
             </div>`;
         }
-        return `<span class="team-slot-player-name" style="opacity:.4;">—</span>`;
+        return `<div class="team-slot-player"><span class="team-slot-player-name" style="opacity:.4;">—</span></div>`;
       };
 
       html += `
         <div class="team-slot-row">
-          <div class="team-slot-number">${n}</div>
-          <div>${cellHtml(team?.player1Id, team?.player2Id)}</div>
-          <div>${cellHtml(team?.player2Id, team?.player1Id)}</div>
-          <div>${team?.group ? `${t("group_label")} ${team.group}` : "—"}</div>
+          <div class="team-slot-row-head">
+            <span class="team-slot-number">${t("team_label")} ${n}</span>
+            <span class="team-slot-group-tag">${team?.group ? `${t("group_label")} ${team.group}` : "—"}</span>
+          </div>
+          <div class="team-slot-players">
+            ${cellHtml(team?.player1Id, team?.player2Id)}
+            ${cellHtml(team?.player2Id, team?.player1Id)}
+          </div>
         </div>
       `;
     }

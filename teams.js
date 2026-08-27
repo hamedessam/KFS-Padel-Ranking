@@ -20,12 +20,14 @@ export function findTeamOf(teams, playerId) {
 }
 
 // Player registers themselves: claims the next free team number (1..totalTeams)
-// as player1 with an open player2 slot. Safe to call twice (idempotent).
+// as player1 with an open player2 slot. If the tournament is full, they go on
+// the waiting list instead (still counted in participantIds). Safe to call
+// twice (idempotent) if they already have a team.
 export async function registerPlayer(tournamentId, playerId, totalTeams) {
   const teams = await fetchTeams(tournamentId);
   const already = findTeamOf(teams, playerId);
   await updateDoc(doc(db, "tournaments", tournamentId), { participantIds: arrayUnion(playerId) });
-  if (already) return already;
+  if (already) return { ...already, waiting: false };
 
   const used = new Set(teams.map((t) => t.teamNumber).filter(Boolean));
   let nextNum = null;
@@ -33,14 +35,13 @@ export async function registerPlayer(tournamentId, playerId, totalTeams) {
     if (!used.has(n)) { nextNum = n; break; }
   }
   if (!nextNum) {
-    const err = new Error("Tournament is full");
-    err.code = "FULL";
-    throw err;
+    await updateDoc(doc(db, "tournaments", tournamentId), { waitingList: arrayUnion(playerId) });
+    return { waiting: true };
   }
   const ref = await addDoc(collection(db, "tournaments", tournamentId, "teams"), {
     teamNumber: nextNum, player1Id: playerId, player2Id: null, group: null, createdAt: serverTimestamp()
   });
-  return { id: ref.id, teamNumber: nextNum, player1Id: playerId, player2Id: null, group: null };
+  return { id: ref.id, teamNumber: nextNum, player1Id: playerId, player2Id: null, group: null, waiting: false };
 }
 
 // Removes a player from whichever slot they're in (if any) WITHOUT touching
@@ -67,10 +68,54 @@ export async function removeFromSlot(tournamentId, playerId) {
 }
 
 // Full unregister: removes from the team slot (same rules as removeFromSlot)
-// AND takes them out of participantIds.
+// AND takes them out of participantIds / waitingList. If they were on an
+// actual team, whatever opened up gets automatically filled by the first
+// person on the waiting list (if anyone's waiting).
 export async function unregisterPlayer(tournamentId, playerId) {
+  const teamsBefore = await fetchTeams(tournamentId);
+  const wasOnTeam = Boolean(findTeamOf(teamsBefore, playerId));
+
   await removeFromSlot(tournamentId, playerId);
-  await updateDoc(doc(db, "tournaments", tournamentId), { participantIds: arrayRemove(playerId) });
+  await updateDoc(doc(db, "tournaments", tournamentId), {
+    participantIds: arrayRemove(playerId),
+    waitingList: arrayRemove(playerId)
+  });
+
+  if (wasOnTeam) {
+    await promoteFromWaitingList(tournamentId);
+  }
+}
+
+// Takes the first person off the waiting list and slots them into whichever
+// opening exists — a team with one empty seat, or if none, the lowest free
+// team number. No-op if the waiting list is empty or nothing is actually open.
+export async function promoteFromWaitingList(tournamentId) {
+  const tSnap = await getDoc(doc(db, "tournaments", tournamentId));
+  if (!tSnap.exists()) return;
+  const waitingList = tSnap.data().waitingList || [];
+  if (waitingList.length === 0) return;
+
+  const nextPlayerId = waitingList[0];
+  const teams = await fetchTeams(tournamentId);
+
+  const partialTeam = teams.find((t) => (t.player1Id && !t.player2Id) || (!t.player1Id && t.player2Id));
+  if (partialTeam) {
+    const slot = partialTeam.player1Id ? "player2" : "player1";
+    await updateDoc(doc(db, "tournaments", tournamentId, "teams", partialTeam.id), { [slot]: nextPlayerId });
+  } else {
+    const totalTeams = tSnap.data().totalTeams || 12;
+    const used = new Set(teams.map((t) => t.teamNumber).filter(Boolean));
+    let num = null;
+    for (let n = 1; n <= totalTeams; n++) {
+      if (!used.has(n)) { num = n; break; }
+    }
+    if (num == null) return; // nothing actually opened up — leave them waiting
+    await addDoc(collection(db, "tournaments", tournamentId, "teams"), {
+      teamNumber: num, player1Id: nextPlayerId, player2Id: null, group: null, createdAt: serverTimestamp()
+    });
+  }
+
+  await updateDoc(doc(db, "tournaments", tournamentId), { waitingList: arrayRemove(nextPlayerId) });
 }
 
 // Fills a team's open slot with partnerId. If partnerId already has their own

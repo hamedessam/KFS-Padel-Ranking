@@ -1,5 +1,5 @@
 import {
-  db, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc,
+  db, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
   query, orderBy, runTransaction, writeBatch, increment, serverTimestamp
 } from "./firebase-config.js";
 import { hashPassword, randomSalt, generatePassword, playerCodeFromSeq, tierMeta, tierFromPoints, isFoundingMember, computeMatchPointChanges } from "./utils.js";
@@ -201,7 +201,10 @@ async function loadPlayers() {
         <td><span class="badge-pill ${meta.cssClass}">${meta.displayName}</span></td>
         <td>${Math.round(p.ratingPoints ?? 1000)}</td>
         <td>${p.matchesPlayed ?? 0}</td>
-        <td><button class="link-btn" data-reset-player="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" type="button" style="font-size:12px;">Reset password</button></td>
+        <td style="white-space:nowrap;">
+          <button class="link-btn" data-reset-player="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" type="button" style="font-size:12px;">Reset password</button>
+          <button class="link-btn" data-delete-player="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" type="button" style="font-size:12px; color:var(--danger);">Delete</button>
+        </td>
       `;
       tbody.appendChild(tr);
     });
@@ -211,9 +214,43 @@ async function loadPlayers() {
     tbody.querySelectorAll("[data-reset-player]").forEach((btn) => {
       btn.addEventListener("click", () => resetPlayerPassword(btn.dataset.resetPlayer, btn.dataset.playerName, btn));
     });
+    tbody.querySelectorAll("[data-delete-player]").forEach((btn) => {
+      btn.addEventListener("click", () => deletePlayerCompletely(btn.dataset.deletePlayer, btn.dataset.playerName, btn));
+    });
   } catch (err) {
     console.error(err);
     loadingEl.textContent = "Couldn't load the players.";
+  }
+}
+
+// ---------------- permanently delete a player ----------------
+// Hard delete: removes their profile and login entirely — they can never sign
+// in again with that code. Not reversible. Their name may still appear in old
+// match/rating history records (those aren't touched), but the account itself
+// is gone. Also pulls them out of any tournament team slots first.
+async function deletePlayerCompletely(playerId, playerName, btn) {
+  const confirmed = confirm(
+    `Permanently delete ${playerName}?\n\nThis removes their profile and login completely — their code and password will stop working immediately, and this CANNOT be undone.\n\nAre you sure?`
+  );
+  if (!confirmed) return;
+
+  btn.disabled = true;
+  btn.textContent = "Deleting...";
+
+  try {
+    const tournamentsSnap = await getDocs(collection(db, "tournaments"));
+    for (const tDoc of tournamentsSnap.docs) {
+      await unregisterPlayer(tDoc.id, playerId);
+    }
+    await deleteDoc(doc(db, "players", playerId));
+    loadPlayers();
+    loadMatchFormOptions();
+    loadTMTournamentSelect();
+  } catch (err) {
+    console.error(err);
+    alert(`Something went wrong deleting ${playerName}. Try again.`);
+    btn.disabled = false;
+    btn.textContent = "Delete";
   }
 }
 
@@ -625,11 +662,7 @@ async function loadTeamGrid(tournamentId) {
 
     const teamByNumber = new Map(teams.map((tm) => [tm.teamNumber, tm]));
 
-    let html = `
-      <div class="team-slot-grid-header">
-        <span>#</span><span>Player 1</span><span>Player 2</span><span>Group</span>
-      </div>
-    `;
+    let html = "";
 
     for (let n = 1; n <= totalTeams; n++) {
       const team = teamByNumber.get(n);
@@ -643,28 +676,43 @@ async function loadTeamGrid(tournamentId) {
         }
         const options = availablePlayers.map((p) => `<option value="${p.id}">${escapeHtml(p.name)} (${escapeHtml(p.playerCode || "")})</option>`).join("");
         return `
-          <select class="team-slot-add-select" data-assign-team="${n}" data-assign-slot="${slot}" data-tournament="${tournamentId}">
-            <option value="">+ Add player</option>
-            ${options}
-          </select>`;
+          <div class="team-slot-player">
+            <select class="team-slot-add-select" data-assign-team="${n}" data-assign-slot="${slot}" data-tournament="${tournamentId}">
+              <option value="">+ Add player</option>
+              ${options}
+            </select>
+          </div>`;
       };
 
       const groupOptions = [1, 2, 3].map((g) =>
         `<option value="${g}" ${team?.group === g ? "selected" : ""}>Group ${g}</option>`
       ).join("");
+      const groupSelect = team
+        ? `<select class="team-slot-group-select" data-set-group="${team.id}" data-tournament="${tournamentId}"><option value="">Group —</option>${groupOptions}</select>`
+        : `<select class="team-slot-group-select" disabled><option>Group —</option></select>`;
 
       html += `
         <div class="team-slot-row">
-          <div class="team-slot-number">${n}</div>
-          <div>${playerCell(team?.player1Id, "player1")}</div>
-          <div>${playerCell(team?.player2Id, "player2")}</div>
-          <div>
-            ${team ? `<select class="team-slot-group-select" data-set-group="${team.id}" data-tournament="${tournamentId}">
-                <option value="">—</option>${groupOptions}
-              </select>` : `<select class="team-slot-group-select" disabled><option>—</option></select>`}
+          <div class="team-slot-row-head">
+            <span class="team-slot-number">Team ${n}</span>
+            ${groupSelect}
+          </div>
+          <div class="team-slot-players">
+            ${playerCell(team?.player1Id, "player1")}
+            ${playerCell(team?.player2Id, "player2")}
           </div>
         </div>
       `;
+    }
+
+    const waitingList = tSnap.data().waitingList || [];
+    const waitlistEl = $("tm-waitlist");
+    if (waitingList.length > 0) {
+      const names = waitingList.map((id) => nameById.get(id) || "Unknown player").join(", ");
+      waitlistEl.textContent = `Waiting list (${waitingList.length}): ${names}`;
+      waitlistEl.classList.remove("hidden");
+    } else {
+      waitlistEl.classList.add("hidden");
     }
 
     gridEl.innerHTML = html;
