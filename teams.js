@@ -4,7 +4,7 @@
 // they're reading and writing through the exact same functions.
 
 import {
-  db, collection, doc, getDocs, updateDoc, deleteDoc, addDoc,
+  db, collection, doc, getDoc, getDocs, updateDoc, deleteDoc, addDoc,
   arrayUnion, arrayRemove, serverTimestamp
 } from "./firebase-config.js";
 
@@ -67,55 +67,82 @@ export async function removeFromSlot(tournamentId, playerId) {
   }
 }
 
-// Full unregister: removes from the team slot (same rules as removeFromSlot)
-// AND takes them out of participantIds / waitingList. If they were on an
-// actual team, whatever opened up gets automatically filled by the first
-// person on the waiting list (if anyone's waiting).
-export async function unregisterPlayer(tournamentId, playerId) {
-  const teamsBefore = await fetchTeams(tournamentId);
-  const wasOnTeam = Boolean(findTeamOf(teamsBefore, playerId));
+// Full unregister: removes them from participantIds/waitingList, then handles
+// the vacated slot according to their role:
+//  - Partner (player2) leaving: the slot just goes empty. Nobody from the
+//    waiting list is pulled in automatically.
+//  - Solo founder (player1, no partner) leaving: the whole team number frees
+//    up and the first person on the waiting list becomes the new founder.
+//  - Founder WITH a partner leaving: ambiguous on purpose — caller must pass
+//    founderChoice: 'promote-partner' (partner becomes the new founder, no
+//    waitlist involved — this is also the default if omitted) or
+//    'fill-from-waitlist' (partner keeps their spot, someone from the waiting
+//    list takes over as the new founder).
+export async function unregisterPlayer(tournamentId, playerId, founderChoice) {
+  const teams = await fetchTeams(tournamentId);
+  const myTeam = findTeamOf(teams, playerId);
 
-  await removeFromSlot(tournamentId, playerId);
   await updateDoc(doc(db, "tournaments", tournamentId), {
     participantIds: arrayRemove(playerId),
     waitingList: arrayRemove(playerId)
   });
 
-  if (wasOnTeam) {
-    await promoteFromWaitingList(tournamentId);
+  if (!myTeam) return; // was only on the waiting list — nothing else to do
+
+  if (myTeam.player1Id === playerId && myTeam.player2Id) {
+    // founder with a partner — behavior depends on their explicit choice
+    if (founderChoice === "fill-from-waitlist") {
+      const nextId = await popWaitlist(tournamentId);
+      await updateDoc(doc(db, "tournaments", tournamentId, "teams", myTeam.id), { player1Id: nextId || null });
+    } else {
+      await updateDoc(doc(db, "tournaments", tournamentId, "teams", myTeam.id), {
+        player1Id: myTeam.player2Id,
+        player2Id: null
+      });
+    }
+    return;
   }
+
+  if (myTeam.player1Id === playerId) {
+    // solo founder leaving — the whole number frees up for the waiting list
+    await deleteDoc(doc(db, "tournaments", tournamentId, "teams", myTeam.id));
+    await claimFreeNumberFromWaitlist(tournamentId);
+    return;
+  }
+
+  // partner (player2) leaving — just open their slot, no waitlist promotion
+  await updateDoc(doc(db, "tournaments", tournamentId, "teams", myTeam.id), { player2Id: null });
 }
 
-// Takes the first person off the waiting list and slots them into whichever
-// opening exists — a team with one empty seat, or if none, the lowest free
-// team number. No-op if the waiting list is empty or nothing is actually open.
-export async function promoteFromWaitingList(tournamentId) {
+async function popWaitlist(tournamentId) {
   const tSnap = await getDoc(doc(db, "tournaments", tournamentId));
-  if (!tSnap.exists()) return;
-  const waitingList = tSnap.data().waitingList || [];
-  if (waitingList.length === 0) return;
+  const waitingList = tSnap.exists() ? (tSnap.data().waitingList || []) : [];
+  if (waitingList.length === 0) return null;
+  const nextId = waitingList[0];
+  await updateDoc(doc(db, "tournaments", tournamentId), { waitingList: arrayRemove(nextId) });
+  return nextId;
+}
 
-  const nextPlayerId = waitingList[0];
+async function claimFreeNumberFromWaitlist(tournamentId) {
+  const nextId = await popWaitlist(tournamentId);
+  if (!nextId) return;
+
+  const tSnap = await getDoc(doc(db, "tournaments", tournamentId));
+  const totalTeams = tSnap.exists() ? (tSnap.data().totalTeams || 12) : 12;
   const teams = await fetchTeams(tournamentId);
-
-  const partialTeam = teams.find((t) => (t.player1Id && !t.player2Id) || (!t.player1Id && t.player2Id));
-  if (partialTeam) {
-    const slot = partialTeam.player1Id ? "player2" : "player1";
-    await updateDoc(doc(db, "tournaments", tournamentId, "teams", partialTeam.id), { [slot]: nextPlayerId });
-  } else {
-    const totalTeams = tSnap.data().totalTeams || 12;
-    const used = new Set(teams.map((t) => t.teamNumber).filter(Boolean));
-    let num = null;
-    for (let n = 1; n <= totalTeams; n++) {
-      if (!used.has(n)) { num = n; break; }
-    }
-    if (num == null) return; // nothing actually opened up — leave them waiting
-    await addDoc(collection(db, "tournaments", tournamentId, "teams"), {
-      teamNumber: num, player1Id: nextPlayerId, player2Id: null, group: null, createdAt: serverTimestamp()
-    });
+  const used = new Set(teams.map((t) => t.teamNumber).filter(Boolean));
+  let num = null;
+  for (let n = 1; n <= totalTeams; n++) {
+    if (!used.has(n)) { num = n; break; }
   }
-
-  await updateDoc(doc(db, "tournaments", tournamentId), { waitingList: arrayRemove(nextPlayerId) });
+  if (num == null) {
+    // nothing actually free (shouldn't normally happen) — put them back
+    await updateDoc(doc(db, "tournaments", tournamentId), { waitingList: arrayUnion(nextId) });
+    return;
+  }
+  await addDoc(collection(db, "tournaments", tournamentId, "teams"), {
+    teamNumber: num, player1Id: nextId, player2Id: null, group: null, createdAt: serverTimestamp()
+  });
 }
 
 // Fills a team's open slot with partnerId. If partnerId already has their own
