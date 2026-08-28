@@ -45,7 +45,6 @@ html, body {
   background: #040a09;
   color: var(--text);
   font-family: var(--font-body);
-  direction: ltr;
 }
 
 body {

@@ -221,6 +221,10 @@ document.querySelectorAll(".subtab-btn").forEach((btn) => {
     $("tournaments-subtab-list").classList.toggle("hidden", btn.dataset.subtab !== "list");
     $("tournaments-subtab-requests").classList.toggle("hidden", btn.dataset.subtab !== "requests");
     if (btn.dataset.subtab === "requests") loadRequestsSubtab();
+    // Refresh the tournaments list (and its registered-players counts) whenever
+    // coming back from Requests — e.g. right after accepting/declining a
+    // request, so the count reflects reality without needing a full page reload.
+    if (btn.dataset.subtab === "list") loadTournamentsTab();
   });
 });
 
