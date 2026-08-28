@@ -1,5 +1,5 @@
 import { db, collection, doc, getDoc, getDocs, updateDoc, query, where, limit, orderBy } from "./firebase-config.js";
-import { registerPlayer, unregisterPlayer, addPartner, fetchTeams, requestToJoinTeam, cancelJoinRequest, acceptJoinRequest, declineJoinRequest, getOpenTeams, myPendingRequestTeams, myIncomingRequests } from "./teams.js";
+import { registerPlayer, unregisterPlayer, addPartner, fetchTeams, findTeamOf, requestToJoinTeam, cancelJoinRequest, acceptJoinRequest, declineJoinRequest, getOpenTeams, myPendingRequestTeams, myIncomingRequests } from "./teams.js";
 import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFoundingMember } from "./utils.js";
 import { t, getLang, setLang, applyStaticTranslations } from "./i18n.js";
 
@@ -558,9 +558,9 @@ async function loadTournamentsTab() {
         ${tr.dateLabel ? `<div class="tourney-meta">${CAL_SVG}${tr.dateLabel}</div>` : ""}
         ${deadline ? `<div class="tourney-meta">${CAL_SVG}${t("deadline_label")}: ${deadline.toLocaleString(getLang() === "ar" ? "ar-EG" : "en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>` : ""}
         ${tr.championName ? `<div class="tourney-champion">🏆 ${t("champion_label")}: ${tr.championName}</div>` : ""}
-        <div class="tourney-actions" id="actions-${tr.id}">
-          ${actionHtml}
+        <div class="tourney-actions">
           ${viewParticipantsHtml}
+          <span id="actions-${tr.id}" style="display:contents;">${actionHtml}</span>
         </div>
         ${isPastDeadline && isRegistered ? `<div class="hint" style="margin-top:6px;">${t("registration_locked_hint")}</div>` : ""}
         <div class="tourney-participants hidden" id="participants-${tr.id}"></div>
@@ -636,12 +636,32 @@ async function resolveRegisterActions(tournamentId) {
       return;
     }
 
+    // No existing interaction yet (not on waiting list, no pending request) —
+    // hold off on showing Register/Join until the player has checked
+    // "View registered players" first, per explicit request: view before choosing.
+    el.innerHTML = "";
+    el.dataset.pendingView = "true";
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// Reveals the Register/Join buttons after the player has viewed the team list.
+// No-op if this tournament's actions were already resolved to something else
+// (registered, past deadline, pending request, or waiting list — none of
+// those should ever be gated behind viewing the list).
+async function revealRegisterJoinOptions(tournamentId) {
+  const el = $(`actions-${tournamentId}`);
+  if (!el || el.dataset.pendingView !== "true") return;
+  try {
+    const teams = await fetchTeams(tournamentId);
     el.innerHTML = `
       <button class="btn btn-primary btn-sm" data-register type="button">${t("register_own_team_btn")}</button>
       <button class="btn btn-ghost btn-sm" data-join type="button">${t("join_team_btn")}</button>
     `;
     el.querySelector("[data-register]").addEventListener("click", (e) => registerForTournament(tournamentId, e.target));
     el.querySelector("[data-join]").addEventListener("click", () => toggleJoinTeamPicker(tournamentId, teams));
+    el.dataset.pendingView = "false";
   } catch (err) {
     console.error(err);
   }
@@ -722,11 +742,28 @@ async function registerForTournament(tournamentId, btn) {
 }
 
 async function unregisterFromTournament(tournamentId, btn) {
-  if (!confirm(t("unregister_confirm"))) return;
+  try {
+    const teams = await fetchTeams(tournamentId);
+    const myTeam = findTeamOf(teams, currentPlayer.id);
+
+    // founder with a partner: ambiguous, needs an explicit choice instead of a plain confirm
+    if (myTeam && myTeam.player1Id === currentPlayer.id && myTeam.player2Id) {
+      showFounderLeaveChoice(tournamentId, myTeam, btn);
+      return;
+    }
+
+    if (!confirm(t("unregister_confirm"))) return;
+    await performUnregister(tournamentId, btn);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function performUnregister(tournamentId, btn, founderChoice) {
   btn.disabled = true;
   btn.textContent = t("unregistering");
   try {
-    await unregisterPlayer(tournamentId, currentPlayer.id);
+    await unregisterPlayer(tournamentId, currentPlayer.id, founderChoice);
     const cached = tournamentsCache?.find((tr) => tr.id === tournamentId);
     if (cached) cached.participantIds = (cached.participantIds || []).filter((id) => id !== currentPlayer.id);
     loadTournamentsTab();
@@ -735,6 +772,41 @@ async function unregisterFromTournament(tournamentId, btn) {
     btn.disabled = false;
     btn.textContent = t("unregister_btn");
   }
+}
+
+async function showFounderLeaveChoice(tournamentId, myTeam, btn) {
+  const containerId = `founder-choice-${tournamentId}`;
+  if (document.getElementById(containerId)) return; // already open
+
+  let partnerName = "—";
+  try {
+    const pDoc = await getDoc(doc(db, "players", myTeam.player2Id));
+    if (pDoc.exists()) partnerName = pDoc.data().name || "—";
+  } catch (err) {
+    console.error(err);
+  }
+
+  const div = document.createElement("div");
+  div.id = containerId;
+  div.style.marginTop = "10px";
+  div.innerHTML = `
+    <div class="hint" style="margin-bottom:8px;">${t("founder_leave_prompt").replace("{name}", partnerName)}</div>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <button class="btn btn-ghost btn-sm" data-choice="promote-partner" type="button">${t("leave_to_partner_btn").replace("{name}", partnerName)}</button>
+      <button class="btn btn-ghost btn-sm" data-choice="fill-from-waitlist" type="button">${t("fill_from_waitlist_btn")}</button>
+      <button class="link-btn" data-choice="cancel" type="button" style="font-size:12px;">${t("cancel_btn")}</button>
+    </div>
+  `;
+  btn.insertAdjacentElement("afterend", div);
+
+  div.querySelectorAll("[data-choice]").forEach((choiceBtn) => {
+    choiceBtn.addEventListener("click", () => {
+      const choice = choiceBtn.dataset.choice;
+      div.remove();
+      if (choice === "cancel") return;
+      performUnregister(tournamentId, btn, choice);
+    });
+  });
 }
 
 // ---------------- full team grid (read-only for everyone, except your own open slot) ----------------
@@ -746,6 +818,7 @@ async function toggleTeamGridView(tournamentId) {
   }
   container.classList.remove("hidden");
   await renderTeamGrid(tournamentId, container);
+  revealRegisterJoinOptions(tournamentId);
 }
 
 async function renderTeamGrid(tournamentId, container) {
