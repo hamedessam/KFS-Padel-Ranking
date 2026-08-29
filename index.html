@@ -157,6 +157,13 @@
 
       <!-- ---- tab: profile ---- -->
       <div class="panel hidden" id="tab-profile">
+
+        <div class="subtab-bar" id="profile-main-subtab-bar">
+          <button class="subtab-btn active" data-profile-subtab="main" type="button" data-i18n="tab_profile">Profile</button>
+          <button class="subtab-btn" data-profile-subtab="history" type="button" data-i18n="profile_subtab_history">History</button>
+        </div>
+
+        <div id="profile-subtab-main">
         <div class="profile-head">
           <div class="avatar-wrap">
             <div class="avatar" id="pf-avatar">?</div>
@@ -213,6 +220,38 @@
 
         <button class="btn btn-ghost share-card-btn" id="share-card-btn" type="button" data-i18n="profile_share_btn">Share profile card</button>
         <canvas id="share-canvas" width="1080" height="1350" class="hidden"></canvas>
+        </div>
+
+        <div class="hidden" id="profile-subtab-history">
+          <div class="subtab-bar" id="history-inner-subtab-bar">
+            <button class="subtab-btn active" data-history-subtab="points" type="button" data-i18n="points_history_subtab">Points History</button>
+            <button class="subtab-btn" data-history-subtab="coins" type="button" data-i18n="coins_history_subtab">Coins History</button>
+          </div>
+
+          <div id="history-subtab-points">
+            <div id="ph-loading" style="font-size:13px; color:var(--text-soft); margin-top:10px;">
+              <span class="spinner"></span> <span data-i18n="loading">Loading...</span>
+            </div>
+            <div class="hidden" id="ph-list"></div>
+            <div class="tourney-empty hidden" id="ph-empty" data-i18n="points_history_empty">No matches played yet.</div>
+            <div class="my-rank-strip" id="ph-total-strip" style="margin-top:14px;">
+              <span data-i18n="current_points_strip">Your current points</span>
+              <strong id="ph-total">—</strong>
+            </div>
+          </div>
+
+          <div class="hidden" id="history-subtab-coins">
+            <div id="ch-loading" style="font-size:13px; color:var(--text-soft); margin-top:10px;">
+              <span class="spinner"></span> <span data-i18n="loading">Loading...</span>
+            </div>
+            <div class="hidden" id="ch-list"></div>
+            <div class="tourney-empty hidden" id="ch-empty" data-i18n="coins_history_empty">No coins yet.</div>
+            <div class="my-rank-strip" id="ch-total-strip" style="margin-top:14px;">
+              <span data-i18n="current_coins_strip">Your current coin balance</span>
+              <strong id="ch-total">—</strong>
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>

@@ -217,12 +217,44 @@ document.querySelectorAll(".view-all[data-goto]").forEach((btn) => {
 });
 
 // ---------------- tournaments sub-tabs (list / requests) ----------------
-document.querySelectorAll(".subtab-btn").forEach((btn) => {
+// Scoped to #tab-tournaments only — otherwise this generic .subtab-btn
+// selector would also catch the new Profile/History subtabs below and cause
+// cross-talk between the two independent subtab groups.
+document.querySelectorAll("#tab-tournaments .subtab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".subtab-btn").forEach((b) => b.classList.toggle("active", b === btn));
+    document.querySelectorAll("#tab-tournaments .subtab-btn").forEach((b) => b.classList.toggle("active", b === btn));
     $("tournaments-subtab-list").classList.toggle("hidden", btn.dataset.subtab !== "list");
     $("tournaments-subtab-requests").classList.toggle("hidden", btn.dataset.subtab !== "requests");
     if (btn.dataset.subtab === "requests") loadRequestsSubtab();
+    // Refresh the tournaments list (and its registered-players counts) whenever
+    // coming back from Requests — e.g. right after accepting/declining a
+    // request, so the count reflects reality without needing a full page reload.
+    if (btn.dataset.subtab === "list") loadTournamentsTab();
+  });
+});
+
+// ---------------- profile sub-tabs (Profile / History) ----------------
+document.querySelectorAll("#profile-main-subtab-bar .subtab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#profile-main-subtab-bar .subtab-btn").forEach((b) => b.classList.toggle("active", b === btn));
+    $("profile-subtab-main").classList.toggle("hidden", btn.dataset.profileSubtab !== "main");
+    $("profile-subtab-history").classList.toggle("hidden", btn.dataset.profileSubtab !== "history");
+    if (btn.dataset.profileSubtab === "history") {
+      const activeInner = $("history-inner-subtab-bar").querySelector(".subtab-btn.active");
+      if (!activeInner || activeInner.dataset.historySubtab === "points") loadPointsHistory();
+      else loadCoinsHistoryTab();
+    }
+  });
+});
+
+// ---------------- history sub-tabs (Points / Coins) ----------------
+document.querySelectorAll("#history-inner-subtab-bar .subtab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#history-inner-subtab-bar .subtab-btn").forEach((b) => b.classList.toggle("active", b === btn));
+    $("history-subtab-points").classList.toggle("hidden", btn.dataset.historySubtab !== "points");
+    $("history-subtab-coins").classList.toggle("hidden", btn.dataset.historySubtab !== "coins");
+    if (btn.dataset.historySubtab === "points") loadPointsHistory();
+    else loadCoinsHistoryTab();
   });
 });
 
@@ -560,9 +592,9 @@ async function loadTournamentsTab() {
         ${tr.dateLabel ? `<div class="tourney-meta">${CAL_SVG}${tr.dateLabel}</div>` : ""}
         ${deadline ? `<div class="tourney-meta">${CAL_SVG}${t("deadline_label")}: ${deadline.toLocaleString(getLang() === "ar" ? "ar-EG" : "en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>` : ""}
         ${tr.championName ? `<div class="tourney-champion">🏆 ${t("champion_label")}: ${tr.championName}</div>` : ""}
-        <div class="tourney-actions" id="actions-${tr.id}">
-          ${actionHtml}
+        <div class="tourney-actions">
           ${viewParticipantsHtml}
+          <span id="actions-${tr.id}" style="display:contents;">${actionHtml}</span>
         </div>
         ${isPastDeadline && isRegistered ? `<div class="hint" style="margin-top:6px;">${t("registration_locked_hint")}</div>` : ""}
         <div class="tourney-participants hidden" id="participants-${tr.id}"></div>
@@ -638,12 +670,32 @@ async function resolveRegisterActions(tournamentId) {
       return;
     }
 
+    // No existing interaction yet (not on waiting list, no pending request) —
+    // hold off on showing Register/Join until the player has checked
+    // "View registered players" first, per explicit request: view before choosing.
+    el.innerHTML = "";
+    el.dataset.pendingView = "true";
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// Reveals the Register/Join buttons after the player has viewed the team list.
+// No-op if this tournament's actions were already resolved to something else
+// (registered, past deadline, pending request, or waiting list — none of
+// those should ever be gated behind viewing the list).
+async function revealRegisterJoinOptions(tournamentId) {
+  const el = $(`actions-${tournamentId}`);
+  if (!el || el.dataset.pendingView !== "true") return;
+  try {
+    const teams = await fetchTeams(tournamentId);
     el.innerHTML = `
       <button class="btn btn-primary btn-sm" data-register type="button">${t("register_own_team_btn")}</button>
       <button class="btn btn-ghost btn-sm" data-join type="button">${t("join_team_btn")}</button>
     `;
     el.querySelector("[data-register]").addEventListener("click", (e) => registerForTournament(tournamentId, e.target));
     el.querySelector("[data-join]").addEventListener("click", () => toggleJoinTeamPicker(tournamentId, teams));
+    el.dataset.pendingView = "false";
   } catch (err) {
     console.error(err);
   }
@@ -800,6 +852,7 @@ async function toggleTeamGridView(tournamentId) {
   }
   container.classList.remove("hidden");
   await renderTeamGrid(tournamentId, container);
+  revealRegisterJoinOptions(tournamentId);
 }
 
 async function renderTeamGrid(tournamentId, container) {
@@ -927,6 +980,156 @@ async function loadLeaderboard() {
     $("my-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : "—";
 
     loadingEl.classList.add("hidden");
+    listEl.classList.remove("hidden");
+  } catch (err) {
+    console.error(err);
+    loadingEl.textContent = t("leaderboard_err");
+  }
+}
+
+// ---------------- profile: points history (read-only — reads the existing ratingHistory audit trail) ----------------
+async function loadPointsHistory() {
+  const loadingEl = $("ph-loading");
+  const listEl = $("ph-list");
+  const emptyEl = $("ph-empty");
+  loadingEl.classList.remove("hidden");
+  listEl.classList.add("hidden");
+  emptyEl.classList.add("hidden");
+  $("ph-total").textContent = `${Math.round(currentPlayer.ratingPoints ?? 1000)} ${t("pts")}`;
+
+  try {
+    const snap = await getDocs(query(collection(db, "ratingHistory"), where("playerId", "==", currentPlayer.id)));
+    const entries = snap.docs.map((d) => d.data()).sort((a, b) => {
+      const at = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+      const bt = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+      return bt - at; // newest first
+    });
+
+    loadingEl.classList.add("hidden");
+
+    if (entries.length === 0) {
+      emptyEl.classList.remove("hidden");
+      return;
+    }
+
+    // Batch-fetch everything needed to describe each match: the match doc
+    // (opponent IDs, round, scores), the tournament doc (name), and the
+    // opponents' names — all in a handful of parallel reads, not per-row.
+    const matchIds = [...new Set(entries.map((e) => e.matchId).filter(Boolean))];
+    const matchDocs = await Promise.all(matchIds.map((id) => getDoc(doc(db, "matches", id))));
+    const matchById = new Map();
+    matchDocs.forEach((d) => { if (d.exists()) matchById.set(d.id, d.data()); });
+
+    const tournamentIds = [...new Set(entries.map((e) => e.tournamentId).filter(Boolean))];
+    const tournamentDocs = await Promise.all(tournamentIds.map((id) => getDoc(doc(db, "tournaments", id))));
+    const tournamentById = new Map();
+    tournamentDocs.forEach((d) => { if (d.exists()) tournamentById.set(d.id, d.data()); });
+
+    const opponentIds = new Set();
+    entries.forEach((e) => {
+      const m = matchById.get(e.matchId);
+      if (!m) return;
+      const onTeam1 = (m.team1 || []).includes(currentPlayer.id);
+      ((onTeam1 ? m.team2 : m.team1) || []).forEach((id) => opponentIds.add(id));
+    });
+    const opponentDocs = await Promise.all([...opponentIds].map((id) => getDoc(doc(db, "players", id))));
+    const opponentNameById = new Map();
+    opponentDocs.forEach((d) => { if (d.exists()) opponentNameById.set(d.id, d.data().name || "—"); });
+
+    listEl.innerHTML = entries.map((e) => {
+      const m = matchById.get(e.matchId);
+      const tr = tournamentById.get(e.tournamentId);
+      const won = e.actualResult === 1;
+      const sign = e.pointsChange >= 0 ? "+" : "";
+      const color = e.pointsChange >= 0 ? "var(--live)" : "var(--danger)";
+
+      let scoreLabel = "—";
+      let opponentsLabel = "—";
+      if (m) {
+        const onTeam1 = (m.team1 || []).includes(currentPlayer.id);
+        const myScore = onTeam1 ? m.team1Games : m.team2Games;
+        const oppScore = onTeam1 ? m.team2Games : m.team1Games;
+        scoreLabel = `${myScore}-${oppScore}`;
+        opponentsLabel = ((onTeam1 ? m.team2 : m.team1) || []).map((id) => opponentNameById.get(id) || "—").join(" & ");
+      }
+
+      const resultText = (won ? t("points_won_against") : t("points_lost_against"))
+        .replace("{score}", scoreLabel)
+        .replace("{opponents}", opponentsLabel);
+
+      const metaParts = [];
+      if (tr?.name) metaParts.push(tr.name);
+      if (m?.round) metaParts.push(m.round);
+      const date = e.createdAt?.toDate
+        ? e.createdAt.toDate().toLocaleDateString(getLang() === "ar" ? "ar-EG" : "en-US", { month: "short", day: "numeric" })
+        : "";
+      if (date) metaParts.push(date);
+
+      return `
+        <div style="padding:10px 0; border-bottom:1px solid var(--border);">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+            <span style="font-size:13px; color:var(--text);">${resultText}</span>
+            <span style="color:${color}; font-family:var(--font-mono); font-weight:700; font-size:13px; flex-shrink:0;">${sign}${e.pointsChange.toFixed(1)}</span>
+          </div>
+          <div style="font-size:11px; color:var(--text-soft); margin-top:3px;">${metaParts.join(" · ")}</div>
+        </div>
+      `;
+    }).join("");
+    listEl.classList.remove("hidden");
+  } catch (err) {
+    console.error(err);
+    loadingEl.textContent = t("leaderboard_err");
+  }
+}
+
+// ---------------- profile: coins history (read-only — reads the existing coinTransactions audit trail) ----------------
+function coinTxLabel(tx) {
+  if (tx.type === "placement" && tx.position) return t(`coin_type_placement_${tx.position}`);
+  if (tx.type === "participation") return t("coin_type_participation");
+  if (tx.type === "advancement") return t("coin_type_advancement");
+  return tx.note || tx.type || "—"; // fallback for any future/manual transaction type
+}
+
+async function loadCoinsHistoryTab() {
+  const loadingEl = $("ch-loading");
+  const listEl = $("ch-list");
+  const emptyEl = $("ch-empty");
+  loadingEl.classList.remove("hidden");
+  listEl.classList.add("hidden");
+  emptyEl.classList.add("hidden");
+  $("ch-total").textContent = `${Math.round(currentPlayer.coinsBalance ?? 0)} ${t("coins_label")}`;
+
+  try {
+    const snap = await getDocs(query(collection(db, "coinTransactions"), where("playerId", "==", currentPlayer.id)));
+    const transactions = snap.docs.map((d) => d.data()).sort((a, b) => {
+      const at = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+      const bt = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+      return bt - at; // newest first
+    });
+
+    loadingEl.classList.add("hidden");
+
+    if (transactions.length === 0) {
+      emptyEl.classList.remove("hidden");
+      return;
+    }
+
+    listEl.innerHTML = transactions.map((tx) => {
+      const sign = tx.amount >= 0 ? "+" : "";
+      const color = tx.amount >= 0 ? "var(--live)" : "var(--danger)";
+      const date = tx.createdAt?.toDate
+        ? tx.createdAt.toDate().toLocaleDateString(getLang() === "ar" ? "ar-EG" : "en-US", { month: "short", day: "numeric", year: "numeric" })
+        : "";
+      return `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);">
+          <div>
+            <div style="font-size:13px; color:var(--text);">${coinTxLabel(tx)}</div>
+            <div style="font-size:11px; color:var(--text-soft); margin-top:2px;">${date}</div>
+          </div>
+          <span style="color:${color}; font-family:var(--font-mono); font-weight:700; font-size:13px;">${sign}${tx.amount}</span>
+        </div>
+      `;
+    }).join("");
     listEl.classList.remove("hidden");
   } catch (err) {
     console.error(err);
