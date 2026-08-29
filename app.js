@@ -89,6 +89,8 @@ function renderBadges(player) {
   if (matches >= 15) activityKey = "badge_veteran";
   else if (matches >= 3) activityKey = "badge_regular";
   el.innerHTML += `<span class="badge-pill activity">${t(activityKey)}</span>`;
+
+  el.innerHTML += `<span class="badge-pill gold">🪙 ${Math.round(player.coinsBalance ?? 0)} ${t("coins_label")}</span>`;
 }
 
 function showLogin() {
@@ -221,10 +223,6 @@ document.querySelectorAll(".subtab-btn").forEach((btn) => {
     $("tournaments-subtab-list").classList.toggle("hidden", btn.dataset.subtab !== "list");
     $("tournaments-subtab-requests").classList.toggle("hidden", btn.dataset.subtab !== "requests");
     if (btn.dataset.subtab === "requests") loadRequestsSubtab();
-    // Refresh the tournaments list (and its registered-players counts) whenever
-    // coming back from Requests — e.g. right after accepting/declining a
-    // request, so the count reflects reality without needing a full page reload.
-    if (btn.dataset.subtab === "list") loadTournamentsTab();
   });
 });
 
@@ -562,9 +560,9 @@ async function loadTournamentsTab() {
         ${tr.dateLabel ? `<div class="tourney-meta">${CAL_SVG}${tr.dateLabel}</div>` : ""}
         ${deadline ? `<div class="tourney-meta">${CAL_SVG}${t("deadline_label")}: ${deadline.toLocaleString(getLang() === "ar" ? "ar-EG" : "en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>` : ""}
         ${tr.championName ? `<div class="tourney-champion">🏆 ${t("champion_label")}: ${tr.championName}</div>` : ""}
-        <div class="tourney-actions">
+        <div class="tourney-actions" id="actions-${tr.id}">
+          ${actionHtml}
           ${viewParticipantsHtml}
-          <span id="actions-${tr.id}" style="display:contents;">${actionHtml}</span>
         </div>
         ${isPastDeadline && isRegistered ? `<div class="hint" style="margin-top:6px;">${t("registration_locked_hint")}</div>` : ""}
         <div class="tourney-participants hidden" id="participants-${tr.id}"></div>
@@ -640,32 +638,12 @@ async function resolveRegisterActions(tournamentId) {
       return;
     }
 
-    // No existing interaction yet (not on waiting list, no pending request) —
-    // hold off on showing Register/Join until the player has checked
-    // "View registered players" first, per explicit request: view before choosing.
-    el.innerHTML = "";
-    el.dataset.pendingView = "true";
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-// Reveals the Register/Join buttons after the player has viewed the team list.
-// No-op if this tournament's actions were already resolved to something else
-// (registered, past deadline, pending request, or waiting list — none of
-// those should ever be gated behind viewing the list).
-async function revealRegisterJoinOptions(tournamentId) {
-  const el = $(`actions-${tournamentId}`);
-  if (!el || el.dataset.pendingView !== "true") return;
-  try {
-    const teams = await fetchTeams(tournamentId);
     el.innerHTML = `
       <button class="btn btn-primary btn-sm" data-register type="button">${t("register_own_team_btn")}</button>
       <button class="btn btn-ghost btn-sm" data-join type="button">${t("join_team_btn")}</button>
     `;
     el.querySelector("[data-register]").addEventListener("click", (e) => registerForTournament(tournamentId, e.target));
     el.querySelector("[data-join]").addEventListener("click", () => toggleJoinTeamPicker(tournamentId, teams));
-    el.dataset.pendingView = "false";
   } catch (err) {
     console.error(err);
   }
@@ -822,7 +800,6 @@ async function toggleTeamGridView(tournamentId) {
   }
   container.classList.remove("hidden");
   await renderTeamGrid(tournamentId, container);
-  revealRegisterJoinOptions(tournamentId);
 }
 
 async function renderTeamGrid(tournamentId, container) {

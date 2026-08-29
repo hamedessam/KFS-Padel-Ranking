@@ -20,7 +20,7 @@
     <!-- ===================== GATE VIEW ===================== -->
     <div class="panel login-fill" id="view-gate">
       <h1>Admin sign-in</h1>
-      <p class="sub">This page is for the admin only — enter your password to continue.</p>
+      <p class="sub">This page is for the admin only.</p>
       <div class="msg error" id="gate-error"></div>
       <form id="gate-form">
         <div class="field">
@@ -38,6 +38,7 @@
         <button class="admin-tab-btn active" data-admin-tab="overview" type="button">Overview</button>
         <button class="admin-tab-btn" data-admin-tab="add-tournament" type="button">Add Tournament</button>
         <button class="admin-tab-btn" data-admin-tab="tournament-manager" type="button">Tournament Manager</button>
+        <button class="admin-tab-btn" data-admin-tab="coins" type="button">Coins</button>
       </div>
 
       <!-- ============ TAB: OVERVIEW ============ -->
@@ -272,6 +273,92 @@
           <div id="tm-waitlist" class="hidden" style="margin-bottom:14px; font-size:13px; color:var(--text-soft);"></div>
           <div id="tm-grid" class="hidden"></div>
         </div>
+      </div>
+
+      <!-- ============ TAB: COINS ============ -->
+      <div class="admin-tab-panel hidden" id="admin-tab-coins">
+
+        <div class="panel">
+          <h1>Coins system</h1>
+          <p class="sub">Everything here is fully manual — nothing is awarded automatically, on purpose, to avoid any accidental duplicate payouts. Every award is logged below and can be checked per player at any time.</p>
+        </div>
+
+        <!-- 1. Participation -->
+        <div class="panel" style="margin-top:16px;">
+          <h1>1. Participation coins (+10 each)</h1>
+          <p class="sub">Give every player who took part in a tournament 10 coins.</p>
+          <div class="msg error" id="coin-p-error"></div>
+          <div class="msg success" id="coin-p-success"></div>
+          <div class="field">
+            <label for="coin-p-tournament">Tournament</label>
+            <select id="coin-p-tournament"></select>
+          </div>
+          <div id="coin-p-loading" style="font-size:13px; color:var(--text-soft);"><span class="spinner"></span> Loading...</div>
+          <div class="hidden" id="coin-p-list-wrap">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <span class="hint" style="margin:0;">Select the players to award</span>
+              <button class="link-btn" id="coin-p-select-all-btn" type="button" style="font-size:12px;">Select all not-yet-awarded</button>
+            </div>
+            <div id="coin-p-list" style="max-height:340px; overflow-y:auto; border:1px solid var(--border); border-radius:12px; padding:4px 12px;"></div>
+            <button type="button" class="btn btn-primary" id="coin-p-btn" style="margin-top:14px;">Award 10 coins to selected players</button>
+          </div>
+          <div class="hidden" id="coin-p-summary" style="margin-top:16px;"></div>
+        </div>
+
+        <!-- 2. Advancement -->
+        <div class="panel" style="margin-top:16px;">
+          <h1>2. Group-stage advancement coins (+20 each)</h1>
+          <p class="sub">Give the players who advanced out of the group stage 20 coins each (typically 12 players — top 2 of each group — but select as many as apply).</p>
+          <div class="msg error" id="coin-a-error"></div>
+          <div class="msg success" id="coin-a-success"></div>
+          <div class="field">
+            <label for="coin-a-tournament">Tournament</label>
+            <select id="coin-a-tournament"></select>
+          </div>
+          <div id="coin-a-loading" style="font-size:13px; color:var(--text-soft);"><span class="spinner"></span> Loading...</div>
+          <div class="hidden" id="coin-a-list-wrap">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <span class="hint" style="margin:0;">Select the players who advanced</span>
+              <button class="link-btn" id="coin-a-select-all-btn" type="button" style="font-size:12px;">Select all not-yet-awarded</button>
+            </div>
+            <div id="coin-a-list" style="max-height:340px; overflow-y:auto; border:1px solid var(--border); border-radius:12px; padding:4px 12px;"></div>
+            <button type="button" class="btn btn-primary" id="coin-a-btn" style="margin-top:14px;">Award 20 coins to selected players</button>
+          </div>
+          <div class="hidden" id="coin-a-summary" style="margin-top:16px;"></div>
+        </div>
+
+        <!-- 3. Placement -->
+        <div class="panel" style="margin-top:16px;">
+          <h1>3. Final placement coins</h1>
+          <p class="sub">1st place: 150 coins each · 2nd place: 100 coins each · 3rd place: 75 coins each — awarded to both players of the team.</p>
+          <div class="msg error" id="coin-pl-error"></div>
+          <div class="msg success" id="coin-pl-success"></div>
+          <div class="field">
+            <label for="coin-pl-tournament">Tournament</label>
+            <select id="coin-pl-tournament"></select>
+          </div>
+          <div id="coin-pl-loading" style="font-size:13px; color:var(--text-soft);"><span class="spinner"></span> Loading...</div>
+          <div class="hidden" id="coin-pl-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+          <button type="button" class="btn btn-primary hidden" id="coin-pl-btn" style="margin-top:14px;">Award placement coins</button>
+          <div class="hidden" id="coin-pl-summary" style="margin-top:16px;"></div>
+        </div>
+
+        <!-- 4. Player coin log -->
+        <div class="panel" style="margin-top:16px; margin-bottom:16px;">
+          <h1>Player coin log</h1>
+          <p class="sub">Pick a player to see their full coin history and current balance — check this after every award to make sure everything landed correctly.</p>
+          <div class="field">
+            <label for="coin-log-player">Player</label>
+            <select id="coin-log-player"><option value="">Select a player</option></select>
+          </div>
+          <div id="coin-log-loading" class="hidden" style="font-size:13px; color:var(--text-soft);"><span class="spinner"></span> Loading...</div>
+          <div class="hidden" id="coin-log-body">
+            <div class="code-tag" id="coin-log-balance" style="margin-bottom:14px;">— coins</div>
+            <div id="coin-log-list"></div>
+            <div class="hint hidden" id="coin-log-empty">No coin transactions yet for this player.</div>
+          </div>
+        </div>
+
       </div>
 
     </div>

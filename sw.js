@@ -1,5 +1,5 @@
 // Bump CACHE_NAME on every deploy to bust stale caches (lesson learned from previous PWAs)
-const CACHE_NAME = "kfs-padel-v20";
+const CACHE_NAME = "kfs-padel-v23";
 const ASSETS = [
   "./index.html",
   "./styles.css",

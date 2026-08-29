@@ -1,6 +1,6 @@
 import {
   db, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
-  query, orderBy, runTransaction, writeBatch, increment, serverTimestamp
+  query, orderBy, where, runTransaction, writeBatch, increment, arrayUnion, serverTimestamp
 } from "./firebase-config.js";
 import { hashPassword, randomSalt, generatePassword, playerCodeFromSeq, tierMeta, tierFromPoints, isFoundingMember, computeMatchPointChanges } from "./utils.js";
 import { fetchTeams, assignToSlot, unregisterPlayer, setTeamGroup } from "./teams.js";
@@ -86,6 +86,10 @@ function enterAdmin() {
   loadTiersToggle();
   loadMatchFormOptions();
   loadTMTournamentSelect();
+  initCoinParticipationTab();
+  initCoinAdvancementTab();
+  initCoinPlacementTab();
+  initCoinLogTab();
 }
 
 // ---------------- admin tab switcher ----------------
@@ -166,6 +170,7 @@ $("add-form").addEventListener("submit", async (e) => {
     $("add-form").reset();
     loadPlayers();
     loadMatchFormOptions();
+    initCoinLogTab();
   } catch (err) {
     console.error(err);
     showMsg(errEl, "Something went wrong while adding the player. Try again.");
@@ -246,6 +251,7 @@ async function deletePlayerCompletely(playerId, playerName, btn) {
     loadPlayers();
     loadMatchFormOptions();
     loadTMTournamentSelect();
+    initCoinLogTab();
   } catch (err) {
     console.error(err);
     alert(`Something went wrong deleting ${playerName}. Try again.`);
@@ -400,6 +406,9 @@ $("tournament-form").addEventListener("submit", async (e) => {
     $("tr-total-teams").value = "12";
     loadTournaments();
     loadTMTournamentSelect();
+    initCoinParticipationTab();
+    initCoinAdvancementTab();
+    initCoinPlacementTab();
   } catch (err) {
     console.error(err);
     showMsg(errEl, "Something went wrong while adding the tournament. Try again.");
@@ -764,5 +773,460 @@ async function loadTeamGrid(tournamentId) {
   } catch (err) {
     console.error(err);
     loadingEl.textContent = "Couldn't load tournament data.";
+  }
+}
+
+// =========================================================================
+// ---------------- Coins system (fully manual — no automatic awards) ----------------
+// Every award goes through one atomic batch write that: (1) increments the
+// player's coinsBalance, (2) writes an audit-trail entry to coinTransactions,
+// and (3) marks the tournament so the same player can never be double-awarded
+// the same coin type again. This is the ONLY place coinsBalance ever changes.
+// =========================================================================
+
+const COIN_AMOUNTS = {
+  participation: 10,
+  advancement: 20,
+  placement: { 1: 150, 2: 100, 3: 75 }
+};
+
+async function loadCoinTournamentSelect(selectId) {
+  const snap = await getDocs(query(collection(db, "tournaments"), orderBy("createdAt", "desc")));
+  const select = $(selectId);
+  select.innerHTML = "";
+  if (snap.empty) {
+    select.innerHTML = '<option value="">Add a tournament first</option>';
+    return [];
+  }
+  const tournaments = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  tournaments.forEach((t) => {
+    const opt = document.createElement("option");
+    opt.value = t.id;
+    opt.textContent = `${t.name || "Untitled"} (${t.status || "upcoming"})`;
+    select.appendChild(opt);
+  });
+  return tournaments;
+}
+
+async function fetchPlayersByIds(ids) {
+  const docs = await Promise.all(ids.map((id) => getDoc(doc(db, "players", id))));
+  return docs.filter((d) => d.exists()).map((d) => ({ id: d.id, ...d.data() }));
+}
+
+function coinPlayerRowHtml(p, awarded) {
+  return `
+    <label style="display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--border); font-size:13.5px; ${awarded ? "opacity:.5;" : ""}">
+      <input type="checkbox" value="${p.id}" ${awarded ? "disabled" : ""} style="width:auto;">
+      <span style="flex:1;">${escapeHtml(p.name || "—")} <span style="color:var(--text-soft); font-family:var(--font-mono); font-size:11px;">${escapeHtml(p.playerCode || "")}</span></span>
+      ${awarded ? '<span class="badge-pill gold">✓ Awarded</span>' : ""}
+    </label>
+  `;
+}
+
+// ---------------- 1. Participation (+10) ----------------
+
+async function initCoinParticipationTab() {
+  const tournaments = await loadCoinTournamentSelect("coin-p-tournament");
+  if (tournaments.length > 0) loadCoinParticipationList(tournaments[0].id);
+}
+
+$("coin-p-tournament").addEventListener("change", (e) => {
+  if (e.target.value) loadCoinParticipationList(e.target.value);
+});
+
+async function loadCoinParticipationList(tournamentId) {
+  const loadingEl = $("coin-p-loading");
+  const wrapEl = $("coin-p-list-wrap");
+  loadingEl.classList.remove("hidden");
+  wrapEl.classList.add("hidden");
+  hideMsg($("coin-p-error"));
+  hideMsg($("coin-p-success"));
+  $("coin-p-summary").classList.add("hidden");
+
+  try {
+    const tSnap = await getDoc(doc(db, "tournaments", tournamentId));
+    if (!tSnap.exists()) return;
+    const t = tSnap.data();
+    const alreadyAwarded = new Set((t.coinsAwarded && t.coinsAwarded.participation) || []);
+    const players = await fetchPlayersByIds(t.participantIds || []);
+    players.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+    $("coin-p-list").innerHTML = players.map((p) => coinPlayerRowHtml(p, alreadyAwarded.has(p.id))).join("")
+      || '<div class="hint">No registered players in this tournament yet.</div>';
+
+    loadingEl.classList.add("hidden");
+    wrapEl.classList.remove("hidden");
+  } catch (err) {
+    console.error(err);
+    loadingEl.textContent = "Couldn't load the participant list.";
+  }
+}
+
+$("coin-p-select-all-btn").addEventListener("click", () => {
+  $("coin-p-list").querySelectorAll('input[type="checkbox"]:not([disabled])').forEach((cb) => { cb.checked = true; });
+});
+
+$("coin-p-btn").addEventListener("click", () => awardTournamentCoins({
+  tournamentId: $("coin-p-tournament").value,
+  listElId: "coin-p-list",
+  errorElId: "coin-p-error",
+  successElId: "coin-p-success",
+  summaryElId: "coin-p-summary",
+  type: "participation",
+  amount: COIN_AMOUNTS.participation,
+  note: "Tournament participation",
+  reload: () => loadCoinParticipationList($("coin-p-tournament").value)
+}));
+
+// ---------------- 2. Group-stage advancement (+20) ----------------
+
+async function initCoinAdvancementTab() {
+  const tournaments = await loadCoinTournamentSelect("coin-a-tournament");
+  if (tournaments.length > 0) loadCoinAdvancementList(tournaments[0].id);
+}
+
+$("coin-a-tournament").addEventListener("change", (e) => {
+  if (e.target.value) loadCoinAdvancementList(e.target.value);
+});
+
+async function loadCoinAdvancementList(tournamentId) {
+  const loadingEl = $("coin-a-loading");
+  const wrapEl = $("coin-a-list-wrap");
+  loadingEl.classList.remove("hidden");
+  wrapEl.classList.add("hidden");
+  hideMsg($("coin-a-error"));
+  hideMsg($("coin-a-success"));
+  $("coin-a-summary").classList.add("hidden");
+
+  try {
+    const tSnap = await getDoc(doc(db, "tournaments", tournamentId));
+    if (!tSnap.exists()) return;
+    const t = tSnap.data();
+    const alreadyAwarded = new Set((t.coinsAwarded && t.coinsAwarded.advancement) || []);
+    const players = await fetchPlayersByIds(t.participantIds || []);
+    players.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+    $("coin-a-list").innerHTML = players.map((p) => coinPlayerRowHtml(p, alreadyAwarded.has(p.id))).join("")
+      || '<div class="hint">No registered players in this tournament yet.</div>';
+
+    loadingEl.classList.add("hidden");
+    wrapEl.classList.remove("hidden");
+  } catch (err) {
+    console.error(err);
+    loadingEl.textContent = "Couldn't load the participant list.";
+  }
+}
+
+$("coin-a-select-all-btn").addEventListener("click", () => {
+  $("coin-a-list").querySelectorAll('input[type="checkbox"]:not([disabled])').forEach((cb) => { cb.checked = true; });
+});
+
+$("coin-a-btn").addEventListener("click", () => awardTournamentCoins({
+  tournamentId: $("coin-a-tournament").value,
+  listElId: "coin-a-list",
+  errorElId: "coin-a-error",
+  successElId: "coin-a-success",
+  summaryElId: "coin-a-summary",
+  type: "advancement",
+  amount: COIN_AMOUNTS.advancement,
+  note: "Group-stage advancement",
+  reload: () => loadCoinAdvancementList($("coin-a-tournament").value)
+}));
+
+// Shared awarding routine for participation/advancement — a flat amount to a
+// set of individually-selected players, in one atomic batch write.
+async function awardTournamentCoins({ tournamentId, listElId, errorElId, successElId, summaryElId, type, amount, note, reload }) {
+  const errEl = $(errorElId);
+  const okEl = $(successElId);
+  hideMsg(errEl);
+  hideMsg(okEl);
+
+  if (!tournamentId) {
+    showMsg(errEl, "Pick a tournament first.");
+    return;
+  }
+
+  const checked = Array.from($(listElId).querySelectorAll('input[type="checkbox"]:checked:not([disabled])')).map((cb) => cb.value);
+  if (checked.length === 0) {
+    showMsg(errEl, "Select at least one player.");
+    return;
+  }
+
+  const confirmed = confirm(`Award ${amount} coins each to ${checked.length} player(s)? This can't be undone from here.`);
+  if (!confirmed) return;
+
+  try {
+    const players = await fetchPlayersByIds(checked);
+    const batch = writeBatch(db);
+
+    players.forEach((p) => {
+      batch.update(doc(db, "players", p.id), { coinsBalance: increment(amount) });
+      const txRef = doc(collection(db, "coinTransactions"));
+      batch.set(txRef, {
+        playerId: p.id,
+        amount,
+        type,
+        tournamentId,
+        note,
+        balanceAfter: (p.coinsBalance ?? 0) + amount,
+        createdAt: serverTimestamp()
+      });
+    });
+
+    batch.update(doc(db, "tournaments", tournamentId), {
+      [`coinsAwarded.${type}`]: arrayUnion(...checked)
+    });
+
+    await batch.commit();
+
+    const summaryEl = $(summaryElId);
+    summaryEl.innerHTML = players.map((p) => `
+      <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px;">
+        <span>${escapeHtml(p.name || "—")}</span>
+        <span style="color:var(--live); font-family:var(--font-mono); font-weight:700;">+${amount} → ${(p.coinsBalance ?? 0) + amount}</span>
+      </div>
+    `).join("");
+    summaryEl.classList.remove("hidden");
+
+    showMsg(okEl, `${amount} coins awarded to ${players.length} player(s).`);
+    reload();
+  } catch (err) {
+    console.error(err);
+    showMsg(errEl, "Something went wrong awarding coins. No coins were given — try again.");
+  }
+}
+
+// ---------------- 3. Final placement (150 / 100 / 75) ----------------
+
+async function initCoinPlacementTab() {
+  const tournaments = await loadCoinTournamentSelect("coin-pl-tournament");
+  if (tournaments.length > 0) loadCoinPlacementList(tournaments[0].id);
+}
+
+$("coin-pl-tournament").addEventListener("change", (e) => {
+  if (e.target.value) loadCoinPlacementList(e.target.value);
+});
+
+async function loadCoinPlacementList(tournamentId) {
+  const loadingEl = $("coin-pl-loading");
+  const listEl = $("coin-pl-list");
+  const btn = $("coin-pl-btn");
+  loadingEl.classList.remove("hidden");
+  listEl.classList.add("hidden");
+  btn.classList.add("hidden");
+  hideMsg($("coin-pl-error"));
+  hideMsg($("coin-pl-success"));
+  $("coin-pl-summary").classList.add("hidden");
+
+  try {
+    const [tSnap, teams] = await Promise.all([
+      getDoc(doc(db, "tournaments", tournamentId)),
+      fetchTeams(tournamentId)
+    ]);
+    if (!tSnap.exists()) return;
+    const t = tSnap.data();
+    const alreadyAwarded = new Set((t.coinsAwarded && t.coinsAwarded.placement) || []);
+
+    const fullTeams = teams.filter((tm) => tm.player1Id && tm.player2Id);
+    const players = await fetchPlayersByIds(fullTeams.flatMap((tm) => [tm.player1Id, tm.player2Id]));
+    const playerById = new Map(players.map((p) => [p.id, p]));
+
+    if (fullTeams.length === 0) {
+      listEl.innerHTML = '<div class="hint">No complete teams (both players assigned) in this tournament yet.</div>';
+    } else {
+      listEl.innerHTML = fullTeams.map((tm) => {
+        const p1 = playerById.get(tm.player1Id);
+        const p2 = playerById.get(tm.player2Id);
+        const awarded = alreadyAwarded.has(tm.player1Id) && alreadyAwarded.has(tm.player2Id);
+        return `
+          <div style="background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px 14px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+            <div>
+              <div style="font-family:var(--font-mono); font-size:11.5px; color:var(--text-soft); margin-bottom:2px;">Team ${tm.teamNumber}</div>
+              <div style="font-size:13.5px;">${escapeHtml(p1?.name || "—")} &amp; ${escapeHtml(p2?.name || "—")}</div>
+            </div>
+            ${awarded
+              ? '<span class="badge-pill gold">✓ Awarded</span>'
+              : `<select class="team-slot-group-select" data-team-position data-p1="${tm.player1Id}" data-p2="${tm.player2Id}" style="width:130px;">
+                  <option value="">No placement</option>
+                  <option value="1">🥇 1st (150)</option>
+                  <option value="2">🥈 2nd (100)</option>
+                  <option value="3">🥉 3rd (75)</option>
+                </select>`
+            }
+          </div>
+        `;
+      }).join("");
+    }
+
+    loadingEl.classList.add("hidden");
+    listEl.classList.remove("hidden");
+    btn.classList.remove("hidden");
+  } catch (err) {
+    console.error(err);
+    loadingEl.textContent = "Couldn't load the teams.";
+  }
+}
+
+$("coin-pl-btn").addEventListener("click", async () => {
+  const tournamentId = $("coin-pl-tournament").value;
+  const errEl = $("coin-pl-error");
+  const okEl = $("coin-pl-success");
+  hideMsg(errEl);
+  hideMsg(okEl);
+
+  const selects = Array.from($("coin-pl-list").querySelectorAll("[data-team-position]")).filter((sel) => sel.value);
+  if (selects.length === 0) {
+    showMsg(errEl, "Pick a placement for at least one team.");
+    return;
+  }
+
+  const lines = selects.map((sel) => {
+    const pos = Number(sel.value);
+    const label = pos === 1 ? "1st" : pos === 2 ? "2nd" : "3rd";
+    return `${label} place — ${COIN_AMOUNTS.placement[pos]} coins each`;
+  });
+  const confirmed = confirm(`Award placement coins for ${selects.length} team(s)?\n\n${lines.join("\n")}\n\nThis can't be undone from here.`);
+  if (!confirmed) return;
+
+  try {
+    const allIds = [];
+    selects.forEach((sel) => { allIds.push(sel.dataset.p1, sel.dataset.p2); });
+    const players = await fetchPlayersByIds(allIds);
+    const playerById = new Map(players.map((p) => [p.id, p]));
+
+    const batch = writeBatch(db);
+    const summaryRows = [];
+    const awardedIds = [];
+
+    selects.forEach((sel) => {
+      const pos = Number(sel.value);
+      const amount = COIN_AMOUNTS.placement[pos];
+      const label = pos === 1 ? "1st place" : pos === 2 ? "2nd place" : "3rd place";
+      [sel.dataset.p1, sel.dataset.p2].forEach((pid) => {
+        const p = playerById.get(pid);
+        if (!p) return;
+        const newBalance = (p.coinsBalance ?? 0) + amount;
+        batch.update(doc(db, "players", pid), { coinsBalance: increment(amount) });
+        const txRef = doc(collection(db, "coinTransactions"));
+        batch.set(txRef, {
+          playerId: pid,
+          amount,
+          type: "placement",
+          position: pos,
+          tournamentId,
+          note: label,
+          balanceAfter: newBalance,
+          createdAt: serverTimestamp()
+        });
+        summaryRows.push({ name: p.name || "—", amount, newBalance });
+        awardedIds.push(pid);
+      });
+    });
+
+    batch.update(doc(db, "tournaments", tournamentId), {
+      "coinsAwarded.placement": arrayUnion(...awardedIds)
+    });
+
+    await batch.commit();
+
+    const summaryEl = $("coin-pl-summary");
+    summaryEl.innerHTML = summaryRows.map((r) => `
+      <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px;">
+        <span>${escapeHtml(r.name)}</span>
+        <span style="color:var(--live); font-family:var(--font-mono); font-weight:700;">+${r.amount} → ${r.newBalance}</span>
+      </div>
+    `).join("");
+    summaryEl.classList.remove("hidden");
+
+    showMsg(okEl, `Placement coins awarded for ${selects.length} team(s).`);
+    loadCoinPlacementList(tournamentId);
+  } catch (err) {
+    console.error(err);
+    showMsg(errEl, "Something went wrong awarding placement coins. No coins were given — try again.");
+  }
+});
+
+// ---------------- 4. Player coin log (audit trail) ----------------
+
+async function initCoinLogTab() {
+  try {
+    const snap = await getDocs(query(collection(db, "players"), orderBy("name")));
+    const select = $("coin-log-player");
+    const previousValue = select.value;
+    select.innerHTML = '<option value="">Select a player</option>';
+    snap.forEach((d) => {
+      const p = d.data();
+      const opt = document.createElement("option");
+      opt.value = d.id;
+      opt.textContent = `${p.name || "—"} (${p.playerCode || "—"})`;
+      select.appendChild(opt);
+    });
+    if (previousValue && snap.docs.some((d) => d.id === previousValue)) select.value = previousValue;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+$("coin-log-player").addEventListener("change", (e) => {
+  if (e.target.value) loadCoinLog(e.target.value);
+  else $("coin-log-body").classList.add("hidden");
+});
+
+async function loadCoinLog(playerId) {
+  const loadingEl = $("coin-log-loading");
+  const bodyEl = $("coin-log-body");
+  loadingEl.classList.remove("hidden");
+  bodyEl.classList.add("hidden");
+
+  try {
+    const [pSnap, txSnap] = await Promise.all([
+      getDoc(doc(db, "players", playerId)),
+      getDocs(query(collection(db, "coinTransactions"), where("playerId", "==", playerId)))
+    ]);
+    if (!pSnap.exists()) return;
+    const p = pSnap.data();
+
+    $("coin-log-balance").textContent = `${Math.round(p.coinsBalance ?? 0)} coins — current balance for ${p.name || "—"}`;
+
+    // Sorted client-side (not via Firestore orderBy) to avoid requiring a
+    // composite index for a simple single-player equality + date query.
+    const transactions = txSnap.docs
+      .map((d) => d.data())
+      .sort((a, b) => {
+        const at = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+        const bt = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+        return bt - at;
+      });
+
+    const listEl = $("coin-log-list");
+    const emptyEl = $("coin-log-empty");
+    if (transactions.length === 0) {
+      listEl.innerHTML = "";
+      emptyEl.classList.remove("hidden");
+    } else {
+      emptyEl.classList.add("hidden");
+      listEl.innerHTML = transactions.map((tx) => {
+        const date = tx.createdAt?.toDate
+          ? tx.createdAt.toDate().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })
+          : "—";
+        const sign = tx.amount >= 0 ? "+" : "";
+        const color = tx.amount >= 0 ? "var(--live)" : "var(--danger)";
+        return `
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); font-size:13px;">
+            <div>
+              <div>${escapeHtml(tx.note || tx.type || "—")}</div>
+              <div style="font-size:11px; color:var(--text-soft); margin-top:2px;">${date}</div>
+            </div>
+            <span style="color:${color}; font-family:var(--font-mono); font-weight:700;">${sign}${tx.amount} → ${tx.balanceAfter ?? "—"}</span>
+          </div>
+        `;
+      }).join("");
+    }
+
+    loadingEl.classList.add("hidden");
+    bodyEl.classList.remove("hidden");
+  } catch (err) {
+    console.error(err);
+    loadingEl.textContent = "Couldn't load the coin log.";
   }
 }
