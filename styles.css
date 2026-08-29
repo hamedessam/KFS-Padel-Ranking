@@ -110,16 +110,9 @@ body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: 20px 18px 24px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--ball-dim) transparent;
+  scrollbar-width: none;
 }
-.content-scroll::-webkit-scrollbar { width: 6px; }
-.content-scroll::-webkit-scrollbar-track { background: transparent; }
-.content-scroll::-webkit-scrollbar-thumb {
-  background: var(--ball-dim);
-  border-radius: 10px;
-}
-.content-scroll::-webkit-scrollbar-thumb:hover { background: var(--ball); }
+.content-scroll::-webkit-scrollbar { display: none; }
 
 .login-fill {
   min-height: 100%;
@@ -920,4 +913,18 @@ table.players tr:last-child td { border-bottom: none; }
   .app-frame {
     max-width: 560px;
   }
+  .content-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--ball-dim) transparent;
+  }
+  .content-scroll::-webkit-scrollbar {
+    display: block;
+    width: 6px;
+  }
+  .content-scroll::-webkit-scrollbar-track { background: transparent; }
+  .content-scroll::-webkit-scrollbar-thumb {
+    background: var(--ball-dim);
+    border-radius: 10px;
+  }
+  .content-scroll::-webkit-scrollbar-thumb:hover { background: var(--ball); }
 }
