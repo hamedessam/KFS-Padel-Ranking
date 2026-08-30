@@ -8,9 +8,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Space+Mono:wght@400;700&display=swap');
 
 :root {
-  --bg: #0a1615;
-  --panel: #10201f;
-  --panel-alt: #16302d;
+  --bg: #000000;
+  --panel: #141414;
+  --panel-alt: #1c1c1c;
   --border: rgba(245,243,234,0.09);
 
   --ball: #c9f24c;
@@ -42,7 +42,7 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: #040a09;
+  background: #000000;
   color: var(--text);
   font-family: var(--font-body);
 }
@@ -71,13 +71,21 @@ body {
 
 .topbar {
   flex-shrink: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: 34px 1fr 34px;
   align-items: center;
   gap: 10px;
   padding: 16px 18px;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
   color: var(--text);
+}
+.topbar-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
 }
 .topbar .dot {
   width: 9px; height: 9px; border-radius: 50%;
@@ -86,12 +94,15 @@ body {
   flex-shrink: 0;
 }
 .topbar .brand {
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 15px;
-  letter-spacing: 0.2px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.topbar-spacer { flex: 1; }
 .icon-btn {
   width: 34px; height: 34px;
   display: flex; align-items: center; justify-content: center;
