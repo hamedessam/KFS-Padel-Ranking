@@ -183,7 +183,7 @@ export async function assignToSlot(tournamentId, teamNumber, slot, playerId) {
     });
     return;
   }
-  await updateDoc(doc(db, "tournaments", tournamentId, "teams", existing.id), { [slot]: playerId });
+  await updateDoc(doc(db, "tournaments", tournamentId, "teams", existing.id), { [`${slot}Id`]: playerId });
 }
 
 export async function setTeamGroup(tournamentId, teamId, group) {
