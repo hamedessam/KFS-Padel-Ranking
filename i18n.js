@@ -1,10 +1,10 @@
 // Lightweight i18n: Arabic default, English toggle, saved in localStorage.
 
-const LANG_KEY = "kfs_lang";
+const LANG_KEY = "padelx_lang";
 
 const translations = {
   ar: {
-    app_name: "KFS Padel Ranking",
+    app_name: "Padel X",
     loading: "جاري التحميل...",
     tab_home: "الرئيسية",
     tab_market: "المتجر",
@@ -23,7 +23,7 @@ const translations = {
     login_err_generic: "حصل خطأ في الاتصال. حاول تاني.",
     // home
     home_greeting_prefix: "أهلاً",
-    home_sub: "لمحة سريعة عن حالتك في KFS Padel.",
+    home_sub: "لمحة سريعة عن حالتك في Padel X.",
     home_your_rank: "ترتيبك في الليدربورد",
     home_tournaments_title: "البطولات",
     home_top_players_title: "أفضل اللاعبين",
@@ -141,7 +141,7 @@ const translations = {
     back: "رجوع"
   },
   en: {
-    app_name: "KFS Padel Ranking",
+    app_name: "Padel X",
     loading: "Loading...",
     tab_home: "Home",
     tab_market: "Market",
@@ -158,7 +158,7 @@ const translations = {
     login_err_wrong_pass: "Wrong password. Try again.",
     login_err_generic: "Something went wrong. Try again.",
     home_greeting_prefix: "Hi",
-    home_sub: "A quick look at where you stand in KFS Padel.",
+    home_sub: "A quick look at where you stand in Padel X.",
     home_your_rank: "Your leaderboard rank",
     home_tournaments_title: "Tournaments",
     home_top_players_title: "Top Players",

@@ -13,7 +13,7 @@ const gateForm = $("gate-form");
 const gateTitle = viewGate.querySelector("h1");
 const gateSub = viewGate.querySelector("p.sub");
 
-const ADMIN_SESSION_KEY = "kfs_admin_session";
+const ADMIN_SESSION_KEY = "padelx_admin_session";
 const ADMIN_CONFIG_REF = doc(db, "config", "admin");
 const COUNTERS_REF = doc(db, "config", "counters");
 
@@ -160,7 +160,7 @@ $("add-form").addEventListener("submit", async (e) => {
     $("new-pass").textContent = password;
     $("credentials-card").classList.remove("hidden");
     $("copy-creds").onclick = () => {
-      const msg = `Hey ${name}! Here are your login details for KFS Padel Ranking:\nCode: ${playerCode}\nPassword: ${password}`;
+      const msg = `Hey ${name}! Here are your login details for Padel X:\nCode: ${playerCode}\nPassword: ${password}`;
       navigator.clipboard.writeText(msg);
       $("copy-creds").textContent = "Copied ✓";
       setTimeout(() => { $("copy-creds").textContent = "Copy WhatsApp-ready message"; }, 1800);
@@ -282,7 +282,7 @@ async function resetPlayerPassword(playerId, playerName, btn) {
     $("reset-credentials-card").classList.remove("hidden");
     $("reset-credentials-card").scrollIntoView({ behavior: "smooth", block: "center" });
     $("copy-reset-creds").onclick = () => {
-      const msg = `Hey ${playerName}! Your KFS Padel Ranking password was reset:\nPassword: ${newPassword}`;
+      const msg = `Hey ${playerName}! Your Padel X password was reset:\nPassword: ${newPassword}`;
       navigator.clipboard.writeText(msg);
       $("copy-reset-creds").textContent = "Copied ✓";
       setTimeout(() => { $("copy-reset-creds").textContent = "Copy WhatsApp-ready message"; }, 1800);

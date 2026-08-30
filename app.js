@@ -17,13 +17,13 @@ let lastTabBeforeSettings = "home";
 
 // ---------------- session ----------------
 function saveSession(playerId) {
-  localStorage.setItem("kfs_player_id", playerId);
+  localStorage.setItem("padelx_player_id", playerId);
 }
 function clearSession() {
-  localStorage.removeItem("kfs_player_id");
+  localStorage.removeItem("padelx_player_id");
 }
 function getSession() {
-  return localStorage.getItem("kfs_player_id");
+  return localStorage.getItem("padelx_player_id");
 }
 
 // ---------------- rendering ----------------
@@ -1279,7 +1279,7 @@ async function generateAndShareProfileCard() {
     ctx.fill();
     ctx.font = "700 30px 'Space Mono', monospace";
     ctx.fillStyle = "rgba(245,243,234,0.85)";
-    ctx.fillText("KFS PADEL RANKING", W / 2 + 30, 106);
+    ctx.fillText("PADEL X", W / 2 + 30, 106);
 
     // avatar
     const avatarSize = 260;
@@ -1345,14 +1345,14 @@ async function generateAndShareProfileCard() {
     // footer
     ctx.font = "600 26px 'Cairo', sans-serif";
     ctx.fillStyle = "rgba(245,243,234,0.35)";
-    ctx.fillText("kfspadel", W / 2, H - 60);
+    ctx.fillText("padelx.me", W / 2, H - 60);
 
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png", 0.95));
-    const fileName = `kfs-padel-${(currentPlayer.playerCode || "profile").toLowerCase()}.png`;
+    const fileName = `padel-x-${(currentPlayer.playerCode || "profile").toLowerCase()}.png`;
     const file = new File([blob], fileName, { type: "image/png" });
 
     if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: "KFS Padel Ranking" });
+      await navigator.share({ files: [file], title: "Padel X" });
     } else {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

@@ -1,10 +1,10 @@
 {
-  "name": "KFS Padel Ranking",
-  "short_name": "KFS Padel",
+  "name": "Padel X",
+  "short_name": "Padel X",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#0a2b2c",
-  "theme_color": "#0a2b2c",
+  "background_color": "#0a1615",
+  "theme_color": "#0a1615",
   "orientation": "portrait",
   "icons": [
     {
