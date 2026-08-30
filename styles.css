@@ -102,6 +102,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 .icon-btn {
   width: 34px; height: 34px;
