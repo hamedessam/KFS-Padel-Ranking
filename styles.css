@@ -80,6 +80,9 @@ body {
   border-bottom: 1px solid var(--border);
   color: var(--text);
 }
+.topbar .back-btn { grid-column: 1; }
+.topbar .topbar-center { grid-column: 2; }
+.topbar .icon-btn { grid-column: 3; }
 .topbar-center {
   display: flex;
   align-items: center;
