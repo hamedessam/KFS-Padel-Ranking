@@ -1,4 +1,4 @@
-import { db, collection, doc, getDoc, getDocs, updateDoc, query, where, limit, orderBy } from "./firebase-config.js";
+import { db, collection, doc, getDoc, getDocs, updateDoc, query, where, limit, orderBy, onSnapshot } from "./firebase-config.js";
 import { registerPlayer, unregisterPlayer, addPartner, fetchTeams, findTeamOf, requestToJoinTeam, cancelJoinRequest, acceptJoinRequest, declineJoinRequest, getOpenTeams, myPendingRequestTeams, myIncomingRequests } from "./teams.js";
 import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFoundingMember } from "./utils.js";
 import { t, getLang, setLang, applyStaticTranslations } from "./i18n.js";
@@ -16,14 +16,60 @@ let currentPlayer = null; // { id, ...data }
 let lastTabBeforeSettings = "home";
 
 // ---------------- session ----------------
-function saveSession(playerId) {
+// Alongside the player ID, we also remember the passwordHash that was valid
+// at login time. This lets us detect — even after fully closing and
+// reopening the app — that the password was changed elsewhere while this
+// device was away, and refuse to silently re-authenticate.
+function saveSession(playerId, passwordHash) {
   localStorage.setItem("padelx_player_id", playerId);
+  localStorage.setItem("padelx_password_hash", passwordHash || "");
 }
 function clearSession() {
   localStorage.removeItem("padelx_player_id");
+  localStorage.removeItem("padelx_password_hash");
 }
 function getSession() {
   return localStorage.getItem("padelx_player_id");
+}
+function getSessionPasswordHash() {
+  return localStorage.getItem("padelx_password_hash");
+}
+
+// ---------------- forced logout (security) ----------------
+// Live-watches the current player's own document. If the password changes
+// (self-service change, or admin reset) or the account is deleted while
+// this tab is open, the session is force-ended immediately — no action
+// needed from the person using this device.
+let sessionUnsub = null;
+let expectedPasswordHash = null;
+
+function startSessionWatch(player) {
+  expectedPasswordHash = player.passwordHash;
+  stopSessionWatch();
+  sessionUnsub = onSnapshot(doc(db, "players", player.id), (snap) => {
+    if (!snap.exists()) {
+      forceLogout("forced_logout_deleted");
+      return;
+    }
+    const data = snap.data();
+    if (data.passwordHash !== expectedPasswordHash) {
+      forceLogout("forced_logout_password_changed");
+    }
+  }, (err) => console.error(err));
+}
+
+function stopSessionWatch() {
+  if (sessionUnsub) { sessionUnsub(); sessionUnsub = null; }
+}
+
+function forceLogout(messageKey) {
+  stopSessionWatch();
+  clearSession();
+  currentPlayer = null;
+  leaderboardCache = null;
+  tournamentsCache = null;
+  showLogin();
+  showMsg($("login-error"), t(messageKey));
 }
 
 // ---------------- rendering ----------------
@@ -66,6 +112,7 @@ function refreshProfileDisplay(player) {
 function renderProfile(player) {
   currentPlayer = player;
   refreshProfileDisplay(player);
+  startSessionWatch(player);
 
   viewLogin.classList.add("hidden");
   viewApp.classList.remove("hidden");
@@ -1185,7 +1232,7 @@ $("login-form").addEventListener("submit", async (e) => {
       showMsg(errEl, t("login_err_wrong_pass"));
       return;
     }
-    saveSession(player.id);
+    saveSession(player.id, player.passwordHash);
     renderProfile(player);
   } catch (err) {
     console.error(err);
@@ -1235,6 +1282,8 @@ $("change-pass-form").addEventListener("submit", async (e) => {
     });
     currentPlayer.passwordSalt = newSalt;
     currentPlayer.passwordHash = newHash;
+    expectedPasswordHash = newHash;
+    saveSession(currentPlayer.id, newHash);
     showMsg(okEl, t("pass_success"));
     $("cp-current").value = "";
     $("cp-new").value = "";
@@ -1390,6 +1439,7 @@ function roundRect(ctx, x, y, w, h, r) {
 
 // ---------------- logout ----------------
 $("logout-btn").addEventListener("click", () => {
+  stopSessionWatch();
   clearSession();
   leaderboardCache = null;
   tournamentsCache = null;
@@ -1422,11 +1472,24 @@ applyStaticTranslations();
   if (!savedId) return;
   try {
     const player = await loadPlayerById(savedId);
-    if (player) {
-      renderProfile(player);
-    } else {
+    if (!player) {
       clearSession();
+      return;
     }
+    const savedHash = getSessionPasswordHash();
+    if (!savedHash) {
+      // Session predates this security check — trust it now and start
+      // tracking from this point forward (avoids logging out everyone
+      // who was already signed in before this feature shipped).
+      saveSession(player.id, player.passwordHash);
+    } else if (player.passwordHash !== savedHash) {
+      // Password was changed (or reset by the admin) while this device
+      // was closed — refuse to silently re-authenticate.
+      clearSession();
+      showMsg($("login-error"), t("forced_logout_password_changed"));
+      return;
+    }
+    renderProfile(player);
   } catch (err) {
     console.error(err);
   }

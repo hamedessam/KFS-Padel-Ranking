@@ -4,7 +4,7 @@ import {
   getFirestore,
   collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc,
   query, where, limit, orderBy, arrayUnion, arrayRemove,
-  runTransaction, writeBatch, increment,
+  runTransaction, writeBatch, increment, onSnapshot,
   serverTimestamp, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
@@ -22,5 +22,5 @@ export const db = getFirestore(app);
 
 export {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc,
-  query, where, limit, orderBy, arrayUnion, arrayRemove, runTransaction, writeBatch, increment, serverTimestamp, Timestamp
+  query, where, limit, orderBy, arrayUnion, arrayRemove, runTransaction, writeBatch, increment, onSnapshot, serverTimestamp, Timestamp
 };

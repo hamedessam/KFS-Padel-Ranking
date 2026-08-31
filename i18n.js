@@ -21,6 +21,8 @@ const translations = {
     login_err_no_code: "الكود ده مش موجود. اتأكد منه وحاول تاني.",
     login_err_wrong_pass: "الباسورد غلط. حاول تاني.",
     login_err_generic: "حصل خطأ في الاتصال. حاول تاني.",
+    forced_logout_password_changed: "الباسورد اتغيّر من جهاز تاني — سجّل دخولك تاني.",
+    forced_logout_deleted: "الحساب ده اتشال. كلم الأدمن لو محتاج مساعدة.",
     // home
     home_greeting_prefix: "أهلاً",
     home_sub: "لمحة سريعة عن حالتك في Padel X.",
@@ -157,6 +159,8 @@ const translations = {
     login_err_no_code: "That code doesn't exist. Double-check it and try again.",
     login_err_wrong_pass: "Wrong password. Try again.",
     login_err_generic: "Something went wrong. Try again.",
+    forced_logout_password_changed: "Your password was changed on another device — please sign in again.",
+    forced_logout_deleted: "This account has been removed. Contact the admin if you need help.",
     home_greeting_prefix: "Hi",
     home_sub: "A quick look at where you stand in Padel X.",
     home_your_rank: "Your leaderboard rank",
