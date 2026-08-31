@@ -1268,6 +1268,8 @@ $("change-pass-form").addEventListener("submit", async (e) => {
   btn.disabled = true;
   btn.textContent = t("settings_saving");
 
+  const previousExpectedHash = expectedPasswordHash;
+
   try {
     const computedCurrentHash = await hashPassword(current, currentPlayer.passwordSalt || "");
     if (computedCurrentHash !== currentPlayer.passwordHash) {
@@ -1276,20 +1278,28 @@ $("change-pass-form").addEventListener("submit", async (e) => {
     }
     const newSalt = randomSalt();
     const newHash = await hashPassword(next, newSalt);
+    // Update what our own session watch expects BEFORE writing — the
+    // real-time listener can see the change almost instantly (via the local
+    // optimistic cache), sometimes faster than the code right after the
+    // write itself runs. Setting this first avoids the device that made the
+    // change kicking itself out.
+    expectedPasswordHash = newHash;
+    saveSession(currentPlayer.id, newHash);
     await updateDoc(doc(db, "players", currentPlayer.id), {
       passwordSalt: newSalt,
       passwordHash: newHash
     });
     currentPlayer.passwordSalt = newSalt;
     currentPlayer.passwordHash = newHash;
-    expectedPasswordHash = newHash;
-    saveSession(currentPlayer.id, newHash);
     showMsg(okEl, t("pass_success"));
     $("cp-current").value = "";
     $("cp-new").value = "";
     $("cp-confirm").value = "";
   } catch (err) {
     console.error(err);
+    // Revert — the write didn't actually succeed, so our session watch
+    // should keep expecting the old (still-valid) password hash.
+    expectedPasswordHash = previousExpectedHash;
     showMsg(errEl, t("pass_err_generic"));
   } finally {
     btn.disabled = false;
