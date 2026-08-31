@@ -86,6 +86,7 @@ body {
   justify-content: center;
   gap: 8px;
   min-width: 0;
+  width: 100%;
 }
 .topbar .dot {
   width: 9px; height: 9px; border-radius: 50%;
