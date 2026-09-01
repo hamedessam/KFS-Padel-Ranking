@@ -51,7 +51,23 @@
       </form>
 
       <div class="foot-link">
-        <span style="opacity:.7; font-size:13px;" data-i18n="login_no_code">No code yet? Ask the admin at KFS club.</span>
+        <button class="link-btn" id="request-account-link" type="button" style="font-size:13px;" data-i18n="login_no_code">No code yet? Request an account.</button>
+      </div>
+
+      <div class="hidden" id="request-account-wrap" style="margin-top:16px;">
+        <div class="msg error" id="request-error"></div>
+        <div class="msg success" id="request-success"></div>
+        <form id="request-account-form">
+          <div class="field">
+            <label for="ra-name" data-i18n="request_name_label">Full name</label>
+            <input type="text" id="ra-name" required>
+          </div>
+          <div class="field">
+            <label for="ra-phone" data-i18n="request_phone_label">Phone number</label>
+            <input type="tel" id="ra-phone" required placeholder="01xxxxxxxxx">
+          </div>
+          <button type="submit" class="btn btn-primary" id="ra-btn" data-i18n="request_submit_btn">Send request</button>
+        </form>
       </div>
     </div>
 

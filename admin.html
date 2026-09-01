@@ -43,6 +43,7 @@
         <button class="admin-tab-btn" data-admin-tab="add-tournament" type="button">Add Tournament</button>
         <button class="admin-tab-btn" data-admin-tab="tournament-manager" type="button">Tournament Manager</button>
         <button class="admin-tab-btn" data-admin-tab="coins" type="button">Coins</button>
+        <button class="admin-tab-btn" data-admin-tab="requests" type="button">Join Requests</button>
       </div>
 
       <!-- ============ TAB: OVERVIEW ============ -->
@@ -206,6 +207,19 @@
           <button class="btn btn-ghost" id="copy-reset-creds" type="button">Copy WhatsApp-ready message</button>
         </div>
 
+        <div class="panel hidden" id="edit-name-card" style="margin-top:16px;">
+          <h1>Edit player name</h1>
+          <p class="sub">Updates how this player's name is displayed everywhere in the app (leaderboard, profile, tournaments, admin lists).</p>
+          <div class="msg error" id="edit-name-error"></div>
+          <form id="edit-name-form">
+            <div class="field">
+              <label for="en-name">Name</label>
+              <input type="text" id="en-name" required>
+            </div>
+            <button type="submit" class="btn btn-primary" id="en-btn">Save name</button>
+          </form>
+        </div>
+
         <div class="foot-link" style="margin-top:16px; margin-bottom: 16px;">
           <button class="link-btn" id="admin-logout" type="button" style="color:var(--text-soft); opacity:.8;">Log out</button>
         </div>
@@ -361,6 +375,40 @@
             <div id="coin-log-list"></div>
             <div class="hint hidden" id="coin-log-empty">No coin transactions yet for this player.</div>
           </div>
+        </div>
+
+      </div>
+
+      <!-- ============ TAB: JOIN REQUESTS ============ -->
+      <div class="admin-tab-panel hidden" id="admin-tab-requests">
+
+        <div class="panel">
+          <h1>Pending requests</h1>
+          <p class="sub">People who asked for an account from the login page. Approving jumps you to the Add Player form in Overview, pre-filled — review and submit it as usual to generate their code.</p>
+          <div id="jr-pending-loading" style="font-size:13px; color:var(--text-soft);"><span class="spinner"></span> Loading...</div>
+          <div class="hidden" id="jr-pending-list"></div>
+          <div class="hint hidden" id="jr-pending-empty">No pending requests.</div>
+        </div>
+
+        <div class="panel" style="margin-top:16px; margin-bottom:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+            <h1 style="margin:0;">History</h1>
+            <button class="btn btn-ghost btn-sm" id="jr-export-btn" type="button">Export CSV</button>
+          </div>
+          <p class="sub">Every request ever submitted, approved or rejected.</p>
+          <div id="jr-history-loading" style="font-size:13px; color:var(--text-soft);"><span class="spinner"></span> Loading...</div>
+          <table class="players hidden" id="jr-history-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Status</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody id="jr-history-tbody"></tbody>
+          </table>
+          <div class="hint hidden" id="jr-history-empty">No requests yet.</div>
         </div>
 
       </div>

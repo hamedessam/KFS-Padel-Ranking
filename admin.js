@@ -90,6 +90,7 @@ function enterAdmin() {
   initCoinAdvancementTab();
   initCoinPlacementTab();
   initCoinLogTab();
+  initJoinRequestsTab();
 }
 
 // ---------------- admin tab switcher ----------------
@@ -207,6 +208,7 @@ async function loadPlayers() {
         <td>${Math.round(p.ratingPoints ?? 1000)}</td>
         <td>${p.matchesPlayed ?? 0}</td>
         <td style="white-space:nowrap;">
+          <button class="link-btn" data-edit-name="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" type="button" style="font-size:12px;">Edit name</button>
           <button class="link-btn" data-reset-player="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" type="button" style="font-size:12px;">Reset password</button>
           <button class="link-btn" data-delete-player="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" type="button" style="font-size:12px; color:var(--danger);">Delete</button>
         </td>
@@ -216,6 +218,9 @@ async function loadPlayers() {
     loadingEl.classList.add("hidden");
     tableEl.classList.remove("hidden");
 
+    tbody.querySelectorAll("[data-edit-name]").forEach((btn) => {
+      btn.addEventListener("click", () => openEditNameCard(btn.dataset.editName, btn.dataset.playerName));
+    });
     tbody.querySelectorAll("[data-reset-player]").forEach((btn) => {
       btn.addEventListener("click", () => resetPlayerPassword(btn.dataset.resetPlayer, btn.dataset.playerName, btn));
     });
@@ -1228,5 +1233,255 @@ async function loadCoinLog(playerId) {
   } catch (err) {
     console.error(err);
     loadingEl.textContent = "Couldn't load the coin log.";
+  }
+}
+
+// =========================================================================
+// ---------------- Join requests (from the login screen) ----------------
+// One shared read powers both the pending list and the full history table,
+// avoiding a composite Firestore index (status + createdAt would need one).
+// =========================================================================
+
+let joinRequestsCache = [];
+
+async function initJoinRequestsTab() {
+  const loadingP = $("jr-pending-loading");
+  const loadingH = $("jr-history-loading");
+  loadingP.classList.remove("hidden");
+  loadingH.classList.remove("hidden");
+  $("jr-pending-list").classList.add("hidden");
+  $("jr-pending-empty").classList.add("hidden");
+  $("jr-history-table").classList.add("hidden");
+  $("jr-history-empty").classList.add("hidden");
+
+  try {
+    const snap = await getDocs(query(collection(db, "joinRequests"), orderBy("createdAt", "desc")));
+    joinRequestsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderPendingRequests();
+    renderRequestsHistory();
+  } catch (err) {
+    console.error(err);
+    loadingP.textContent = "Couldn't load requests.";
+    loadingH.textContent = "Couldn't load history.";
+  }
+}
+
+function renderPendingRequests() {
+  const loadingEl = $("jr-pending-loading");
+  const listEl = $("jr-pending-list");
+  const emptyEl = $("jr-pending-empty");
+  const pending = joinRequestsCache.filter((r) => (r.status || "pending") === "pending");
+
+  loadingEl.classList.add("hidden");
+
+  if (pending.length === 0) {
+    emptyEl.classList.remove("hidden");
+    listEl.classList.add("hidden");
+    return;
+  }
+
+  listEl.innerHTML = pending.map((r) => {
+    const date = r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—";
+    return `
+      <div style="background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px 16px; margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+          <div>
+            <div style="font-weight:700; font-size:14px;">${escapeHtml(r.name || "—")}</div>
+            <div style="font-size:12.5px; color:var(--text-soft); margin-top:2px;">${escapeHtml(r.phone || "—")} · ${date}</div>
+          </div>
+          <div style="display:flex; gap:8px; flex-shrink:0;">
+            <button class="btn btn-primary btn-sm" data-approve-request="${r.id}" type="button">Approve</button>
+            <button class="btn btn-ghost btn-sm" data-reject-request="${r.id}" type="button">Reject</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+  listEl.classList.remove("hidden");
+
+  listEl.querySelectorAll("[data-approve-request]").forEach((btn) => {
+    btn.addEventListener("click", () => approveJoinRequest(btn.dataset.approveRequest));
+  });
+  listEl.querySelectorAll("[data-reject-request]").forEach((btn) => {
+    btn.addEventListener("click", () => rejectJoinRequest(btn.dataset.rejectRequest));
+  });
+}
+
+function renderRequestsHistory() {
+  const loadingEl = $("jr-history-loading");
+  const tableEl = $("jr-history-table");
+  const emptyEl = $("jr-history-empty");
+  const tbody = $("jr-history-tbody");
+
+  loadingEl.classList.add("hidden");
+
+  if (joinRequestsCache.length === 0) {
+    emptyEl.classList.remove("hidden");
+    tableEl.classList.add("hidden");
+    return;
+  }
+
+  tbody.innerHTML = "";
+  joinRequestsCache.forEach((r) => {
+    const date = r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
+    const status = r.status || "pending";
+    const statusClass = status === "approved" ? "gold" : status === "rejected" ? "bronze" : "silver";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(r.name || "—")}</td>
+      <td>${escapeHtml(r.phone || "—")}</td>
+      <td><span class="badge-pill ${statusClass}">${status}</span></td>
+      <td>${date}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  tableEl.classList.remove("hidden");
+}
+
+async function approveJoinRequest(requestId) {
+  try {
+    const request = joinRequestsCache.find((r) => r.id === requestId);
+    if (!request) return;
+
+    const similar = await findSimilarNamedPlayers(request.name);
+    if (similar.length > 0) {
+      const list = similar.map((p) => `- ${p.name || "—"} (${p.playerCode || "—"})`).join("\n");
+      const proceed = confirm(
+        `Found existing player(s) with a similar name:\n\n${list}\n\nContinue approving "${request.name}" anyway? (You can still adjust the name before submitting the Add Player form.)`
+      );
+      if (!proceed) return;
+    }
+
+    await updateDoc(doc(db, "joinRequests", requestId), {
+      status: "approved",
+      reviewedAt: serverTimestamp()
+    });
+
+    // Jump to Overview and pre-fill the existing Add Player form — reuses
+    // the exact same account-creation flow/logic, nothing duplicated here.
+    document.querySelector('[data-admin-tab="overview"]').click();
+    $("ap-name").value = request.name || "";
+    $("ap-phone").value = request.phone || "";
+    $("ap-name").scrollIntoView({ behavior: "smooth", block: "center" });
+
+    initJoinRequestsTab();
+  } catch (err) {
+    console.error(err);
+    alert("Something went wrong approving that request. Try again.");
+  }
+}
+
+async function rejectJoinRequest(requestId) {
+  const confirmed = confirm("Reject this request? They won't be added as a player.");
+  if (!confirmed) return;
+  try {
+    await updateDoc(doc(db, "joinRequests", requestId), {
+      status: "rejected",
+      reviewedAt: serverTimestamp()
+    });
+    initJoinRequestsTab();
+  } catch (err) {
+    console.error(err);
+    alert("Something went wrong rejecting that request. Try again.");
+  }
+}
+
+// ---------------- CSV export ----------------
+function csvEscape(value) {
+  const str = String(value ?? "");
+  if (/[",\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
+  return str;
+}
+
+$("jr-export-btn").addEventListener("click", () => {
+  if (joinRequestsCache.length === 0) return;
+
+  const rows = [["Name", "Phone", "Status", "Requested at"]];
+  joinRequestsCache.forEach((r) => {
+    const dateStr = r.createdAt?.toDate ? r.createdAt.toDate().toISOString() : "";
+    rows.push([r.name || "", r.phone || "", r.status || "pending", dateStr]);
+  });
+
+  const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `padel-x-join-requests-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+// =========================================================================
+// ---------------- Edit player name ----------------
+// =========================================================================
+
+let editingPlayerId = null;
+
+function openEditNameCard(playerId, currentName) {
+  editingPlayerId = playerId;
+  hideMsg($("edit-name-error"));
+  $("en-name").value = currentName === "—" ? "" : currentName;
+  const card = $("edit-name-card");
+  card.classList.remove("hidden");
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  $("en-name").focus();
+}
+
+$("edit-name-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errEl = $("edit-name-error");
+  hideMsg(errEl);
+
+  const newName = $("en-name").value.trim();
+  if (!newName || !editingPlayerId) return;
+
+  const btn = $("en-btn");
+  btn.disabled = true;
+  btn.textContent = "Saving...";
+
+  try {
+    await updateDoc(doc(db, "players", editingPlayerId), { name: newName });
+    $("edit-name-card").classList.add("hidden");
+    editingPlayerId = null;
+    loadPlayers();
+    loadMatchFormOptions();
+    initCoinLogTab();
+  } catch (err) {
+    console.error(err);
+    showMsg(errEl, "Something went wrong saving the name. Try again.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Save name";
+  }
+});
+
+// =========================================================================
+// ---------------- Duplicate-name check (used before approving a request) ----------------
+// =========================================================================
+
+// Deliberately loose on purpose: exact match, or same first name — enough to
+// prompt a human decision (per Hamed's own judgment call), not to block
+// anything automatically. Nicknames/stage names are fully legitimate and
+// should never be flagged as a "conflict" against a real full name.
+function namesLikelySimilar(a, b) {
+  const na = (a || "").trim().toLowerCase();
+  const nb = (b || "").trim().toLowerCase();
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const firstA = na.split(/\s+/)[0];
+  const firstB = nb.split(/\s+/)[0];
+  return Boolean(firstA) && firstA === firstB;
+}
+
+async function findSimilarNamedPlayers(name) {
+  try {
+    const snap = await getDocs(collection(db, "players"));
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((p) => namesLikelySimilar(name, p.name));
+  } catch (err) {
+    console.error(err);
+    return [];
   }
 }

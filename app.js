@@ -1,4 +1,4 @@
-import { db, collection, doc, getDoc, getDocs, updateDoc, query, where, limit, orderBy, onSnapshot } from "./firebase-config.js";
+import { db, collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp } from "./firebase-config.js";
 import { registerPlayer, unregisterPlayer, addPartner, fetchTeams, findTeamOf, requestToJoinTeam, cancelJoinRequest, acceptJoinRequest, declineJoinRequest, getOpenTeams, myPendingRequestTeams, myIncomingRequests } from "./teams.js";
 import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFoundingMember } from "./utils.js";
 import { t, getLang, setLang, applyStaticTranslations } from "./i18n.js";
@@ -1208,6 +1208,44 @@ async function loadPlayerById(playerId) {
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() };
 }
+
+// ---------------- request an account (login screen) ----------------
+$("request-account-link").addEventListener("click", () => {
+  $("request-account-wrap").classList.toggle("hidden");
+});
+
+$("request-account-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errEl = $("request-error");
+  const okEl = $("request-success");
+  hideMsg(errEl);
+  hideMsg(okEl);
+
+  const name = $("ra-name").value.trim();
+  const phone = $("ra-phone").value.trim();
+  if (!name || !phone) return;
+
+  const btn = $("ra-btn");
+  btn.disabled = true;
+  btn.textContent = t("request_sending");
+
+  try {
+    await addDoc(collection(db, "joinRequests"), {
+      name,
+      phone,
+      status: "pending",
+      createdAt: serverTimestamp()
+    });
+    showMsg(okEl, t("request_success_msg"));
+    $("request-account-form").reset();
+  } catch (err) {
+    console.error(err);
+    showMsg(errEl, t("request_error_generic"));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t("request_submit_btn");
+  }
+});
 
 // ---------------- login ----------------
 $("login-form").addEventListener("submit", async (e) => {
