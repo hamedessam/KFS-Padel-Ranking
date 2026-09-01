@@ -91,6 +91,7 @@ function enterAdmin() {
   initCoinPlacementTab();
   initCoinLogTab();
   initJoinRequestsTab();
+  loadAvailableCodes();
 }
 
 // ---------------- admin tab switcher ----------------
@@ -118,6 +119,7 @@ $("add-form").addEventListener("submit", async (e) => {
 
   const name = $("ap-name").value.trim();
   const phone = $("ap-phone").value.trim();
+  const customCodeRaw = $("ap-code").value.trim();
   const startingPoints = parseInt($("ap-points").value, 10) || 1000;
   const btn = $("add-btn");
 
@@ -127,16 +129,48 @@ $("add-form").addEventListener("submit", async (e) => {
   btn.textContent = "Adding...";
 
   try {
-    // atomic counter for sequential player codes: KFS-001, KFS-002, ...
-    const seq = await runTransaction(db, async (tx) => {
-      const counterSnap = await tx.get(COUNTERS_REF);
-      const current = counterSnap.exists() ? (counterSnap.data().playerSeq || 0) : 0;
-      const next = current + 1;
-      tx.set(COUNTERS_REF, { playerSeq: next }, { merge: true });
-      return next;
-    });
+    let playerCode;
 
-    const playerCode = playerCodeFromSeq(seq);
+    if (customCodeRaw) {
+      // Reusing a specific (presumably freed) code instead of the next one
+      // in sequence — validate it's a real, already-issued, currently-free number.
+      const num = parseInt(customCodeRaw.replace(/\D/g, ""), 10);
+      const counterSnap = await getDoc(COUNTERS_REF);
+      const maxSeq = counterSnap.exists() ? (counterSnap.data().playerSeq || 0) : 0;
+
+      if (!num || num < 1) {
+        showMsg(errEl, "That custom code doesn't look valid.");
+        btn.disabled = false;
+        btn.textContent = "Add player & generate code";
+        return;
+      }
+      if (num > maxSeq) {
+        showMsg(errEl, `That code hasn't been issued yet — only codes up to KFS-${String(maxSeq).padStart(3, "0")} can be reused.`);
+        btn.disabled = false;
+        btn.textContent = "Add player & generate code";
+        return;
+      }
+      const candidateCode = playerCodeFromSeq(num);
+      const dupSnap = await getDocs(query(collection(db, "players"), where("playerCode", "==", candidateCode)));
+      if (!dupSnap.empty) {
+        showMsg(errEl, `${candidateCode} is already in use by another player.`);
+        btn.disabled = false;
+        btn.textContent = "Add player & generate code";
+        return;
+      }
+      playerCode = candidateCode;
+    } else {
+      // atomic counter for sequential player codes: KFS-001, KFS-002, ...
+      const seq = await runTransaction(db, async (tx) => {
+        const counterSnap = await tx.get(COUNTERS_REF);
+        const current = counterSnap.exists() ? (counterSnap.data().playerSeq || 0) : 0;
+        const next = current + 1;
+        tx.set(COUNTERS_REF, { playerSeq: next }, { merge: true });
+        return next;
+      });
+      playerCode = playerCodeFromSeq(seq);
+    }
+
     const password = generatePassword(8);
     const salt = randomSalt();
     const passwordHash = await hashPassword(password, salt);
@@ -172,6 +206,7 @@ $("add-form").addEventListener("submit", async (e) => {
     loadPlayers();
     loadMatchFormOptions();
     initCoinLogTab();
+    loadAvailableCodes();
   } catch (err) {
     console.error(err);
     showMsg(errEl, "Something went wrong while adding the player. Try again.");
@@ -209,6 +244,7 @@ async function loadPlayers() {
         <td>${p.matchesPlayed ?? 0}</td>
         <td style="white-space:nowrap;">
           <button class="link-btn" data-edit-name="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" type="button" style="font-size:12px;">Edit name</button>
+          <button class="link-btn" data-edit-code="${d.id}" data-player-code="${escapeHtml(p.playerCode || "—")}" type="button" style="font-size:12px;">Edit code</button>
           <button class="link-btn" data-reset-player="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" type="button" style="font-size:12px;">Reset password</button>
           <button class="link-btn" data-delete-player="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" type="button" style="font-size:12px; color:var(--danger);">Delete</button>
         </td>
@@ -220,6 +256,9 @@ async function loadPlayers() {
 
     tbody.querySelectorAll("[data-edit-name]").forEach((btn) => {
       btn.addEventListener("click", () => openEditNameCard(btn.dataset.editName, btn.dataset.playerName));
+    });
+    tbody.querySelectorAll("[data-edit-code]").forEach((btn) => {
+      btn.addEventListener("click", () => openEditCodeCard(btn.dataset.editCode, btn.dataset.playerCode));
     });
     tbody.querySelectorAll("[data-reset-player]").forEach((btn) => {
       btn.addEventListener("click", () => resetPlayerPassword(btn.dataset.resetPlayer, btn.dataset.playerName, btn));
@@ -257,6 +296,7 @@ async function deletePlayerCompletely(playerId, playerName, btn) {
     loadMatchFormOptions();
     loadTMTournamentSelect();
     initCoinLogTab();
+    loadAvailableCodes();
   } catch (err) {
     console.error(err);
     alert(`Something went wrong deleting ${playerName}. Try again.`);
@@ -1457,6 +1497,70 @@ $("edit-name-form").addEventListener("submit", async (e) => {
 });
 
 // =========================================================================
+// ---------------- Edit player code ----------------
+// =========================================================================
+
+let editingCodePlayerId = null;
+
+function openEditCodeCard(playerId, currentCode) {
+  editingCodePlayerId = playerId;
+  hideMsg($("edit-code-error"));
+  $("ec-code").value = currentCode === "—" ? "" : currentCode;
+  const card = $("edit-code-card");
+  card.classList.remove("hidden");
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  $("ec-code").focus();
+}
+
+$("edit-code-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errEl = $("edit-code-error");
+  hideMsg(errEl);
+
+  const raw = $("ec-code").value.trim();
+  const num = parseInt(raw.replace(/\D/g, ""), 10);
+  if (!num || num < 1 || !editingCodePlayerId) {
+    showMsg(errEl, "Enter a valid code number.");
+    return;
+  }
+  const newCode = playerCodeFromSeq(num);
+
+  const btn = $("ec-btn");
+  btn.disabled = true;
+  btn.textContent = "Saving...";
+
+  try {
+    const counterSnap = await getDoc(COUNTERS_REF);
+    const maxSeq = counterSnap.exists() ? (counterSnap.data().playerSeq || 0) : 0;
+    if (num > maxSeq) {
+      showMsg(errEl, `That code hasn't been issued yet — only codes up to KFS-${String(maxSeq).padStart(3, "0")} can be reused.`);
+      return;
+    }
+
+    const dupSnap = await getDocs(query(collection(db, "players"), where("playerCode", "==", newCode)));
+    const conflict = dupSnap.docs.find((d) => d.id !== editingCodePlayerId);
+    if (conflict) {
+      showMsg(errEl, `${newCode} is already in use by another player.`);
+      return;
+    }
+
+    await updateDoc(doc(db, "players", editingCodePlayerId), { playerCode: newCode });
+    $("edit-code-card").classList.add("hidden");
+    editingCodePlayerId = null;
+    loadPlayers();
+    loadMatchFormOptions();
+    initCoinLogTab();
+    loadAvailableCodes();
+  } catch (err) {
+    console.error(err);
+    showMsg(errEl, "Something went wrong saving the code. Try again.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Save code";
+  }
+});
+
+// =========================================================================
 // ---------------- Duplicate-name check (used before approving a request) ----------------
 // =========================================================================
 
@@ -1483,5 +1587,60 @@ async function findSimilarNamedPlayers(name) {
   } catch (err) {
     console.error(err);
     return [];
+  }
+}
+
+// =========================================================================
+// ---------------- Available codes (gaps left by deleted players) ----------------
+// The sequence itself never rewinds or reuses numbers automatically — this
+// is purely a reference list so gaps left by deletions aren't invisible.
+// =========================================================================
+
+async function loadAvailableCodes() {
+  const loadingEl = $("available-codes-loading");
+  const listEl = $("available-codes-list");
+  const emptyEl = $("available-codes-empty");
+  loadingEl.classList.remove("hidden");
+  listEl.classList.add("hidden");
+  emptyEl.classList.add("hidden");
+
+  try {
+    const [counterSnap, playersSnap] = await Promise.all([
+      getDoc(COUNTERS_REF),
+      getDocs(collection(db, "players"))
+    ]);
+
+    const maxSeq = counterSnap.exists() ? (counterSnap.data().playerSeq || 0) : 0;
+    const usedSeqs = new Set();
+    playersSnap.forEach((d) => {
+      const num = parseInt((d.data().playerCode || "").replace(/\D/g, ""), 10);
+      if (num) usedSeqs.add(num);
+    });
+
+    const gaps = [];
+    for (let n = 1; n <= maxSeq; n++) {
+      if (!usedSeqs.has(n)) gaps.push(n);
+    }
+
+    loadingEl.classList.add("hidden");
+
+    if (gaps.length === 0) {
+      emptyEl.classList.remove("hidden");
+      return;
+    }
+
+    listEl.innerHTML = gaps.map((n) => `<button type="button" class="badge-pill silver" data-fill-code="${playerCodeFromSeq(n)}" style="margin:3px; display:inline-block; cursor:pointer; border:none;">${playerCodeFromSeq(n)}</button>`).join("");
+    listEl.classList.remove("hidden");
+
+    listEl.querySelectorAll("[data-fill-code]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        $("ap-code").value = btn.dataset.fillCode;
+        $("ap-name").scrollIntoView({ behavior: "smooth", block: "center" });
+        $("ap-name").focus();
+      });
+    });
+  } catch (err) {
+    console.error(err);
+    loadingEl.textContent = "Couldn't load available codes.";
   }
 }

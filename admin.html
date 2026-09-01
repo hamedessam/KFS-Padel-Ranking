@@ -66,6 +66,11 @@
               <input type="tel" id="ap-phone" required placeholder="01xxxxxxxxx">
             </div>
             <div class="field">
+              <label for="ap-code">Custom code (optional)</label>
+              <input type="text" id="ap-code" placeholder="Leave empty for next in sequence">
+              <div class="hint">Only fill this in to reuse a freed code (see "Available codes" below) — it'll be rejected if already in use, or if it hasn't been issued yet.</div>
+            </div>
+            <div class="field">
               <label for="ap-points">Starting points</label>
               <input type="number" id="ap-points" value="1000" min="500" max="2000" step="10">
               <div class="hint">Everyone starts at 1000 (lands in Silver 3). Only raise this if you already know this player is genuinely strong — the tier badge is always calculated from points, never chosen manually.</div>
@@ -193,6 +198,16 @@
           </table>
         </div>
 
+        <div class="panel" style="margin-top:16px;">
+          <h1>Available codes</h1>
+          <p class="sub">Codes freed up by deleted accounts. New players keep getting the next code in sequence as usual — this is just for your reference, in case you want to hand one of these out on purpose.</p>
+          <div id="available-codes-loading" style="font-size:13px; color:var(--text-soft);">
+            <span class="spinner"></span> Loading...
+          </div>
+          <div class="hidden" id="available-codes-list"></div>
+          <div class="hint hidden" id="available-codes-empty">No available codes — every code issued so far is currently in use.</div>
+        </div>
+
         <div class="panel hidden" id="reset-credentials-card" style="margin-top:16px;">
           <h1>New password</h1>
           <p class="sub">Send this to the player — the old password stops working now.</p>
@@ -217,6 +232,19 @@
               <input type="text" id="en-name" required>
             </div>
             <button type="submit" class="btn btn-primary" id="en-btn">Save name</button>
+          </form>
+        </div>
+
+        <div class="panel hidden" id="edit-code-card" style="margin-top:16px;">
+          <h1>Edit player code</h1>
+          <p class="sub">Changes this player's code. Their old code becomes available for reuse right away. Heads up: this can also change their Founding Member badge, since that's automatically based on the code number (≤20) — nothing else about their points, matches, or history changes.</p>
+          <div class="msg error" id="edit-code-error"></div>
+          <form id="edit-code-form">
+            <div class="field">
+              <label for="ec-code">New code</label>
+              <input type="text" id="ec-code" required placeholder="e.g. KFS-002 or just 2">
+            </div>
+            <button type="submit" class="btn btn-primary" id="ec-btn">Save code</button>
           </form>
         </div>
 
