@@ -1214,6 +1214,13 @@ $("request-account-link").addEventListener("click", () => {
   $("request-account-wrap").classList.toggle("hidden");
 });
 
+// Accepts either 11 digits on their own, or 11 digits prefixed with +2
+// (how the country code is often typed alongside a local 0-leading number).
+function isValidRequestPhone(phone) {
+  const cleaned = phone.replace(/\s+/g, "");
+  return /^(\+2)?\d{11}$/.test(cleaned);
+}
+
 $("request-account-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const errEl = $("request-error");
@@ -1224,6 +1231,11 @@ $("request-account-form").addEventListener("submit", async (e) => {
   const name = $("ra-name").value.trim();
   const phone = $("ra-phone").value.trim();
   if (!name || !phone) return;
+
+  if (!isValidRequestPhone(phone)) {
+    showMsg(errEl, t("request_phone_invalid"));
+    return;
+  }
 
   const btn = $("ra-btn");
   btn.disabled = true;

@@ -1295,7 +1295,7 @@ async function initJoinRequestsTab() {
   $("jr-history-empty").classList.add("hidden");
 
   try {
-    const snap = await getDocs(query(collection(db, "joinRequests"), orderBy("createdAt", "desc")));
+    const snap = await getDocs(query(collection(db, "joinRequests"), orderBy("createdAt", "asc")));
     joinRequestsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     renderPendingRequests();
     renderRequestsHistory();
@@ -1321,7 +1321,7 @@ function renderPendingRequests() {
   }
 
   listEl.innerHTML = pending.map((r) => {
-    const date = r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—";
+    const date = r.createdAt?.toDate ? r.createdAt.toDate().toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "—";
     return `
       <div style="background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px 16px; margin-bottom:10px;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
@@ -1363,7 +1363,7 @@ function renderRequestsHistory() {
 
   tbody.innerHTML = "";
   joinRequestsCache.forEach((r) => {
-    const date = r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
+    const date = r.createdAt?.toDate ? r.createdAt.toDate().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "—";
     const status = r.status || "pending";
     const statusClass = status === "approved" ? "gold" : status === "rejected" ? "bronze" : "silver";
     const tr = document.createElement("tr");
