@@ -1,4 +1,7 @@
-import { db, collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp } from "./firebase-config.js";
+import {
+  db, collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp,
+  auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential
+} from "./firebase-config.js";
 import { registerPlayer, unregisterPlayer, addPartner, fetchTeams, findTeamOf, requestToJoinTeam, cancelJoinRequest, acceptJoinRequest, declineJoinRequest, getOpenTeams, myPendingRequestTeams, myIncomingRequests } from "./teams.js";
 import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFoundingMember } from "./utils.js";
 import { t, getLang, setLang, applyStaticTranslations } from "./i18n.js";
@@ -14,6 +17,15 @@ const settingsBackBtn = $("settings-back-btn");
 
 let currentPlayer = null; // { id, ...data }
 let lastTabBeforeSettings = "home";
+
+// ---------------- Firebase Auth email mapping ----------------
+// Firebase Auth needs a real-looking email even though there isn't one.
+// Built from the player's Firestore document ID (never changes) rather than
+// their playerCode (which the admin can now edit) — so editing someone's
+// code later can never orphan their login.
+function authEmailForPlayer(playerId) {
+  return `${playerId.toLowerCase()}@padelx.local`;
+}
 
 // ---------------- session ----------------
 // Alongside the player ID, we also remember the passwordHash that was valid
@@ -1277,11 +1289,30 @@ $("login-form").addEventListener("submit", async (e) => {
       showMsg(errEl, t("login_err_no_code"));
       return;
     }
-    const computedHash = await hashPassword(pass, player.passwordSalt || "");
-    if (computedHash !== player.passwordHash) {
-      showMsg(errEl, t("login_err_wrong_pass"));
-      return;
+
+    const fakeEmail = authEmailForPlayer(player.id);
+
+    if (player.authUid) {
+      // Already migrated to Firebase Auth — sign in for real.
+      try {
+        await signInWithEmailAndPassword(auth, fakeEmail, pass);
+      } catch (authErr) {
+        showMsg(errEl, t("login_err_wrong_pass"));
+        return;
+      }
+    } else {
+      // Not migrated yet — verify the legacy way, then silently create their
+      // real Firebase Auth account using the same password they just typed.
+      const computedHash = await hashPassword(pass, player.passwordSalt || "");
+      if (computedHash !== player.passwordHash) {
+        showMsg(errEl, t("login_err_wrong_pass"));
+        return;
+      }
+      const cred = await createUserWithEmailAndPassword(auth, fakeEmail, pass);
+      await updateDoc(doc(db, "players", player.id), { authUid: cred.user.uid });
+      player.authUid = cred.user.uid;
     }
+
     saveSession(player.id, player.passwordHash);
     renderProfile(player);
   } catch (err) {
@@ -1321,11 +1352,32 @@ $("change-pass-form").addEventListener("submit", async (e) => {
   const previousExpectedHash = expectedPasswordHash;
 
   try {
-    const computedCurrentHash = await hashPassword(current, currentPlayer.passwordSalt || "");
-    if (computedCurrentHash !== currentPlayer.passwordHash) {
-      showMsg(errEl, t("pass_err_wrong_current"));
-      return;
+    const fakeEmail = authEmailForPlayer(currentPlayer.id);
+
+    if (currentPlayer.authUid) {
+      // Already migrated — reauthenticate with the current password (this
+      // IS the real password check now), then update the real Auth password.
+      try {
+        const cred = EmailAuthProvider.credential(fakeEmail, current);
+        await reauthenticateWithCredential(auth.currentUser, cred);
+      } catch (reauthErr) {
+        showMsg(errEl, t("pass_err_wrong_current"));
+        return;
+      }
+      await updatePassword(auth.currentUser, next);
+    } else {
+      // Not migrated yet — verify the legacy way, then create their real
+      // Firebase Auth account using the NEW password they're setting now.
+      const computedCurrentHash = await hashPassword(current, currentPlayer.passwordSalt || "");
+      if (computedCurrentHash !== currentPlayer.passwordHash) {
+        showMsg(errEl, t("pass_err_wrong_current"));
+        return;
+      }
+      const cred = await createUserWithEmailAndPassword(auth, fakeEmail, next);
+      await updateDoc(doc(db, "players", currentPlayer.id), { authUid: cred.user.uid });
+      currentPlayer.authUid = cred.user.uid;
     }
+
     const newSalt = randomSalt();
     const newHash = await hashPassword(next, newSalt);
     // Update what our own session watch expects BEFORE writing — the
@@ -1498,8 +1550,9 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 // ---------------- logout ----------------
-$("logout-btn").addEventListener("click", () => {
+$("logout-btn").addEventListener("click", async () => {
   stopSessionWatch();
+  try { await signOut(auth); } catch (err) { console.error(err); }
   clearSession();
   leaderboardCache = null;
   tournamentsCache = null;
@@ -1526,34 +1579,53 @@ function tierLabelOrHidden(meta) {
 // ---------------- bootstrap ----------------
 applyStaticTranslations();
 
-(async function init() {
-  await loadAppSettings();
-  const savedId = getSession();
-  if (!savedId) return;
-  try {
-    const player = await loadPlayerById(savedId);
-    if (!player) {
-      clearSession();
+loadAppSettings().then(() => {
+  onAuthStateChanged(auth, async (user) => {
+    if (user && user.email) {
+      // A real Firebase Auth session already exists — this player is
+      // fully migrated. Firebase Auth handles "remember me" on its own
+      // from here on; decode their player ID straight from the fake email.
+      const playerId = user.email.split("@")[0];
+      try {
+        const player = await loadPlayerById(playerId);
+        if (player) renderProfile(player);
+      } catch (err) {
+        console.error(err);
+      }
       return;
     }
-    const savedHash = getSessionPasswordHash();
-    if (!savedHash) {
-      // Session predates this security check — trust it now and start
-      // tracking from this point forward (avoids logging out everyone
-      // who was already signed in before this feature shipped).
-      saveSession(player.id, player.passwordHash);
-    } else if (player.passwordHash !== savedHash) {
-      // Password was changed (or reset by the admin) while this device
-      // was closed — refuse to silently re-authenticate.
-      clearSession();
-      showMsg($("login-error"), t("forced_logout_password_changed"));
-      return;
+
+    // No Firebase Auth session — fall back to the legacy localStorage
+    // session, for players who haven't logged in since this update and
+    // so haven't been migrated to Firebase Auth yet. They'll be fully
+    // migrated automatically the next time they use the login form.
+    const savedId = getSession();
+    if (!savedId) return;
+    try {
+      const player = await loadPlayerById(savedId);
+      if (!player) {
+        clearSession();
+        return;
+      }
+      const savedHash = getSessionPasswordHash();
+      if (!savedHash) {
+        // Session predates this security check — trust it now and start
+        // tracking from this point forward (avoids logging out everyone
+        // who was already signed in before this feature shipped).
+        saveSession(player.id, player.passwordHash);
+      } else if (player.passwordHash !== savedHash) {
+        // Password was changed (or reset by the admin) while this device
+        // was closed — refuse to silently re-authenticate.
+        clearSession();
+        showMsg($("login-error"), t("forced_logout_password_changed"));
+        return;
+      }
+      renderProfile(player);
+    } catch (err) {
+      console.error(err);
     }
-    renderProfile(player);
-  } catch (err) {
-    console.error(err);
-  }
-})();
+  });
+});
 
 // ---------------- register service worker ----------------
 if ("serviceWorker" in navigator) {

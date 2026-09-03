@@ -7,6 +7,11 @@ import {
   runTransaction, writeBatch, increment, onSnapshot,
   serverTimestamp, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import {
+  getAuth,
+  signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
+  onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCnat9jgc77PMF32bvW1dyUFN2xgzgX0DQ",
@@ -19,8 +24,10 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+export const auth = getAuth(app);
 
 export {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc,
-  query, where, limit, orderBy, arrayUnion, arrayRemove, runTransaction, writeBatch, increment, onSnapshot, serverTimestamp, Timestamp
+  query, where, limit, orderBy, arrayUnion, arrayRemove, runTransaction, writeBatch, increment, onSnapshot, serverTimestamp, Timestamp,
+  signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential
 };
