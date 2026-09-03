@@ -80,6 +80,7 @@ function forceLogout(messageKey) {
   currentPlayer = null;
   leaderboardCache = null;
   tournamentsCache = null;
+  signOut(auth).catch((err) => console.error(err));
   showLogin();
   showMsg($("login-error"), t(messageKey));
 }
@@ -1552,8 +1553,8 @@ function roundRect(ctx, x, y, w, h, r) {
 // ---------------- logout ----------------
 $("logout-btn").addEventListener("click", async () => {
   stopSessionWatch();
-  try { await signOut(auth); } catch (err) { console.error(err); }
   clearSession();
+  try { await signOut(auth); } catch (err) { console.error(err); }
   leaderboardCache = null;
   tournamentsCache = null;
   showLogin();
