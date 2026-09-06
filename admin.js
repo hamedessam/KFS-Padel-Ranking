@@ -1,6 +1,7 @@
 import {
   db, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
-  query, orderBy, where, runTransaction, writeBatch, increment, arrayUnion, serverTimestamp
+  query, orderBy, where, runTransaction, writeBatch, increment, arrayUnion, serverTimestamp,
+  auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged
 } from "./firebase-config.js";
 import { hashPassword, randomSalt, generatePassword, playerCodeFromSeq, tierMeta, tierFromPoints, isFoundingMember, computeMatchPointChanges } from "./utils.js";
 import { fetchTeams, assignToSlot, unregisterPlayer, setTeamGroup } from "./teams.js";
@@ -35,11 +36,27 @@ async function initGate() {
     isSetupMode = true;
     gateTitle.textContent = "First time? Set the admin password";
     gateSub.textContent = "You'll use this password every time you open this page — keep it safe.";
+    $("gate-email-field").classList.remove("hidden");
+    return;
   }
 
-  if (localStorage.getItem(ADMIN_SESSION_KEY) === "ok" && !isSetupMode) {
-    enterAdmin();
+  const data = snap.data();
+  if (!data.authUid) {
+    // Not migrated to real Firebase Auth yet — needs the email once.
+    $("gate-email-field").classList.remove("hidden");
   }
+
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      enterAdmin();
+      return;
+    }
+    // Fallback for the transition period only: already signed in via the
+    // old localStorage flag before this update, and hasn't migrated yet.
+    if (!data.authUid && localStorage.getItem(ADMIN_SESSION_KEY) === "ok") {
+      enterAdmin();
+    }
+  });
 }
 
 gateForm.addEventListener("submit", async (e) => {
@@ -47,6 +64,7 @@ gateForm.addEventListener("submit", async (e) => {
   const errEl = $("gate-error");
   hideMsg(errEl);
   const pass = $("gate-pass").value.trim();
+  const email = $("gate-email").value.trim();
 
   try {
     if (isSetupMode) {
@@ -54,22 +72,50 @@ gateForm.addEventListener("submit", async (e) => {
         showMsg(errEl, "Password must be at least 6 characters.");
         return;
       }
+      if (!email) {
+        showMsg(errEl, "Enter your email.");
+        return;
+      }
       const salt = randomSalt();
       const hash = await hashPassword(pass, salt);
-      await setDoc(ADMIN_CONFIG_REF, { passwordSalt: salt, passwordHash: hash, createdAt: serverTimestamp() });
-      localStorage.setItem(ADMIN_SESSION_KEY, "ok");
+      const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      await setDoc(ADMIN_CONFIG_REF, {
+        passwordSalt: salt, passwordHash: hash,
+        authUid: cred.user.uid, email,
+        createdAt: serverTimestamp()
+      });
       enterAdmin();
       return;
     }
 
     const snap = await getDoc(ADMIN_CONFIG_REF);
     const data = snap.data();
-    const computed = await hashPassword(pass, data.passwordSalt);
-    if (computed !== data.passwordHash) {
+
+    if (!data.authUid) {
+      // Not migrated yet — verify the legacy way, then create the real
+      // Firebase Auth account now using the email just entered.
+      const computed = await hashPassword(pass, data.passwordSalt);
+      if (computed !== data.passwordHash) {
+        showMsg(errEl, "Wrong password.");
+        return;
+      }
+      if (!email) {
+        showMsg(errEl, "Enter your email to finish setting up secure sign-in.");
+        return;
+      }
+      const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      await setDoc(ADMIN_CONFIG_REF, { authUid: cred.user.uid, email }, { merge: true });
+      enterAdmin();
+      return;
+    }
+
+    // Already migrated — sign in for real.
+    try {
+      await signInWithEmailAndPassword(auth, data.email, pass);
+    } catch (authErr) {
       showMsg(errEl, "Wrong password.");
       return;
     }
-    localStorage.setItem(ADMIN_SESSION_KEY, "ok");
     enterAdmin();
   } catch (err) {
     console.error(err);
@@ -104,8 +150,9 @@ document.querySelectorAll(".admin-tab-btn").forEach((btn) => {
   });
 });
 
-$("admin-logout").addEventListener("click", () => {
+$("admin-logout").addEventListener("click", async () => {
   localStorage.removeItem(ADMIN_SESSION_KEY);
+  try { await signOut(auth); } catch (err) { console.error(err); }
   location.reload();
 });
 

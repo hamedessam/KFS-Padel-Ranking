@@ -27,6 +27,11 @@
       <p class="sub">This page is for the admin only — enter your password to continue.</p>
       <div class="msg error" id="gate-error"></div>
       <form id="gate-form">
+        <div class="field hidden" id="gate-email-field">
+          <label for="gate-email">Email</label>
+          <input type="email" id="gate-email" autocomplete="username">
+          <div class="hint">First time only — used to set up secure sign-in. You won't need to enter this again.</div>
+        </div>
         <div class="field">
           <label for="gate-pass">Admin password</label>
           <input type="password" id="gate-pass" required autocomplete="current-password">
