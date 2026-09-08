@@ -36,6 +36,43 @@
       <h1 data-i18n="login_title">Sign in to your profile</h1>
       <p class="sub" data-i18n="login_sub">Use the code and password your admin gave you.</p>
 
+      <div class="foot-link" style="text-align:start; margin:0 0 18px;">
+        <button class="link-btn" id="about-app-link" type="button" style="font-size:13px;" data-i18n="about_app_link">What is Padel X? 🤔</button>
+      </div>
+
+      <div class="hidden" id="about-app-wrap" style="margin-bottom:20px;">
+        <p style="font-size:13px; line-height:1.7; color:var(--text-soft); margin-bottom:14px;" data-i18n="about_app_intro">Padel X is our padel community's app — real rankings from your actual match results, easy tournament sign-up, and coins you earn just by playing.</p>
+
+        <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:18px;">
+          <div style="display:flex; align-items:flex-start; gap:8px; font-size:13px;">
+            <span>📊</span><span data-i18n="about_app_benefit_1">Your rank is calculated automatically from real match results — no opinions, just numbers.</span>
+          </div>
+          <div style="display:flex; align-items:flex-start; gap:8px; font-size:13px;">
+            <span>🏆</span><span data-i18n="about_app_benefit_2">Register for tournaments and build your team right from the app — no messy WhatsApp threads.</span>
+          </div>
+          <div style="display:flex; align-items:flex-start; gap:8px; font-size:13px;">
+            <span>🪙</span><span data-i18n="about_app_benefit_3">Every match and tournament earns you coins — spend them in the Marketplace soon.</span>
+          </div>
+        </div>
+
+        <div style="background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-sm); padding:22px 16px; text-align:center; min-height:150px;">
+          <div class="coins-story-frame" data-frame="0">
+            <div style="font-size:38px; margin-bottom:10px;">🎾</div>
+            <div style="font-weight:700; font-size:14px;" data-i18n="story_frame_1">You join a tournament</div>
+          </div>
+          <div class="coins-story-frame hidden" data-frame="1">
+            <div style="font-size:38px; margin-bottom:10px;">🪙</div>
+            <div style="font-weight:700; font-size:14px; color:var(--ball);" data-i18n="story_frame_2">You earn coins</div>
+          </div>
+          <div class="coins-story-frame hidden" data-frame="2">
+            <div style="font-size:38px; margin-bottom:10px;">🛍️</div>
+            <div style="font-weight:700; font-size:14px;" data-i18n="story_frame_3">You spend them in the Marketplace</div>
+            <div style="font-size:11px; color:var(--text-soft); margin-top:4px;" data-i18n="story_frame_3_sub">Coming soon</div>
+          </div>
+          <div style="display:flex; justify-content:center; gap:6px; margin-top:16px;" id="coins-story-dots"></div>
+        </div>
+      </div>
+
       <div class="msg error" id="login-error"></div>
 
       <form id="login-form">

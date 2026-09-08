@@ -209,6 +209,16 @@ body {
 }
 .field .hint { font-size: 12px; color: var(--text-soft); margin-top: 6px; }
 
+.story-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--border);
+  transition: background .2s ease;
+  cursor: pointer;
+}
+.story-dot.active { background: var(--ball); }
+.coins-story-frame { animation: fadeIn 0.35s ease; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
 .code-tag {
   display: inline-flex;
   align-items: center;
