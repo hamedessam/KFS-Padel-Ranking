@@ -1272,6 +1272,46 @@ $("request-account-form").addEventListener("submit", async (e) => {
   }
 });
 
+// ---------------- about-app section (login screen) ----------------
+const storyFrames = document.querySelectorAll(".coins-story-frame");
+const storyDotsWrap = $("coins-story-dots");
+let storyIndex = 0;
+let storyInterval = null;
+
+if (storyFrames.length > 0 && storyDotsWrap) {
+  storyDotsWrap.innerHTML = Array.from(storyFrames).map((_, i) =>
+    `<span class="story-dot${i === 0 ? " active" : ""}" data-story-dot="${i}"></span>`
+  ).join("");
+
+  var showStoryFrame = function (i) {
+    storyIndex = i;
+    storyFrames.forEach((f, idx) => f.classList.toggle("hidden", idx !== i));
+    storyDotsWrap.querySelectorAll(".story-dot").forEach((d, idx) => d.classList.toggle("active", idx === i));
+  };
+  var startStoryAutoplay = function () {
+    stopStoryAutoplay();
+    storyInterval = setInterval(() => showStoryFrame((storyIndex + 1) % storyFrames.length), 2800);
+  };
+  var stopStoryAutoplay = function () {
+    if (storyInterval) clearInterval(storyInterval);
+  };
+
+  storyDotsWrap.querySelectorAll("[data-story-dot]").forEach((dot) => {
+    dot.addEventListener("click", () => {
+      showStoryFrame(parseInt(dot.dataset.storyDot, 10));
+      startStoryAutoplay();
+    });
+  });
+}
+
+$("about-app-link").addEventListener("click", () => {
+  const wrap = $("about-app-wrap");
+  const wasHidden = wrap.classList.contains("hidden");
+  wrap.classList.toggle("hidden");
+  if (wasHidden) startStoryAutoplay();
+  else stopStoryAutoplay();
+});
+
 // ---------------- login ----------------
 $("login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -1315,7 +1355,9 @@ $("login-form").addEventListener("submit", async (e) => {
     }
 
     saveSession(player.id, player.passwordHash);
-    renderProfile(player);
+    // Rendering happens automatically via the onAuthStateChanged watcher in
+    // bootstrap once Firebase confirms the sign-in — calling renderProfile
+    // here too would fetch and load everything twice on every login.
   } catch (err) {
     console.error(err);
     showMsg(errEl, t("login_err_generic"));
