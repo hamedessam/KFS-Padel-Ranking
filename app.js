@@ -1308,6 +1308,7 @@ $("about-app-link").addEventListener("click", () => {
   const wrap = $("about-app-wrap");
   const wasHidden = wrap.classList.contains("hidden");
   wrap.classList.toggle("hidden");
+  $("about-app-chevron").style.transform = wasHidden ? "rotate(90deg)" : "rotate(0deg)";
   if (wasHidden) startStoryAutoplay();
   else stopStoryAutoplay();
 });
@@ -1624,14 +1625,17 @@ applyStaticTranslations();
 
 loadAppSettings().then(() => {
   onAuthStateChanged(auth, async (user) => {
-    if (user && user.email) {
+    if (user) {
       // A real Firebase Auth session already exists — this player is
-      // fully migrated. Firebase Auth handles "remember me" on its own
-      // from here on; decode their player ID straight from the fake email.
-      const playerId = user.email.split("@")[0];
+      // fully migrated. Look them up by their stored authUid rather than
+      // decoding the fake email (Firebase always lowercases emails, which
+      // would corrupt a mixed-case Firestore document ID).
       try {
-        const player = await loadPlayerById(playerId);
-        if (player) renderProfile(player);
+        const snap = await getDocs(query(collection(db, "players"), where("authUid", "==", user.uid), limit(1)));
+        if (!snap.empty) {
+          const d = snap.docs[0];
+          renderProfile({ id: d.id, ...d.data() });
+        }
       } catch (err) {
         console.error(err);
       }
