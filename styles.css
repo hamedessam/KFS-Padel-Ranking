@@ -117,13 +117,6 @@ body {
   text-overflow: ellipsis;
   min-width: 0;
 }
-
-.login-wordmark {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 22px;
-}
-.login-wordmark .wordmark { font-size: 40px; }
 .icon-btn {
   width: 34px; height: 34px;
   display: flex; align-items: center; justify-content: center;
