@@ -109,7 +109,7 @@ body {
   direction: ltr;
 }
 .wordmark-primary { color: var(--text); }
-.wordmark-accent { color: var(--ball); }
+.wordmark-accent { color: var(--ball); margin-left: 0.09em; }
 
 .topbar .wordmark {
   font-size: 15px;
