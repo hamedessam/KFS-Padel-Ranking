@@ -23,8 +23,9 @@ let lastTabBeforeSettings = "home";
 // Built from the player's Firestore document ID (never changes) rather than
 // their playerCode (which the admin can now edit) — so editing someone's
 // code later can never orphan their login.
-function authEmailForPlayer(playerId) {
-  return `${playerId.toLowerCase()}@padelx.local`;
+function authEmailForPlayer(playerId, gen) {
+  const suffix = gen ? `-g${gen}` : "";
+  return `${playerId.toLowerCase()}${suffix}@padelx.local`;
 }
 
 // ---------------- session ----------------
@@ -1335,7 +1336,7 @@ $("login-form").addEventListener("submit", async (e) => {
       return;
     }
 
-    const fakeEmail = authEmailForPlayer(player.id);
+    const fakeEmail = authEmailForPlayer(player.id, player.authEmailGen);
 
     if (player.authUid) {
       // Already migrated to Firebase Auth — sign in for real.
@@ -1399,7 +1400,7 @@ $("change-pass-form").addEventListener("submit", async (e) => {
   const previousExpectedHash = expectedPasswordHash;
 
   try {
-    const fakeEmail = authEmailForPlayer(currentPlayer.id);
+    const fakeEmail = authEmailForPlayer(currentPlayer.id, currentPlayer.authEmailGen);
 
     if (currentPlayer.authUid) {
       // Already migrated — reauthenticate with the current password (this
