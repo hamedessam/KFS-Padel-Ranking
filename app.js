@@ -131,6 +131,7 @@ function renderProfile(player) {
   viewApp.classList.remove("hidden");
   tabbar.classList.remove("hidden");
   settingsBtn.classList.remove("hidden");
+  $("login-lang-btn").classList.add("hidden");
   switchTab("home");
   loadHome();
 }
@@ -161,6 +162,7 @@ function showLogin() {
   settingsBtn.classList.add("hidden");
   settingsBackBtn.classList.add("hidden");
   viewLogin.classList.remove("hidden");
+  $("login-lang-btn").classList.remove("hidden");
 }
 
 // ---------------- settings screen ----------------
@@ -191,6 +193,7 @@ function updateLangButtons() {
 
 $("lang-ar-btn").addEventListener("click", () => switchLanguage("ar"));
 $("lang-en-btn").addEventListener("click", () => switchLanguage("en"));
+$("login-lang-btn").addEventListener("click", () => switchLanguage(getLang() === "ar" ? "en" : "ar"));
 
 function switchLanguage(lang) {
   if (getLang() === lang) return;
@@ -1623,6 +1626,21 @@ function tierLabelOrHidden(meta) {
 // ---------------- bootstrap ----------------
 applyStaticTranslations();
 
+// A brand-new player's first-ever login writes their Firestore authUid
+// slightly AFTER the Firebase Auth sign-in itself completes (see the login
+// handler above), so this listener can fire before that write has landed.
+// Retry a few times with a short delay instead of giving up on the first
+// empty result — this is what previously required a manual page refresh
+// to work around.
+async function findPlayerByAuthUidWithRetry(uid, attempts = 6, delayMs = 350) {
+  for (let i = 0; i < attempts; i++) {
+    const snap = await getDocs(query(collection(db, "players"), where("authUid", "==", uid), limit(1)));
+    if (!snap.empty) return snap.docs[0];
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  return null;
+}
+
 loadAppSettings().then(() => {
   onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -1631,9 +1649,8 @@ loadAppSettings().then(() => {
       // decoding the fake email (Firebase always lowercases emails, which
       // would corrupt a mixed-case Firestore document ID).
       try {
-        const snap = await getDocs(query(collection(db, "players"), where("authUid", "==", user.uid), limit(1)));
-        if (!snap.empty) {
-          const d = snap.docs[0];
+        const d = await findPlayerByAuthUidWithRetry(user.uid);
+        if (d) {
           renderProfile({ id: d.id, ...d.data() });
         }
       } catch (err) {

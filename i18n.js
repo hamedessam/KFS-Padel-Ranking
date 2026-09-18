@@ -311,7 +311,7 @@ const translations = {
 };
 
 export function getLang() {
-  return localStorage.getItem(LANG_KEY) || "ar";
+  return localStorage.getItem(LANG_KEY) || "en";
 }
 
 export function setLang(lang) {
