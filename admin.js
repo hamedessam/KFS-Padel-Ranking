@@ -364,9 +364,18 @@ async function resetPlayerPassword(playerId, playerName, btn) {
     const newPassword = generatePassword(8);
     const salt = randomSalt();
     const passwordHash = await hashPassword(newPassword, salt);
+    // Also clear authUid: if this player had already migrated to real
+    // Firebase Auth, their actual sign-in password lives there, not in
+    // passwordHash/passwordSalt — updating only the legacy fields would
+    // silently leave their real login password unchanged (a real bug that
+    // locked at least one player out). Clearing authUid forces their next
+    // login through the legacy-verify path, which re-creates a fresh
+    // Firebase Auth account using this new password, keeping everything
+    // in sync. The old, now-orphaned Auth account is harmless and unused.
     await updateDoc(doc(db, "players", playerId), {
       passwordSalt: salt,
-      passwordHash
+      passwordHash,
+      authUid: null
     });
 
     $("reset-name").textContent = playerName;
