@@ -81,7 +81,7 @@ body {
   color: var(--text);
 }
 .topbar .back-btn { grid-column: 1; }
-.topbar .login-lang-btn { grid-column: 1; }
+.topbar .icon-btn.login-lang-btn { grid-column: 1; }
 .topbar .topbar-center { grid-column: 2; }
 .topbar .icon-btn { grid-column: 3; }
 .topbar-center {
