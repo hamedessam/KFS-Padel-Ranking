@@ -734,32 +734,15 @@ async function resolveRegisterActions(tournamentId) {
       return;
     }
 
-    // No existing interaction yet (not on waiting list, no pending request) —
-    // hold off on showing Register/Join until the player has checked
-    // "View registered players" first, per explicit request: view before choosing.
-    el.innerHTML = "";
-    el.dataset.pendingView = "true";
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-// Reveals the Register/Join buttons after the player has viewed the team list.
-// No-op if this tournament's actions were already resolved to something else
-// (registered, past deadline, pending request, or waiting list — none of
-// those should ever be gated behind viewing the list).
-async function revealRegisterJoinOptions(tournamentId) {
-  const el = $(`actions-${tournamentId}`);
-  if (!el || el.dataset.pendingView !== "true") return;
-  try {
-    const teams = await fetchTeams(tournamentId);
+    // Show Register/Join immediately — previously these were hidden until
+    // the player tapped "View registered players" first, but that made it
+    // unclear people could even register at all. Show them right away now.
     el.innerHTML = `
       <button class="btn btn-primary btn-sm" data-register type="button">${t("register_own_team_btn")}</button>
       <button class="btn btn-ghost btn-sm" data-join type="button">${t("join_team_btn")}</button>
     `;
     el.querySelector("[data-register]").addEventListener("click", (e) => registerForTournament(tournamentId, e.target));
     el.querySelector("[data-join]").addEventListener("click", () => toggleJoinTeamPicker(tournamentId, teams));
-    el.dataset.pendingView = "false";
   } catch (err) {
     console.error(err);
   }
@@ -916,7 +899,6 @@ async function toggleTeamGridView(tournamentId) {
   }
   container.classList.remove("hidden");
   await renderTeamGrid(tournamentId, container);
-  revealRegisterJoinOptions(tournamentId);
 }
 
 async function renderTeamGrid(tournamentId, container) {
