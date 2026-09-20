@@ -198,11 +198,19 @@
 
       <!-- ---- tab: marketplace ---- -->
       <div class="panel hidden" id="tab-marketplace">
-        <div class="coming-soon">
-          <div class="coming-soon-badge" data-i18n="marketplace_badge">Coming soon</div>
-          <h1 data-i18n="marketplace_title">Marketplace</h1>
-          <p class="sub" data-i18n="marketplace_sub">Soon you'll be able to buy custom codes, padel gear, and book courts directly from here. Stay tuned.</p>
+        <h1 data-i18n="marketplace_title">Marketplace</h1>
+        <p class="sub" data-i18n="marketplace_sub">Soon you'll be able to buy custom codes, padel gear, and book courts directly from here. Stay tuned.</p>
+
+        <div class="my-rank-strip" id="mk-balance-strip">
+          <span data-i18n="current_coins_strip">Your current coin balance</span>
+          <strong id="mk-balance-value">—</strong>
         </div>
+
+        <div id="mk-loading" style="font-size:13px; color:var(--text-soft); margin-top:14px;">
+          <span class="spinner"></span> <span data-i18n="loading">Loading...</span>
+        </div>
+        <div class="hidden" id="mk-list"></div>
+        <div class="tourney-empty hidden" id="mk-empty" data-i18n="market_empty">No items in the store yet.</div>
       </div>
 
       <!-- ---- tab: leaderboard ---- -->

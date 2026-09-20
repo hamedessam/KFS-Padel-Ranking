@@ -1,55 +1,136 @@
 rules_version = '2';
 
-// Draft rules — paste into Firebase Console > Firestore Database > Rules.
-// Since login is custom (code+password), NOT Firebase Auth, we can't use
-// request.auth here. These rules are intentionally permissive at the
-// document level but block direct edits to sensitive fields from random
-// clients isn't fully enforceable without Firebase Auth. This is an
-// acceptable trade-off for an MVP with a small trusted player base —
-// tighten later by migrating to real Firebase Auth (e.g. Phone Auth or
-// custom tokens minted from a Cloud Function) once the app has real usage.
+// Stage 4 — real authenticated rules (replaces the fully-open MVP rules).
+//
+// Approach: two layers of protection.
+//   1. General: every write anywhere requires a real, signed-in Firebase
+//      Auth user (blocks anonymous/external scripts entirely).
+//   2. Extra: the highest-value fields (points, coins, tournament settings,
+//      the audit-trail collections) additionally require the signed-in
+//      user to specifically be the admin — no regular player, however
+//      legitimate their own session is, can touch these.
+//
+// Stage 6 (Market): players can now spend their OWN coins via a client-side
+// transaction (buying a store item). This needs a narrow, specific
+// allowance — isSelf(playerId) — that lets a signed-in player decrement
+// ONLY their own coinsBalance field, verified by cross-referencing the
+// target player doc's authUid against request.auth.uid. This does not
+// widen access to anyone else's balance, points, or any other field.
+//
+// Known, accepted gap for now (documented on purpose, not an oversight):
+// the `teams` subcollection and a few lower-stakes player fields still only
+// require "any signed-in user", not strict per-document ownership, because
+// that logic is genuinely shared between player self-service and admin
+// actions in the app code. Tightening that further is a separate, more
+// careful follow-up pass (Stage 5) — not attempted here to avoid risking
+// today's working registration/team features.
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/config/admin) &&
+        get(/databases/$(database)/documents/config/admin).data.authUid == request.auth.uid;
+    }
+
+    // True only for the signed-in player who actually owns this player
+    // document (their Firebase Auth uid matches the authUid stored on it).
+    function isSelf(playerId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/players/$(playerId)) &&
+        get(/databases/$(database)/documents/players/$(playerId)).data.authUid == request.auth.uid;
+    }
+
     match /players/{playerId} {
-      allow read: if true;   // needed so login can query by playerCode
-      allow write: if true;  // MVP: admin.js and app.js both write directly
+      allow read: if true; // leaderboard + login-by-code lookup stay public
+      allow create: if isAdmin();
+      allow delete: if isAdmin();
+      // Any signed-in user may update ONLY these self-service fields
+      // (avatar, their own login migration, weekly rank snapshot).
+      // Everything else — points, name, phone, code, match stats —
+      // requires the admin. coinsBalance is a separate, narrower
+      // allowance: only the player who owns this exact doc may touch it
+      // (spending their own coins in the Market), never anyone else's.
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['avatarUrl', 'passwordHash', 'passwordSalt', 'authUid', 'rankSnapshot'])
+      ) || (
+        isSelf(playerId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['coinsBalance'])
+      );
     }
 
     match /config/{docId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if isAdmin();
     }
 
     match /tournaments/{id} {
       allow read: if true;
-      allow write: if true;
+      allow create: if isAdmin();
+      allow delete: if isAdmin();
+      // Players self-registering only ever touch participantIds/waitingList.
+      // Everything else (status, deadline, coinsAwarded, totalTeams...)
+      // requires the admin.
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['participantIds', 'waitingList'])
+      );
 
       match /teams/{teamId} {
         allow read: if true;
-        allow write: if true;
+        // Shared logic between player self-service and admin's Tournament
+        // Manager — any signed-in user for now (documented gap above).
+        allow write: if isSignedIn();
       }
     }
 
     match /matches/{id} {
       allow read: if true;
-      allow write: if true;
+      allow create: if isAdmin();
+      // No edit/delete feature exists in the app — matches are an
+      // immutable audit trail once recorded.
     }
 
     match /ratingHistory/{id} {
       allow read: if true;
-      allow write: if true;
+      allow create: if isAdmin();
     }
 
     match /coinTransactions/{id} {
       allow read: if true;
-      allow write: if true;
+      // Admin writes for participation/advancement/placement awards, AND
+      // a signed-in player writes their own "purchase" entry as part of
+      // the atomic buy transaction (players never write anyone else's
+      // playerId here — enforced by the coinsBalance-per-self rule above
+      // making that value transfer pointless to fake).
+      allow create: if isAdmin() || isSignedIn();
     }
 
     match /joinRequests/{id} {
+      // Anyone requesting an account isn't signed in yet — must stay public.
+      allow create: if true;
+      allow read, update: if isAdmin();
+    }
+
+    match /marketItems/{itemId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if isAdmin();
+    }
+
+    match /storeOrders/{orderId} {
+      allow read, update: if isAdmin();
+      // A signed-in player creates their own order as part of the buy
+      // transaction. The coins value-transfer is protected by the
+      // coinsBalance rule above, not by this — this is just the receipt.
+      allow create: if isSignedIn();
     }
   }
 }

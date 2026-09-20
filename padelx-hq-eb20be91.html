@@ -49,6 +49,7 @@
         <button class="admin-tab-btn" data-admin-tab="tournament-manager" type="button">Tournament Manager</button>
         <button class="admin-tab-btn" data-admin-tab="coins" type="button">Coins</button>
         <button class="admin-tab-btn" data-admin-tab="requests" type="button">Join Requests</button>
+        <button class="admin-tab-btn" data-admin-tab="market" type="button">Market</button>
       </div>
 
       <!-- ============ TAB: OVERVIEW ============ -->
@@ -442,6 +443,64 @@
             <tbody id="jr-history-tbody"></tbody>
           </table>
           <div class="hint hidden" id="jr-history-empty">No requests yet.</div>
+        </div>
+
+      </div>
+
+      <!-- ============ TAB: MARKET ============ -->
+      <div class="admin-tab-panel hidden" id="admin-tab-market">
+
+        <div class="panel">
+          <h1>Add a store item</h1>
+          <p class="sub">Appears to every player in the Market tab as soon as it's added.</p>
+          <div class="msg error" id="mi-error"></div>
+          <div class="msg success" id="mi-success"></div>
+          <form id="market-item-form">
+            <div class="field">
+              <label for="mi-name">Item name</label>
+              <input type="text" id="mi-name" required placeholder="Padel X Cap">
+            </div>
+            <div class="field">
+              <label for="mi-desc">Description</label>
+              <input type="text" id="mi-desc" placeholder="Adjustable cap, black with lime logo">
+            </div>
+            <div class="field">
+              <label for="mi-price">Price (coins)</label>
+              <input type="number" id="mi-price" required min="1" step="1" placeholder="150">
+            </div>
+            <div class="field">
+              <label for="mi-image">Photo</label>
+              <input type="file" id="mi-image" accept="image/*" required>
+            </div>
+            <button type="submit" class="btn btn-primary" id="mi-btn">Add item</button>
+          </form>
+        </div>
+
+        <div class="panel" style="margin-top:16px;">
+          <h1>Store items</h1>
+          <p class="sub">Toggle "Out of stock" to temporarily hide an item from players without deleting it.</p>
+          <div id="mi-list-loading" style="font-size:13px; color:var(--text-soft);"><span class="spinner"></span> Loading...</div>
+          <div class="hidden" id="mi-list"></div>
+          <div class="hint hidden" id="mi-list-empty">No items added yet.</div>
+        </div>
+
+        <div class="panel" style="margin-top:16px; margin-bottom:16px;">
+          <h1>Orders</h1>
+          <p class="sub">Every purchase, newest first. Check off once you've handed the item over.</p>
+          <div id="so-loading" style="font-size:13px; color:var(--text-soft);"><span class="spinner"></span> Loading...</div>
+          <table class="players hidden" id="so-table">
+            <thead>
+              <tr>
+                <th>Player</th>
+                <th>Item</th>
+                <th>Coins</th>
+                <th>Date</th>
+                <th>Fulfilled</th>
+              </tr>
+            </thead>
+            <tbody id="so-tbody"></tbody>
+          </table>
+          <div class="hint hidden" id="so-empty">No orders yet.</div>
         </div>
 
       </div>

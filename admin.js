@@ -138,6 +138,8 @@ function enterAdmin() {
   initCoinLogTab();
   initJoinRequestsTab();
   loadAvailableCodes();
+  initMarketItemsTab();
+  initStoreOrdersTab();
 }
 
 // ---------------- admin tab switcher ----------------
@@ -1701,5 +1703,218 @@ async function loadAvailableCodes() {
   } catch (err) {
     console.error(err);
     loadingEl.textContent = "Couldn't load available codes.";
+  }
+}
+
+// =========================================================================
+// ---------------- Market: store items + orders ----------------
+// Items are simple (name, description, price in coins, one photo). A
+// player buying one is handled entirely client-side (app.js) via a
+// Firestore transaction that decrements their own coinsBalance and writes
+// both a coinTransactions audit entry and a storeOrders receipt — nothing
+// here in admin.js touches coins directly. This section only manages the
+// item catalog and lets the admin see/track what's been ordered.
+// =========================================================================
+
+function resizeItemImageToDataUrl(file, maxDim) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = () => { img.src = reader.result; };
+    reader.onerror = reject;
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if (w >= h && w > maxDim) { h = Math.round((h * maxDim) / w); w = maxDim; }
+      else if (h > maxDim) { w = Math.round((w * maxDim) / h); h = maxDim; }
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", 0.78));
+    };
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+$("market-item-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errEl = $("mi-error");
+  const okEl = $("mi-success");
+  hideMsg(errEl);
+  hideMsg(okEl);
+
+  const name = $("mi-name").value.trim();
+  const description = $("mi-desc").value.trim();
+  const priceCoins = parseInt($("mi-price").value, 10);
+  const file = $("mi-image").files[0];
+  const btn = $("mi-btn");
+
+  if (!name || !priceCoins || priceCoins < 1) return;
+  if (!file) {
+    showMsg(errEl, "Add a photo for the item.");
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Adding...";
+
+  try {
+    const imageUrl = await resizeItemImageToDataUrl(file, 640);
+    await addDoc(collection(db, "marketItems"), {
+      name,
+      description,
+      priceCoins,
+      imageUrl,
+      outOfStock: false,
+      createdAt: serverTimestamp()
+    });
+    showMsg(okEl, `${name} added to the Market.`);
+    $("market-item-form").reset();
+    loadMarketItems();
+  } catch (err) {
+    console.error(err);
+    showMsg(errEl, "Something went wrong adding the item. Try again.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Add item";
+  }
+});
+
+async function initMarketItemsTab() {
+  await loadMarketItems();
+}
+
+async function loadMarketItems() {
+  const loadingEl = $("mi-list-loading");
+  const listEl = $("mi-list");
+  const emptyEl = $("mi-list-empty");
+  loadingEl.classList.remove("hidden");
+  listEl.classList.add("hidden");
+  emptyEl.classList.add("hidden");
+
+  try {
+    const snap = await getDocs(query(collection(db, "marketItems"), orderBy("createdAt", "desc")));
+    loadingEl.classList.add("hidden");
+
+    if (snap.empty) {
+      emptyEl.classList.remove("hidden");
+      return;
+    }
+
+    listEl.innerHTML = snap.docs.map((d) => {
+      const it = d.data();
+      return `
+        <div style="display:flex; gap:12px; align-items:center; padding:12px 0; border-bottom:1px solid var(--border);">
+          <img src="${it.imageUrl}" alt="" style="width:56px;height:56px;border-radius:10px;object-fit:cover;flex-shrink:0;">
+          <div style="flex:1; min-width:0;">
+            <div style="font-weight:700; font-size:13.5px; ${it.outOfStock ? "opacity:.5;" : ""}">${escapeHtml(it.name || "—")}</div>
+            <div style="font-size:12px; color:var(--text-soft); margin-top:2px;">${escapeHtml(String(it.priceCoins ?? 0))} coins${it.outOfStock ? " · Out of stock" : ""}</div>
+          </div>
+          <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-soft); flex-shrink:0;">
+            <input type="checkbox" data-toggle-stock="${d.id}" ${it.outOfStock ? "checked" : ""} style="width:auto;">
+            Out of stock
+          </label>
+          <button class="link-btn" data-delete-item="${d.id}" data-item-name="${escapeHtml(it.name || "—")}" type="button" style="font-size:12px; color:var(--danger);">Delete</button>
+        </div>
+      `;
+    }).join("");
+    listEl.classList.remove("hidden");
+
+    listEl.querySelectorAll("[data-toggle-stock]").forEach((cb) => {
+      cb.addEventListener("change", async () => {
+        cb.disabled = true;
+        try {
+          await updateDoc(doc(db, "marketItems", cb.dataset.toggleStock), { outOfStock: cb.checked });
+          loadMarketItems();
+        } catch (err) {
+          console.error(err);
+          cb.checked = !cb.checked;
+          cb.disabled = false;
+        }
+      });
+    });
+
+    listEl.querySelectorAll("[data-delete-item]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const confirmed = confirm(`Delete "${btn.dataset.itemName}" from the Market? This can't be undone (past orders for it are unaffected).`);
+        if (!confirmed) return;
+        btn.disabled = true;
+        try {
+          await deleteDoc(doc(db, "marketItems", btn.dataset.deleteItem));
+          loadMarketItems();
+        } catch (err) {
+          console.error(err);
+          btn.disabled = false;
+        }
+      });
+    });
+  } catch (err) {
+    console.error(err);
+    loadingEl.textContent = "Couldn't load store items.";
+  }
+}
+
+async function initStoreOrdersTab() {
+  const loadingEl = $("so-loading");
+  const tableEl = $("so-table");
+  const tbody = $("so-tbody");
+  const emptyEl = $("so-empty");
+  loadingEl.classList.remove("hidden");
+  tableEl.classList.add("hidden");
+  emptyEl.classList.add("hidden");
+
+  try {
+    // Sorted client-side (not via Firestore orderBy) — same reasoning as the
+    // coin log and join requests: avoids needing a composite index.
+    const snap = await getDocs(collection(db, "storeOrders"));
+    const orders = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => {
+        const at = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+        const bt = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+        return bt - at;
+      });
+
+    loadingEl.classList.add("hidden");
+
+    if (orders.length === 0) {
+      emptyEl.classList.remove("hidden");
+      return;
+    }
+
+    tbody.innerHTML = "";
+    orders.forEach((o) => {
+      const date = o.createdAt?.toDate
+        ? o.createdAt.toDate().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })
+        : "—";
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(o.playerName || "—")}</td>
+        <td>${escapeHtml(o.itemName || "—")}</td>
+        <td>${o.priceCoins ?? 0}</td>
+        <td>${date}</td>
+        <td><input type="checkbox" data-toggle-fulfilled="${o.id}" ${o.fulfilled ? "checked" : ""} style="width:auto;"></td>
+      `;
+      tbody.appendChild(tr);
+    });
+    tableEl.classList.remove("hidden");
+
+    tbody.querySelectorAll("[data-toggle-fulfilled]").forEach((cb) => {
+      cb.addEventListener("change", async () => {
+        cb.disabled = true;
+        try {
+          await updateDoc(doc(db, "storeOrders", cb.dataset.toggleFulfilled), { fulfilled: cb.checked });
+        } catch (err) {
+          console.error(err);
+          cb.checked = !cb.checked;
+        } finally {
+          cb.disabled = false;
+        }
+      });
+    });
+  } catch (err) {
+    console.error(err);
+    loadingEl.textContent = "Couldn't load orders.";
   }
 }

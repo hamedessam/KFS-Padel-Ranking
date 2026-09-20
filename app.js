@@ -1,5 +1,5 @@
 import {
-  db, collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp,
+  db, collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp, runTransaction,
   auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential
 } from "./firebase-config.js";
 import { registerPlayer, unregisterPlayer, addPartner, fetchTeams, findTeamOf, requestToJoinTeam, cancelJoinRequest, acceptJoinRequest, declineJoinRequest, getOpenTeams, myPendingRequestTeams, myIncomingRequests } from "./teams.js";
@@ -270,6 +270,7 @@ function switchTab(target) {
   });
   if (target === "leaderboard") loadLeaderboard();
   if (target === "tournaments") loadTournamentsTab();
+  if (target === "marketplace") loadMarketTab();
 }
 
 tabButtons.forEach((btn) => {
@@ -1033,6 +1034,138 @@ async function loadLeaderboard() {
   }
 }
 
+// ---------------- marketplace tab ----------------
+let marketItemsCache = null;
+
+async function ensureMarketItemsData(forceRefresh = false) {
+  if (marketItemsCache && !forceRefresh) return marketItemsCache;
+  const snap = await getDocs(query(collection(db, "marketItems"), orderBy("createdAt", "asc")));
+  marketItemsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return marketItemsCache;
+}
+
+async function loadMarketTab() {
+  const loadingEl = $("mk-loading");
+  const listEl = $("mk-list");
+  const emptyEl = $("mk-empty");
+  loadingEl.classList.remove("hidden");
+  listEl.classList.add("hidden");
+  emptyEl.classList.add("hidden");
+
+  $("mk-balance-value").textContent = `${Math.round(currentPlayer.coinsBalance ?? 0)} ${t("coins_label")}`;
+
+  try {
+    const items = await ensureMarketItemsData(true);
+    loadingEl.classList.add("hidden");
+
+    if (items.length === 0) {
+      emptyEl.classList.remove("hidden");
+      return;
+    }
+
+    const balance = currentPlayer.coinsBalance ?? 0;
+
+    listEl.innerHTML = items.map((it) => {
+      const canAfford = balance >= (it.priceCoins ?? 0);
+      let btnHtml;
+      if (it.outOfStock) {
+        btnHtml = `<button class="btn btn-ghost btn-sm" disabled>${t("out_of_stock_label")}</button>`;
+      } else if (!canAfford) {
+        btnHtml = `<button class="btn btn-ghost btn-sm" disabled>${t("not_enough_coins_label")}</button>`;
+      } else {
+        btnHtml = `<button class="btn btn-primary btn-sm" data-buy-item="${it.id}" type="button">${t("buy_btn")}</button>`;
+      }
+      return `
+        <div class="market-item-card">
+          <img class="market-item-img" src="${it.imageUrl}" alt="">
+          <div class="market-item-info">
+            <div class="market-item-name">${it.name || "—"}</div>
+            ${it.description ? `<div class="market-item-desc">${it.description}</div>` : ""}
+            <div class="market-item-price">${Math.round(it.priceCoins ?? 0)} ${t("coins_label")}</div>
+          </div>
+          ${btnHtml}
+        </div>
+      `;
+    }).join("");
+    listEl.classList.remove("hidden");
+
+    listEl.querySelectorAll("[data-buy-item]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const item = items.find((x) => x.id === btn.dataset.buyItem);
+        if (item) purchaseItem(item, btn);
+      });
+    });
+  } catch (err) {
+    console.error(err);
+    loadingEl.textContent = t("leaderboard_err");
+  }
+}
+
+async function purchaseItem(item, btn) {
+  const confirmMsg = t("confirm_purchase")
+    .replace("{item}", item.name || "")
+    .replace("{price}", Math.round(item.priceCoins ?? 0));
+  if (!confirm(confirmMsg)) return;
+
+  btn.disabled = true;
+  btn.textContent = t("buying");
+
+  try {
+    let newBalance = 0;
+    await runTransaction(db, async (tx) => {
+      const playerRef = doc(db, "players", currentPlayer.id);
+      const itemRef = doc(db, "marketItems", item.id);
+      const [playerSnap, itemSnap] = await Promise.all([tx.get(playerRef), tx.get(itemRef)]);
+
+      if (!itemSnap.exists()) throw new Error("ITEM_GONE");
+      const itemData = itemSnap.data();
+      if (itemData.outOfStock) throw new Error("OUT_OF_STOCK");
+
+      const balance = playerSnap.data().coinsBalance ?? 0;
+      const price = itemData.priceCoins ?? 0;
+      if (balance < price) throw new Error("INSUFFICIENT");
+
+      newBalance = balance - price;
+      tx.update(playerRef, { coinsBalance: newBalance });
+
+      const txRef = doc(collection(db, "coinTransactions"));
+      tx.set(txRef, {
+        playerId: currentPlayer.id,
+        amount: -price,
+        type: "purchase",
+        itemId: item.id,
+        itemName: itemData.name || "",
+        note: itemData.name || "",
+        balanceAfter: newBalance,
+        createdAt: serverTimestamp()
+      });
+
+      const orderRef = doc(collection(db, "storeOrders"));
+      tx.set(orderRef, {
+        playerId: currentPlayer.id,
+        playerName: currentPlayer.name || "—",
+        itemId: item.id,
+        itemName: itemData.name || "",
+        priceCoins: price,
+        fulfilled: false,
+        createdAt: serverTimestamp()
+      });
+    });
+
+    currentPlayer.coinsBalance = newBalance;
+    renderBadges(currentPlayer);
+    alert(t("purchase_success_msg").replace("{item}", item.name || ""));
+    loadMarketTab();
+  } catch (err) {
+    console.error(err);
+    if (err.message === "INSUFFICIENT") alert(t("purchase_err_insufficient"));
+    else if (err.message === "OUT_OF_STOCK") alert(t("purchase_err_out_of_stock"));
+    else alert(t("purchase_err_generic"));
+    btn.disabled = false;
+    btn.textContent = t("buy_btn");
+  }
+}
+
 // ---------------- profile: points history (read-only — reads the existing ratingHistory audit trail) ----------------
 async function loadPointsHistory() {
   const loadingEl = $("ph-loading");
@@ -1133,6 +1266,7 @@ function coinTxLabel(tx) {
   if (tx.type === "placement" && tx.position) return t(`coin_type_placement_${tx.position}`);
   if (tx.type === "participation") return t("coin_type_participation");
   if (tx.type === "advancement") return t("coin_type_advancement");
+  if (tx.type === "purchase") return t("coin_type_purchase").replace("{item}", tx.itemName || tx.note || "—");
   return tx.note || tx.type || "—"; // fallback for any future/manual transaction type
 }
 
