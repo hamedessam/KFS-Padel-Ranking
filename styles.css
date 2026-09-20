@@ -689,52 +689,91 @@ body {
 }
 .coming-soon h1 { margin-top: 0; }
 
-/* ---------- market items ---------- */
+/* ---------- market items (2-column grid, image-forward cards) ---------- */
+.market-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
 .market-item-card {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
   background: var(--panel);
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 12px;
-  margin-bottom: 12px;
+  overflow: hidden;
+}
+.market-item-imgwrap {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--panel-alt);
+  overflow: hidden;
 }
 .market-item-img {
-  width: 56px;
-  height: 56px;
-  border-radius: 10px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  flex-shrink: 0;
-  background: var(--panel-alt);
+  display: block;
 }
-.market-item-info { flex: 1; min-width: 0; }
+.market-item-body {
+  padding: 10px 11px 12px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
 .market-item-name {
   font-weight: 700;
-  font-size: 13.5px;
+  font-size: 12.5px;
   color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.market-item-desc {
-  font-size: 11.5px;
-  color: var(--text-soft);
-  margin-top: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.3;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.market-item-desc {
+  font-size: 10.5px;
+  color: var(--text-soft);
+  margin-top: 3px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .market-item-price {
   font-family: var(--font-mono);
   font-weight: 700;
   font-size: 12.5px;
   color: var(--ball);
-  margin-top: 4px;
+  margin-top: 6px;
 }
-.market-item-card .btn-sm { flex-shrink: 0; width: auto; }
+.market-item-buy {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.market-qty-input {
+  width: 38px;
+  flex-shrink: 0;
+  padding: 8px 4px;
+  text-align: center;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--panel-alt);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.market-item-buy .btn-sm {
+  flex: 1;
+  width: auto;
+  padding: 8px 4px;
+  font-size: 12px;
+}
+.market-item-buy .btn-ghost.btn-sm {
+  font-size: 10.5px;
+  padding: 8px 2px;
+}
 
 /* ---------- bottom tab bar ---------- */
 .tabbar {

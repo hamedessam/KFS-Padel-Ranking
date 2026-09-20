@@ -1066,33 +1066,44 @@ async function loadMarketTab() {
     const balance = currentPlayer.coinsBalance ?? 0;
 
     listEl.innerHTML = items.map((it) => {
-      const canAfford = balance >= (it.priceCoins ?? 0);
-      let btnHtml;
+      const price = it.priceCoins ?? 0;
+      const canAffordOne = balance >= price;
+      let controlsHtml;
       if (it.outOfStock) {
-        btnHtml = `<button class="btn btn-ghost btn-sm" disabled>${t("out_of_stock_label")}</button>`;
-      } else if (!canAfford) {
-        btnHtml = `<button class="btn btn-ghost btn-sm" disabled>${t("not_enough_coins_label")}</button>`;
+        controlsHtml = `<button class="btn btn-ghost btn-sm" disabled>${t("out_of_stock_label")}</button>`;
+      } else if (!canAffordOne) {
+        controlsHtml = `<button class="btn btn-ghost btn-sm" disabled>${t("not_enough_coins_label")}</button>`;
       } else {
-        btnHtml = `<button class="btn btn-primary btn-sm" data-buy-item="${it.id}" type="button">${t("buy_btn")}</button>`;
+        controlsHtml = `
+          <input type="number" class="market-qty-input" min="1" value="1" step="1" data-qty-input="${it.id}">
+          <button class="btn btn-primary btn-sm" data-buy-item="${it.id}" type="button">${t("buy_btn")}</button>
+        `;
       }
       return `
         <div class="market-item-card">
-          <img class="market-item-img" src="${it.imageUrl}" alt="">
-          <div class="market-item-info">
+          <div class="market-item-imgwrap"><img class="market-item-img" src="${it.imageUrl}" alt=""></div>
+          <div class="market-item-body">
             <div class="market-item-name">${it.name || "—"}</div>
             ${it.description ? `<div class="market-item-desc">${it.description}</div>` : ""}
-            <div class="market-item-price">${Math.round(it.priceCoins ?? 0)} ${t("coins_label")}</div>
+            <div class="market-item-price" data-price-display="${it.id}">${Math.round(price)} ${t("coins_label")}</div>
+            <div class="market-item-buy">${controlsHtml}</div>
           </div>
-          ${btnHtml}
         </div>
       `;
     }).join("");
     listEl.classList.remove("hidden");
 
+    listEl.querySelectorAll("[data-qty-input]").forEach((input) => {
+      input.addEventListener("input", () => updateBuyButtonForQty(input, items, balance));
+      updateBuyButtonForQty(input, items, balance);
+    });
+
     listEl.querySelectorAll("[data-buy-item]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const item = items.find((x) => x.id === btn.dataset.buyItem);
-        if (item) purchaseItem(item, btn);
+        const qtyInput = listEl.querySelector(`[data-qty-input="${btn.dataset.buyItem}"]`);
+        const qty = Math.max(1, parseInt(qtyInput?.value, 10) || 1);
+        if (item) purchaseItem(item, qty, btn);
       });
     });
   } catch (err) {
@@ -1101,10 +1112,31 @@ async function loadMarketTab() {
   }
 }
 
-async function purchaseItem(item, btn) {
+// Keeps a card's price line and Buy button in sync with its quantity input —
+// e.g. typing "3" updates the shown price to the total, and disables Buy if
+// that total is more than the player can currently afford.
+function updateBuyButtonForQty(input, items, balance) {
+  const item = items.find((x) => x.id === input.dataset.qtyInput);
+  if (!item) return;
+  const card = input.closest(".market-item-card");
+  const btn = card?.querySelector("[data-buy-item]");
+  const priceEl = card?.querySelector("[data-price-display]");
+  if (!btn) return;
+  let qty = parseInt(input.value, 10);
+  if (!qty || qty < 1) qty = 1;
+  input.value = qty;
+  const total = (item.priceCoins ?? 0) * qty;
+  btn.disabled = total > balance;
+  btn.textContent = btn.disabled ? t("not_enough_coins_label") : t("buy_btn");
+  if (priceEl) priceEl.textContent = `${Math.round(total)} ${t("coins_label")}`;
+}
+
+async function purchaseItem(item, qty, btn) {
+  const total = (item.priceCoins ?? 0) * qty;
   const confirmMsg = t("confirm_purchase")
+    .replace("{qty}", qty)
     .replace("{item}", item.name || "")
-    .replace("{price}", Math.round(item.priceCoins ?? 0));
+    .replace("{price}", Math.round(total));
   if (!confirm(confirmMsg)) return;
 
   btn.disabled = true;
@@ -1122,19 +1154,21 @@ async function purchaseItem(item, btn) {
       if (itemData.outOfStock) throw new Error("OUT_OF_STOCK");
 
       const balance = playerSnap.data().coinsBalance ?? 0;
-      const price = itemData.priceCoins ?? 0;
-      if (balance < price) throw new Error("INSUFFICIENT");
+      const unitPrice = itemData.priceCoins ?? 0;
+      const totalPrice = unitPrice * qty;
+      if (balance < totalPrice) throw new Error("INSUFFICIENT");
 
-      newBalance = balance - price;
+      newBalance = balance - totalPrice;
       tx.update(playerRef, { coinsBalance: newBalance });
 
       const txRef = doc(collection(db, "coinTransactions"));
       tx.set(txRef, {
         playerId: currentPlayer.id,
-        amount: -price,
+        amount: -totalPrice,
         type: "purchase",
         itemId: item.id,
         itemName: itemData.name || "",
+        quantity: qty,
         note: itemData.name || "",
         balanceAfter: newBalance,
         createdAt: serverTimestamp()
@@ -1146,7 +1180,9 @@ async function purchaseItem(item, btn) {
         playerName: currentPlayer.name || "—",
         itemId: item.id,
         itemName: itemData.name || "",
-        priceCoins: price,
+        quantity: qty,
+        priceCoins: unitPrice,
+        totalCoins: totalPrice,
         fulfilled: false,
         createdAt: serverTimestamp()
       });
@@ -1161,8 +1197,7 @@ async function purchaseItem(item, btn) {
     if (err.message === "INSUFFICIENT") alert(t("purchase_err_insufficient"));
     else if (err.message === "OUT_OF_STOCK") alert(t("purchase_err_out_of_stock"));
     else alert(t("purchase_err_generic"));
-    btn.disabled = false;
-    btn.textContent = t("buy_btn");
+    loadMarketTab();
   }
 }
 
@@ -1266,7 +1301,11 @@ function coinTxLabel(tx) {
   if (tx.type === "placement" && tx.position) return t(`coin_type_placement_${tx.position}`);
   if (tx.type === "participation") return t("coin_type_participation");
   if (tx.type === "advancement") return t("coin_type_advancement");
-  if (tx.type === "purchase") return t("coin_type_purchase").replace("{item}", tx.itemName || tx.note || "—");
+  if (tx.type === "purchase") {
+    const qty = tx.quantity ?? 1;
+    const label = tx.itemName || tx.note || "—";
+    return qty > 1 ? `${t("coin_type_purchase").replace("{item}", label)} ×${qty}` : t("coin_type_purchase").replace("{item}", label);
+  }
   return tx.note || tx.type || "—"; // fallback for any future/manual transaction type
 }
 

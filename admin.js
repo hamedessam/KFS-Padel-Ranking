@@ -1892,7 +1892,8 @@ async function initStoreOrdersTab() {
       tr.innerHTML = `
         <td>${escapeHtml(o.playerName || "—")}</td>
         <td>${escapeHtml(o.itemName || "—")}</td>
-        <td>${o.priceCoins ?? 0}</td>
+        <td>${o.quantity ?? 1}</td>
+        <td>${o.totalCoins ?? o.priceCoins ?? 0}</td>
         <td>${date}</td>
         <td><input type="checkbox" data-toggle-fulfilled="${o.id}" ${o.fulfilled ? "checked" : ""} style="width:auto;"></td>
       `;
