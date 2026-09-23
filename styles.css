@@ -70,6 +70,7 @@ body {
 }
 
 .topbar {
+  position: relative;
   flex-shrink: 0;
   display: grid;
   grid-template-columns: 34px 1fr 34px;
@@ -83,6 +84,21 @@ body {
 .topbar .back-btn { grid-column: 1; }
 .topbar .topbar-center { grid-column: 2; }
 .topbar .icon-btn { grid-column: 3; }
+/* Taken completely out of the grid — pinned by absolute position instead —
+   so it can never compete for a column/row with the wordmark and force it
+   to wrap onto a second line. Mirrors to the left in Arabic the same way
+   .avatar-edit-btn already does elsewhere in this file. */
+.topbar .login-lang-btn {
+  grid-column: auto;
+  position: absolute;
+  top: 50%;
+  right: 18px;
+  transform: translateY(-50%);
+}
+[dir="rtl"] .topbar .login-lang-btn {
+  right: auto;
+  left: 18px;
+}
 .topbar-center {
   display: flex;
   align-items: center;
