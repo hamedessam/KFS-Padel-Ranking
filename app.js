@@ -3,7 +3,7 @@ import {
   auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential
 } from "./firebase-config.js";
 import { registerPlayer, unregisterPlayer, addPartner, fetchTeams, findTeamOf, requestToJoinTeam, cancelJoinRequest, acceptJoinRequest, declineJoinRequest, getOpenTeams, myPendingRequestTeams, myIncomingRequests } from "./teams.js";
-import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFoundingMember } from "./utils.js";
+import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFoundingMember, isRanked } from "./utils.js";
 import { t, getLang, setLang, applyStaticTranslations } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
@@ -98,9 +98,11 @@ function refreshProfileDisplay(player) {
   const meta = tierMeta(tierFromPoints(player.ratingPoints));
   $("pf-shield").textContent = meta.level || "-";
   $("pf-shield").className = "tier-shield " + meta.cssClass;
-  $("pf-shield").classList.toggle("hidden", !tiersEnabled);
-  $("pf-tier-name").textContent = tierLabelOrHidden(meta);
-  $("pf-points").textContent = `${Math.round(player.ratingPoints ?? 1000)} ${t("pts")}`;
+  const ranked = isRanked(player);
+  $("pf-shield").classList.toggle("hidden", !tiersEnabled || !ranked);
+  $("pf-tier-name").textContent = ranked ? tierLabelOrHidden(meta) : t("unranked_label");
+  $("pf-points").textContent = ranked ? `${Math.round(player.ratingPoints)} ${t("pts")}` : "—";
+  $("pf-side-select").value = player.playingSide || "";
 
   $("pf-matches").textContent = player.matchesPlayed ?? 0;
   $("pf-wins").textContent = player.wins ?? 0;
@@ -208,6 +210,22 @@ function switchLanguage(lang) {
     loadHome(); // safe: only updates Home tab content, no view/tab navigation
   }
 }
+
+// ---------------- playing side (player can change it any time) ----------------
+$("pf-side-select").addEventListener("change", async (e) => {
+  const select = e.target;
+  const previous = currentPlayer.playingSide || "";
+  select.disabled = true;
+  try {
+    await updateDoc(doc(db, "players", currentPlayer.id), { playingSide: select.value });
+    currentPlayer.playingSide = select.value;
+  } catch (err) {
+    console.error(err);
+    select.value = previous;
+  } finally {
+    select.disabled = false;
+  }
+});
 
 // ---------------- avatar upload ----------------
 $("avatar-edit-btn").addEventListener("click", () => $("avatar-input").click());
@@ -389,11 +407,11 @@ async function buildRequestCard(tournamentId, team, requesterId) {
       <div class="avatar" style="width:44px;height:44px;font-size:16px;">${avatarHtml(p)}</div>
       <div>
         <div class="request-card-name">${p.name || "—"}</div>
-        <div class="request-card-sub">#${team.teamNumber} · ${t("wants_to_join_your_team")}${tiersEnabled ? ` · ${meta.displayName}` : ""}</div>
+        <div class="request-card-sub">#${team.teamNumber} · ${t("wants_to_join_your_team")}${tiersEnabled && isRanked(p) ? ` · ${meta.displayName}` : ""}</div>
       </div>
     </div>
     <div class="request-card-stats">
-      <div class="stat-box"><div class="num">${Math.round(p.ratingPoints ?? 1000)}</div><div class="lbl">${t("pts")}</div></div>
+      <div class="stat-box"><div class="num">${isRanked(p) ? Math.round(p.ratingPoints) : "—"}</div><div class="lbl">${t("pts")}</div></div>
       <div class="stat-box"><div class="num">${matches}</div><div class="lbl">${t("profile_matches")}</div></div>
       <div class="stat-box"><div class="num">${winRate}</div><div class="lbl">${t("profile_winrate")}</div></div>
     </div>
@@ -444,7 +462,9 @@ async function ensureLeaderboardData(forceRefresh = false) {
     orderBy("ratingPoints", "desc")
   );
   const snap = await getDocs(q);
-  leaderboardCache = snap.docs.map((d, i) => ({ id: d.id, rank: i + 1, ...d.data() }));
+  leaderboardCache = snap.docs
+    .filter((d) => d.data().ratingPoints != null) // unranked players stay off the leaderboard
+    .map((d, i) => ({ id: d.id, rank: i + 1, ...d.data() }));
   return leaderboardCache;
 }
 
@@ -456,9 +476,10 @@ async function loadHome() {
   const meta = tierMeta(tierFromPoints(currentPlayer.ratingPoints));
   $("hm-shield").textContent = meta.level || "-";
   $("hm-shield").className = "tier-shield " + meta.cssClass;
-  $("hm-shield").classList.toggle("hidden", !tiersEnabled);
-  $("hm-tier-name").textContent = tierLabelOrHidden(meta);
-  $("hm-points").textContent = `${Math.round(currentPlayer.ratingPoints ?? 1000)} ${t("pts")}`;
+  const homeRanked = isRanked(currentPlayer);
+  $("hm-shield").classList.toggle("hidden", !tiersEnabled || !homeRanked);
+  $("hm-tier-name").textContent = homeRanked ? tierLabelOrHidden(meta) : t("unranked_label");
+  $("hm-points").textContent = homeRanked ? `${Math.round(currentPlayer.ratingPoints)} ${t("pts")}` : "—";
 
   loadAnnouncement();
   loadHomeTournaments();
@@ -466,7 +487,7 @@ async function loadHome() {
   try {
     const data = await ensureLeaderboardData();
     const mine = data.find((p) => p.id === currentPlayer.id);
-    $("hm-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : "—";
+    $("hm-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : (homeRanked ? "—" : t("unranked_label"));
     renderTopPlayers(data.slice(0, 3));
     if (mine) updateRankTrend(mine.rank);
   } catch (err) {
@@ -1024,7 +1045,7 @@ async function loadLeaderboard() {
     });
 
     const mine = data.find((p) => p.id === currentPlayer.id);
-    $("my-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : "—";
+    $("my-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : (isRanked(currentPlayer) ? "—" : t("unranked_label"));
 
     loadingEl.classList.add("hidden");
     listEl.classList.remove("hidden");
@@ -1209,7 +1230,7 @@ async function loadPointsHistory() {
   loadingEl.classList.remove("hidden");
   listEl.classList.add("hidden");
   emptyEl.classList.add("hidden");
-  $("ph-total").textContent = `${Math.round(currentPlayer.ratingPoints ?? 1000)} ${t("pts")}`;
+  $("ph-total").textContent = isRanked(currentPlayer) ? `${Math.round(currentPlayer.ratingPoints)} ${t("pts")}` : "—";
 
   try {
     const snap = await getDocs(query(collection(db, "ratingHistory"), where("playerId", "==", currentPlayer.id)));
@@ -1402,7 +1423,12 @@ $("request-account-form").addEventListener("submit", async (e) => {
 
   const name = $("ra-name").value.trim();
   const phone = $("ra-phone").value.trim();
+  const playingSide = $("ra-side").value;
   if (!name || !phone) return;
+  if (!playingSide) {
+    showMsg(errEl, t("request_side_required"));
+    return;
+  }
 
   if (!isValidRequestPhone(phone)) {
     showMsg(errEl, t("request_phone_invalid"));
@@ -1417,6 +1443,7 @@ $("request-account-form").addEventListener("submit", async (e) => {
     await addDoc(collection(db, "joinRequests"), {
       name,
       phone,
+      playingSide,
       status: "pending",
       createdAt: serverTimestamp()
     });
@@ -1680,18 +1707,19 @@ async function generateAndShareProfileCard() {
     const tierColors = { gold: "#e3b74e", silver: "#b9c2c8", bronze: "#b98a5a" };
     const pillY = avatarY + avatarSize + 200;
     ctx.font = "800 34px 'Cairo', sans-serif";
-    const pillText = tierLabelOrHidden(meta);
+    const shareRanked = isRanked(currentPlayer);
+    const pillText = shareRanked ? tierLabelOrHidden(meta) : t("unranked_label");
     const pillWidth = ctx.measureText(pillText).width + 80;
     ctx.fillStyle = "rgba(255,255,255,0.06)";
     roundRect(ctx, W / 2 - pillWidth / 2, pillY - 44, pillWidth, 76, 38);
     ctx.fill();
-    ctx.fillStyle = tiersEnabled ? (tierColors[meta.cssClass] || "#c9f24c") : "#c9f24c";
+    ctx.fillStyle = tiersEnabled && shareRanked ? (tierColors[meta.cssClass] || "#c9f24c") : "#c9f24c";
     ctx.fillText(pillText, W / 2, pillY + 8);
 
     // stats row
     const statsY = pillY + 150;
     const stats = [
-      [`${Math.round(currentPlayer.ratingPoints ?? 1000)}`, t("pts")],
+      [shareRanked ? `${Math.round(currentPlayer.ratingPoints)}` : "—", t("pts")],
       [`${currentPlayer.matchesPlayed ?? 0}`, t("profile_matches")],
       [(currentPlayer.matchesPlayed ?? 0) > 0 ? `${Math.round(((currentPlayer.wins ?? 0) / currentPlayer.matchesPlayed) * 100)}%` : "—", t("profile_winrate")]
     ];

@@ -77,9 +77,22 @@
               <div class="hint">Only fill this in to reuse a freed code (see "Available codes" below) — it'll be rejected if already in use, or if it hasn't been issued yet.</div>
             </div>
             <div class="field">
-              <label for="ap-points">Starting points</label>
+              <label for="ap-rank">Starting rank</label>
+              <select id="ap-rank"></select>
+              <div class="hint">Leave it on "No rank yet" and the player sees "not ranked yet" on their profile until you give them one. Picking a tier starts them at the first point of that tier — the tier itself is still always calculated from points.</div>
+            </div>
+            <div class="field hidden" id="ap-points-field">
+              <label for="ap-points">Custom starting points</label>
               <input type="number" id="ap-points" value="1000" min="500" max="2000" step="10">
-              <div class="hint">Everyone starts at 1000 (lands in Silver 3). Only raise this if you already know this player is genuinely strong — the tier badge is always calculated from points, never chosen manually.</div>
+            </div>
+            <div class="field">
+              <label for="ap-side">Plays on</label>
+              <select id="ap-side">
+                <option value="">Not set</option>
+                <option value="right">Right</option>
+                <option value="left">Left</option>
+                <option value="both">Both</option>
+              </select>
             </div>
             <button type="submit" class="btn btn-primary" id="add-btn">Add player &amp; generate code</button>
           </form>
@@ -197,6 +210,7 @@
                 <th>Tier</th>
                 <th>Points</th>
                 <th>Matches</th>
+                <th>Side</th>
                 <th></th>
               </tr>
             </thead>
@@ -238,6 +252,33 @@
               <input type="text" id="en-name" required>
             </div>
             <button type="submit" class="btn btn-primary" id="en-btn">Save name</button>
+          </form>
+        </div>
+
+        <div class="panel hidden" id="edit-player-card" style="margin-top:16px;">
+          <h1>Edit rank &amp; playing side</h1>
+          <p class="sub" id="ep-sub">—</p>
+          <div class="msg error" id="edit-player-error"></div>
+          <form id="edit-player-form">
+            <div class="field">
+              <label for="ep-side">Plays on</label>
+              <select id="ep-side">
+                <option value="">Not set</option>
+                <option value="right">Right</option>
+                <option value="left">Left</option>
+                <option value="both">Both</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="ep-rank">Rank</label>
+              <select id="ep-rank"></select>
+              <div class="hint">"Remove rank" makes them look like a new player with no rank yet. Their matches, wins/losses and history are kept.</div>
+            </div>
+            <div class="field hidden" id="ep-points-field">
+              <label for="ep-points">Custom points</label>
+              <input type="number" id="ep-points" value="1000" min="0" max="5000" step="10">
+            </div>
+            <button type="submit" class="btn btn-primary" id="ep-btn">Save</button>
           </form>
         </div>
 

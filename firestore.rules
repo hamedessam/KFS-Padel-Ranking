@@ -62,7 +62,7 @@ service cloud.firestore {
           .hasOnly(['avatarUrl', 'passwordHash', 'passwordSalt', 'authUid', 'rankSnapshot'])
       ) || (
         isSelf(playerId) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['coinsBalance'])
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['coinsBalance', 'playingSide'])
       );
     }
 

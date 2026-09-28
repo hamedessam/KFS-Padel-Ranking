@@ -3,7 +3,7 @@ import {
   query, orderBy, where, runTransaction, writeBatch, increment, arrayUnion, serverTimestamp,
   auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged
 } from "./firebase-config.js";
-import { hashPassword, randomSalt, generatePassword, playerCodeFromSeq, tierMeta, tierFromPoints, isFoundingMember, computeMatchPointChanges } from "./utils.js";
+import { hashPassword, randomSalt, generatePassword, playerCodeFromSeq, tierMeta, tierFromPoints, isFoundingMember, computeMatchPointChanges, isRanked, tierStartOptions } from "./utils.js";
 import { fetchTeams, assignToSlot, unregisterPlayer, setTeamGroup } from "./teams.js";
 
 const $ = (id) => document.getElementById(id);
@@ -19,6 +19,27 @@ const ADMIN_CONFIG_REF = doc(db, "config", "admin");
 const COUNTERS_REF = doc(db, "config", "counters");
 
 let isSetupMode = false;
+
+// ---------------- rank picker helpers (tier list -> starting points) ----------------
+const TIER_START = tierStartOptions(); // lowest -> highest, from utils.js TIER_THRESHOLDS
+const TIER_START_POINTS = Object.fromEntries(TIER_START.map((o) => [o.tier, o.points]));
+const SIDE_LABELS = { right: "Right", left: "Left", both: "Both" };
+function sideLabel(v) { return SIDE_LABELS[v] || "—"; }
+function tierLabel(id) {
+  const [family, level] = id.split("_");
+  return `${family.charAt(0).toUpperCase()}${family.slice(1)} ${level}`;
+}
+function fillRankSelect(sel, leadingOptions) {
+  sel.innerHTML =
+    leadingOptions.map((o) => `<option value="${o.value}">${o.label}</option>`).join("") +
+    TIER_START.map((o) => `<option value="${o.tier}">${tierLabel(o.tier)} (from ${o.points})</option>`).join("") +
+    '<option value="custom">Custom points…</option>';
+}
+fillRankSelect($("ap-rank"), [{ value: "", label: "No rank yet (unranked)" }]);
+function syncRankPointsField() {
+  $("ap-points-field").classList.toggle("hidden", $("ap-rank").value !== "custom");
+}
+$("ap-rank").addEventListener("change", syncRankPointsField);
 
 function showMsg(el, text) {
   el.textContent = text;
@@ -169,7 +190,18 @@ $("add-form").addEventListener("submit", async (e) => {
   const name = $("ap-name").value.trim();
   const phone = $("ap-phone").value.trim();
   const customCodeRaw = $("ap-code").value.trim();
-  const startingPoints = parseInt($("ap-points").value, 10) || 1000;
+  const rankChoice = $("ap-rank").value;
+  const playingSide = $("ap-side").value;
+  let startingPoints = null; // null = no rank yet
+  if (rankChoice === "custom") {
+    startingPoints = parseInt($("ap-points").value, 10);
+    if (Number.isNaN(startingPoints) || startingPoints < 0) {
+      showMsg(errEl, "Enter valid custom starting points.");
+      return;
+    }
+  } else if (rankChoice) {
+    startingPoints = TIER_START_POINTS[rankChoice];
+  }
   const btn = $("add-btn");
 
   if (!name || !phone) return;
@@ -233,6 +265,7 @@ $("add-form").addEventListener("submit", async (e) => {
       passwordHash,
       avatarUrl: "",
       ratingPoints: startingPoints,
+      playingSide,
       matchesPlayed: 0,
       wins: 0,
       losses: 0,
@@ -252,6 +285,7 @@ $("add-form").addEventListener("submit", async (e) => {
 
     showMsg(okEl, `${name} added successfully. Assign them to a team in the Tournament Manager tab whenever you're ready.`);
     $("add-form").reset();
+    syncRankPointsField();
     loadPlayers();
     loadMatchFormOptions();
     initCoinLogTab();
@@ -279,6 +313,7 @@ async function loadPlayers() {
     tbody.innerHTML = "";
     snap.forEach((d) => {
       const p = d.data();
+      const ranked = isRanked(p);
       const meta = tierMeta(tierFromPoints(p.ratingPoints));
       const tr = document.createElement("tr");
       const avatarCell = p.avatarUrl
@@ -288,10 +323,12 @@ async function loadPlayers() {
         <td>${avatarCell}</td>
         <td>${isFoundingMember(p) ? "🌟 " : ""}${escapeHtml(p.name || "—")}</td>
         <td class="code">${escapeHtml(p.playerCode || "—")}</td>
-        <td><span class="badge-pill ${meta.cssClass}">${meta.displayName}</span></td>
-        <td>${Math.round(p.ratingPoints ?? 1000)}</td>
+        <td>${ranked ? `<span class="badge-pill ${meta.cssClass}">${meta.displayName}</span>` : '<span class="badge-pill" style="opacity:.6;">Unranked</span>'}</td>
+        <td>${ranked ? Math.round(p.ratingPoints) : "—"}</td>
         <td>${p.matchesPlayed ?? 0}</td>
+        <td>${sideLabel(p.playingSide)}</td>
         <td style="white-space:nowrap;">
+          <button class="link-btn" data-edit-player="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" data-player-side="${p.playingSide || ""}" data-player-points="${ranked ? Math.round(p.ratingPoints) : ""}" type="button" style="font-size:12px;">Edit rank/side</button>
           <button class="link-btn" data-edit-name="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" type="button" style="font-size:12px;">Edit name</button>
           <button class="link-btn" data-edit-code="${d.id}" data-player-code="${escapeHtml(p.playerCode || "—")}" type="button" style="font-size:12px;">Edit code</button>
           <button class="link-btn" data-reset-player="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" type="button" style="font-size:12px;">Reset password</button>
@@ -303,6 +340,9 @@ async function loadPlayers() {
     loadingEl.classList.add("hidden");
     tableEl.classList.remove("hidden");
 
+    tbody.querySelectorAll("[data-edit-player]").forEach((btn) => {
+      btn.addEventListener("click", () => openEditPlayerCard(btn.dataset.editPlayer, btn.dataset.playerName, btn.dataset.playerSide, btn.dataset.playerPoints));
+    });
     tbody.querySelectorAll("[data-edit-name]").forEach((btn) => {
       btn.addEventListener("click", () => openEditNameCard(btn.dataset.editName, btn.dataset.playerName));
     });
@@ -588,7 +628,7 @@ async function loadMatchFormOptions() {
       activePlayersCache.forEach((p) => {
         const opt = document.createElement("option");
         opt.value = p.id;
-        opt.textContent = `${p.name || "—"} (${p.playerCode || "—"}) — ${Math.round(p.ratingPoints ?? 1000)} pts`;
+        opt.textContent = `${p.name || "—"} (${p.playerCode || "—"}) — ${isRanked(p) ? Math.round(p.ratingPoints) + " pts" : "no rank yet"}`;
         sel.appendChild(opt);
       });
     });
@@ -645,6 +685,11 @@ $("match-form").addEventListener("submit", async (e) => {
       return;
     }
     const players = freshDocs.map((d) => ({ id: d.id, ...d.data() }));
+    const unranked = players.filter((p) => !isRanked(p));
+    if (unranked.length > 0) {
+      showMsg(errEl, `${unranked.map((p) => p.name || "—").join(", ")} ${unranked.length > 1 ? "have" : "has"} no rank yet — give them a rank first (Overview → All players → Edit rank/side).`);
+      return;
+    }
     const team1 = [players[0], players[1]];
     const team2 = [players[2], players[3]];
 
@@ -1388,7 +1433,7 @@ function renderPendingRequests() {
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
           <div>
             <div style="font-weight:700; font-size:14px;">${escapeHtml(r.name || "—")}</div>
-            <div style="font-size:12.5px; color:var(--text-soft); margin-top:2px;">${escapeHtml(r.phone || "—")} · ${date}</div>
+            <div style="font-size:12.5px; color:var(--text-soft); margin-top:2px;">${escapeHtml(r.phone || "—")} · ${date}${r.playingSide ? " · " + sideLabel(r.playingSide) : ""}</div>
           </div>
           <div style="display:flex; gap:8px; flex-shrink:0;">
             <button class="btn btn-primary btn-sm" data-approve-request="${r.id}" type="button">Approve</button>
@@ -1463,6 +1508,7 @@ async function approveJoinRequest(requestId) {
     document.querySelector('[data-admin-tab="overview"]').click();
     $("ap-name").value = request.name || "";
     $("ap-phone").value = request.phone || "";
+    $("ap-side").value = request.playingSide || "";
     $("ap-name").scrollIntoView({ behavior: "smooth", block: "center" });
 
     initJoinRequestsTab();
@@ -1497,10 +1543,10 @@ function csvEscape(value) {
 $("jr-export-btn").addEventListener("click", () => {
   if (joinRequestsCache.length === 0) return;
 
-  const rows = [["Name", "Phone", "Status", "Requested at"]];
+  const rows = [["Name", "Phone", "Plays on", "Status", "Requested at"]];
   joinRequestsCache.forEach((r) => {
     const dateStr = r.createdAt?.toDate ? r.createdAt.toDate().toISOString() : "";
-    rows.push([r.name || "", r.phone || "", r.status || "pending", dateStr]);
+    rows.push([r.name || "", r.phone || "", r.playingSide ? sideLabel(r.playingSide) : "", r.status || "pending", dateStr]);
   });
 
   const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\n");
@@ -1919,3 +1965,80 @@ async function initStoreOrdersTab() {
     loadingEl.textContent = "Couldn't load orders.";
   }
 }
+
+// =========================================================================
+// ---------------- Edit rank & playing side (existing players) ----------------
+// Lets the admin set the playing side for players added before that field
+// existed, give a player a tier from the list, or remove their rank so they
+// show up as "not ranked yet" like a brand-new player. Stats/history are kept.
+// =========================================================================
+
+let editingRankPlayer = null; // { id, name, points (number|null) }
+
+fillRankSelect($("ep-rank"), [
+  { value: "keep", label: "Keep as is" },
+  { value: "none", label: "Remove rank (unranked)" }
+]);
+$("ep-rank").addEventListener("change", () => {
+  $("ep-points-field").classList.toggle("hidden", $("ep-rank").value !== "custom");
+});
+
+function openEditPlayerCard(playerId, name, side, points) {
+  editingRankPlayer = { id: playerId, name, points: points === "" ? null : Number(points) };
+  hideMsg($("edit-player-error"));
+  $("ep-sub").textContent = `${name} — current rank: ${editingRankPlayer.points === null ? "not ranked yet" : editingRankPlayer.points + " pts"}`;
+  $("ep-side").value = side || "";
+  $("ep-rank").value = "keep";
+  $("ep-points-field").classList.add("hidden");
+  const card = $("edit-player-card");
+  card.classList.remove("hidden");
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+$("edit-player-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errEl = $("edit-player-error");
+  hideMsg(errEl);
+  if (!editingRankPlayer) return;
+
+  const { id, name, points: currentPoints } = editingRankPlayer;
+  const rankChoice = $("ep-rank").value;
+  const update = { playingSide: $("ep-side").value };
+
+  if (rankChoice !== "keep") {
+    let newPoints = null;
+    if (rankChoice === "custom") {
+      newPoints = parseInt($("ep-points").value, 10);
+      if (Number.isNaN(newPoints) || newPoints < 0) {
+        showMsg(errEl, "Enter valid custom points.");
+        return;
+      }
+    } else if (rankChoice !== "none") {
+      newPoints = TIER_START_POINTS[rankChoice];
+    }
+    if (newPoints !== currentPoints) {
+      const msg = newPoints === null
+        ? `Remove ${name}'s rank? They'll show as "not ranked yet" and disappear from the leaderboard. Their matches and history are kept.`
+        : `Set ${name}'s rating to ${newPoints} (currently ${currentPoints === null ? "not ranked" : currentPoints})?`;
+      if (!confirm(msg)) return;
+      update.ratingPoints = newPoints;
+    }
+  }
+
+  const btn = $("ep-btn");
+  btn.disabled = true;
+  btn.textContent = "Saving...";
+  try {
+    await updateDoc(doc(db, "players", id), update);
+    $("edit-player-card").classList.add("hidden");
+    editingRankPlayer = null;
+    loadPlayers();
+    loadMatchFormOptions();
+  } catch (err) {
+    console.error(err);
+    showMsg(errEl, "Something went wrong saving. Try again.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Save";
+  }
+});

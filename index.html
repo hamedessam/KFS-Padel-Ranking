@@ -75,6 +75,15 @@
             <label for="ra-phone" data-i18n="request_phone_label">Phone number</label>
             <input type="tel" id="ra-phone" required placeholder="01xxxxxxxxx">
           </div>
+          <div class="field">
+            <label for="ra-side" data-i18n="request_side_label">Which side do you play?</label>
+            <select id="ra-side" required>
+              <option value="" data-i18n="side_choose">Choose</option>
+              <option value="right" data-i18n="side_right">Right</option>
+              <option value="left" data-i18n="side_left">Left</option>
+              <option value="both" data-i18n="side_both">Both</option>
+            </select>
+          </div>
           <button type="submit" class="btn btn-primary" id="ra-btn" data-i18n="request_submit_btn">Send request</button>
         </form>
       </div>
@@ -290,6 +299,16 @@
         <div class="my-rank-strip" id="pf-member-since-strip">
           <span data-i18n="profile_member_since">Member since</span>
           <strong id="pf-member-since">—</strong>
+        </div>
+
+        <div class="field" style="margin-top:14px;">
+          <label for="pf-side-select" data-i18n="profile_side_label">Playing side</label>
+          <select id="pf-side-select">
+            <option value="" data-i18n="side_not_set">Not set</option>
+            <option value="right" data-i18n="side_right">Right</option>
+            <option value="left" data-i18n="side_left">Left</option>
+            <option value="both" data-i18n="side_both">Both</option>
+          </select>
         </div>
 
         <button class="btn btn-ghost share-card-btn" id="share-card-btn" type="button" data-i18n="profile_share_btn">Share profile card</button>

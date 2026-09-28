@@ -51,6 +51,21 @@ export function tierFromPoints(points) {
   return "bronze_3";
 }
 
+// A player with no rating yet (ratingPoints null/absent) is "unranked".
+export function isRanked(player) {
+  return player.ratingPoints !== null && player.ratingPoints !== undefined;
+}
+
+// Starting points for each tier (lowest -> highest), read straight from
+// TIER_THRESHOLDS so it can never drift from the real tier boundaries.
+// The lowest tier has no lower bound (-Infinity), so it gets a concrete 700.
+export function tierStartOptions() {
+  return [...TIER_THRESHOLDS].reverse().map((t) => ({
+    tier: t.tier,
+    points: Number.isFinite(t.min) ? t.min : 700
+  }));
+}
+
 export function tierMeta(tierId) {
   // tierId format: "silver_3", "gold_1", "bronze_2" etc.
   const [family, level] = (tierId || "bronze_3").split("_");
