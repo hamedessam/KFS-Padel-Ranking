@@ -190,6 +190,8 @@
                 <th>Status</th>
                 <th>Date</th>
                 <th>Registered</th>
+                <th>Fee</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="tournaments-tbody"></tbody>
@@ -332,6 +334,11 @@
               <label for="tr-total-teams">Number of teams</label>
               <input type="number" id="tr-total-teams" value="12" min="2" max="64" step="1">
               <div class="hint">The Tournament Manager will show this many numbered team slots.</div>
+            </div>
+            <div class="field">
+              <label for="tr-fee">Registration fee (EGP, optional)</label>
+              <input type="number" id="tr-fee" min="0" step="1" placeholder="e.g. 100">
+              <div class="hint">Shown to players on the tournament card. Leave empty if it is free.</div>
             </div>
             <div class="field">
               <label for="tr-deadline">Registration deadline (optional)</label>

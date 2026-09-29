@@ -277,7 +277,7 @@ $("add-form").addEventListener("submit", async (e) => {
     $("new-pass").textContent = password;
     $("credentials-card").classList.remove("hidden");
     $("copy-creds").onclick = () => {
-      const msg = `Hey ${name}! Here are your login details for Padel X:\nCode: ${playerCode}\nPassword: ${password}`;
+      const msg = `Hey ${name}! Here are your login details for Padel X:\nCode: ${playerCode}\nPassword: ${password}\nWebsite: padelx.me`;
       navigator.clipboard.writeText(msg);
       $("copy-creds").textContent = "Copied ✓";
       setTimeout(() => { $("copy-creds").textContent = "Copy WhatsApp-ready message"; }, 1800);
@@ -286,6 +286,7 @@ $("add-form").addEventListener("submit", async (e) => {
     showMsg(okEl, `${name} added successfully. Assign them to a team in the Tournament Manager tab whenever you're ready.`);
     $("add-form").reset();
     syncRankPointsField();
+    await markPendingRequestApproved(phone);
     loadPlayers();
     loadMatchFormOptions();
     initCoinLogTab();
@@ -527,6 +528,8 @@ $("tournament-form").addEventListener("submit", async (e) => {
   const totalTeams = parseInt($("tr-total-teams").value, 10) || 12;
   const deadlineRaw = $("tr-deadline").value;
   const championName = $("tr-champion").value.trim();
+  const feeRaw = $("tr-fee").value;
+  const fee = feeRaw === "" ? null : Math.max(0, Number(feeRaw));
   const btn = $("tr-btn");
 
   if (!name) return;
@@ -541,6 +544,7 @@ $("tournament-form").addEventListener("submit", async (e) => {
       dateLabel,
       status,
       totalTeams,
+      fee,
       registrationDeadline: deadlineRaw ? new Date(deadlineRaw) : null,
       championName: status === "completed" ? championName : "",
       participantIds: [],
@@ -584,11 +588,16 @@ async function loadTournaments() {
         <td><span class="badge-pill ${statusClass}">${t.status || "upcoming"}</span></td>
         <td>${escapeHtml(t.dateLabel || "—")}</td>
         <td>${(t.participantIds || []).length}</td>
+        <td>${t.fee ? escapeHtml(String(t.fee)) + " EGP" : "—"}</td>
+        <td><button class="link-btn" data-delete-tournament="${d.id}" type="button" style="font-size:12px; color:var(--danger);">Delete</button></td>
       `;
       tbody.appendChild(tr);
     });
     loadingEl.classList.add("hidden");
     tableEl.classList.remove("hidden");
+    tbody.querySelectorAll("[data-delete-tournament]").forEach((btn) => {
+      btn.addEventListener("click", () => deleteTournamentCompletely(btn.dataset.deleteTournament, btn.closest("tr").children[0].textContent, btn));
+    });
   } catch (err) {
     console.error(err);
     loadingEl.textContent = "Couldn't load tournaments.";
@@ -1389,6 +1398,24 @@ async function loadCoinLog(playerId) {
 // =========================================================================
 
 let joinRequestsCache = [];
+let pendingApprovalRequestId = null; // request whose Add Player form is pre-filled but not yet submitted
+
+async function markPendingRequestApproved(submittedPhone) {
+  if (!pendingApprovalRequestId) return;
+  const req = joinRequestsCache.find((r) => r.id === pendingApprovalRequestId);
+  const clean = (v) => (v || "").replace(/\s+/g, "");
+  if (!req || clean(req.phone) !== clean(submittedPhone)) return; // unrelated player, leave the request pending
+  try {
+    await updateDoc(doc(db, "joinRequests", pendingApprovalRequestId), {
+      status: "approved",
+      reviewedAt: serverTimestamp()
+    });
+    pendingApprovalRequestId = null;
+    initJoinRequestsTab();
+  } catch (err) {
+    console.error(err);
+  }
+}
 
 async function initJoinRequestsTab() {
   const loadingP = $("jr-pending-loading");
@@ -1498,10 +1525,9 @@ async function approveJoinRequest(requestId) {
       if (!proceed) return;
     }
 
-    await updateDoc(doc(db, "joinRequests", requestId), {
-      status: "approved",
-      reviewedAt: serverTimestamp()
-    });
+    // Not marked "approved" yet — only once the player is actually created
+    // (see markPendingRequestApproved), so leaving the form doesn't lose it.
+    pendingApprovalRequestId = requestId;
 
     // Jump to Overview and pre-fill the existing Add Player form — reuses
     // the exact same account-creation flow/logic, nothing duplicated here.
@@ -2042,3 +2068,43 @@ $("edit-player-form").addEventListener("submit", async (e) => {
     btn.textContent = "Save";
   }
 });
+
+// =========================================================================
+// ---------------- Delete a tournament ----------------
+// Removes the tournament and its teams. Recorded matches, rating history and
+// coin transactions are NOT touched — points/coins already given stay.
+// =========================================================================
+async function deleteTournamentCompletely(tournamentId, name, btn) {
+  let matchCount = 0;
+  try {
+    const snap = await getDocs(query(collection(db, "matches"), where("tournamentId", "==", tournamentId)));
+    matchCount = snap.size;
+  } catch (err) {
+    console.error(err);
+  }
+  const warn = matchCount > 0
+    ? `\n\nHeads up: ${matchCount} recorded match(es) belong to this tournament. Deleting it does NOT undo the points players already got from them, and coins already awarded stay too.`
+    : "";
+  if (!confirm(`Permanently delete "${name}"?\n\nThis removes the tournament, its teams and registrations. This CANNOT be undone.${warn}`)) return;
+
+  btn.disabled = true;
+  btn.textContent = "Deleting...";
+  try {
+    const teams = await fetchTeams(tournamentId);
+    for (const tm of teams) {
+      await deleteDoc(doc(db, "tournaments", tournamentId, "teams", tm.id));
+    }
+    await deleteDoc(doc(db, "tournaments", tournamentId));
+    loadTournaments();
+    loadTMTournamentSelect();
+    loadMatchFormOptions();
+    initCoinParticipationTab();
+    initCoinAdvancementTab();
+    initCoinPlacementTab();
+  } catch (err) {
+    console.error(err);
+    alert(`Something went wrong deleting "${name}". Try again.`);
+    btn.disabled = false;
+    btn.textContent = "Delete";
+  }
+}

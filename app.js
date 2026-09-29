@@ -100,8 +100,8 @@ function refreshProfileDisplay(player) {
   $("pf-shield").className = "tier-shield " + meta.cssClass;
   const ranked = isRanked(player);
   $("pf-shield").classList.toggle("hidden", !tiersEnabled || !ranked);
-  $("pf-tier-name").textContent = ranked ? tierLabelOrHidden(meta) : t("unranked_label");
-  $("pf-points").textContent = ranked ? `${Math.round(player.ratingPoints)} ${t("pts")}` : "—";
+  $("pf-tier-name").textContent = ranked ? tierLabelOrHidden(meta) : t("tier_hidden_label");
+  $("pf-points").textContent = `${Math.round(player.ratingPoints ?? 0)} ${t("pts")}`;
   $("pf-side-select").value = player.playingSide || "";
 
   $("pf-matches").textContent = player.matchesPlayed ?? 0;
@@ -411,7 +411,7 @@ async function buildRequestCard(tournamentId, team, requesterId) {
       </div>
     </div>
     <div class="request-card-stats">
-      <div class="stat-box"><div class="num">${isRanked(p) ? Math.round(p.ratingPoints) : "—"}</div><div class="lbl">${t("pts")}</div></div>
+      <div class="stat-box"><div class="num">${Math.round(p.ratingPoints ?? 0)}</div><div class="lbl">${t("pts")}</div></div>
       <div class="stat-box"><div class="num">${matches}</div><div class="lbl">${t("profile_matches")}</div></div>
       <div class="stat-box"><div class="num">${winRate}</div><div class="lbl">${t("profile_winrate")}</div></div>
     </div>
@@ -462,9 +462,11 @@ async function ensureLeaderboardData(forceRefresh = false) {
     orderBy("ratingPoints", "desc")
   );
   const snap = await getDocs(q);
+  // Unranked players (ratingPoints null) count as 0, so they sit at the end.
   leaderboardCache = snap.docs
-    .filter((d) => d.data().ratingPoints != null) // unranked players stay off the leaderboard
-    .map((d, i) => ({ id: d.id, rank: i + 1, ...d.data() }));
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.ratingPoints ?? 0) - (a.ratingPoints ?? 0))
+    .map((p, i) => ({ ...p, rank: i + 1 }));
   return leaderboardCache;
 }
 
@@ -478,8 +480,8 @@ async function loadHome() {
   $("hm-shield").className = "tier-shield " + meta.cssClass;
   const homeRanked = isRanked(currentPlayer);
   $("hm-shield").classList.toggle("hidden", !tiersEnabled || !homeRanked);
-  $("hm-tier-name").textContent = homeRanked ? tierLabelOrHidden(meta) : t("unranked_label");
-  $("hm-points").textContent = homeRanked ? `${Math.round(currentPlayer.ratingPoints)} ${t("pts")}` : "—";
+  $("hm-tier-name").textContent = homeRanked ? tierLabelOrHidden(meta) : t("tier_hidden_label");
+  $("hm-points").textContent = `${Math.round(currentPlayer.ratingPoints ?? 0)} ${t("pts")}`;
 
   loadAnnouncement();
   loadHomeTournaments();
@@ -487,7 +489,7 @@ async function loadHome() {
   try {
     const data = await ensureLeaderboardData();
     const mine = data.find((p) => p.id === currentPlayer.id);
-    $("hm-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : (homeRanked ? "—" : t("unranked_label"));
+    $("hm-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : "—";
     renderTopPlayers(data.slice(0, 3));
     if (mine) updateRankTrend(mine.rank);
   } catch (err) {
@@ -549,9 +551,9 @@ function renderTopPlayers(list) {
       <span class="lb-avatar${founding ? " founding-ring" : ""}">${avatarHtml(p)}</span>
       <span class="lb-mid">
         <div class="lb-name">${founding ? '<span class="founding-star" title="Founding Member">🌟</span> ' : ""}${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
-        <div class="lb-tier">${tierLabelOrHidden(meta)}</div>
+        <div class="lb-tier">${tierLabelFor(p)}</div>
       </span>
-      <span class="lb-points">${Math.round(p.ratingPoints ?? 1000)}</span>
+      <span class="lb-points">${Math.round(p.ratingPoints ?? 0)}</span>
     `;
     el.appendChild(row);
   });
@@ -677,6 +679,7 @@ async function loadTournamentsTab() {
         ${tr.location ? `<div class="tourney-meta">${PIN_SVG}${tr.location}</div>` : ""}
         ${tr.dateLabel ? `<div class="tourney-meta">${CAL_SVG}${tr.dateLabel}</div>` : ""}
         ${deadline ? `<div class="tourney-meta">${CAL_SVG}${t("deadline_label")}: ${deadline.toLocaleString(getLang() === "ar" ? "ar-EG" : "en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>` : ""}
+        ${tr.fee > 0 ? `<div class="tourney-meta">${t("fee_label")}: ${tr.fee} ${t("fee_currency")}</div>` : ""}
         ${tr.championName ? `<div class="tourney-champion">🏆 ${t("champion_label")}: ${tr.championName}</div>` : ""}
         <div class="tourney-actions">
           ${viewParticipantsHtml}
@@ -1037,15 +1040,15 @@ async function loadLeaderboard() {
         <span class="lb-avatar${founding ? " founding-ring" : ""}">${avatarHtml(p)}</span>
         <span class="lb-mid">
           <div class="lb-name">${founding ? '<span class="founding-star" title="Founding Member">🌟</span> ' : ""}${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
-          <div class="lb-tier">${tierLabelOrHidden(meta)}</div>
+          <div class="lb-tier">${tierLabelFor(p)}</div>
         </span>
-        <span class="lb-points">${Math.round(p.ratingPoints ?? 1000)}</span>
+        <span class="lb-points">${Math.round(p.ratingPoints ?? 0)}</span>
       `;
       listEl.appendChild(li);
     });
 
     const mine = data.find((p) => p.id === currentPlayer.id);
-    $("my-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : (isRanked(currentPlayer) ? "—" : t("unranked_label"));
+    $("my-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : "—";
 
     loadingEl.classList.add("hidden");
     listEl.classList.remove("hidden");
@@ -1230,7 +1233,7 @@ async function loadPointsHistory() {
   loadingEl.classList.remove("hidden");
   listEl.classList.add("hidden");
   emptyEl.classList.add("hidden");
-  $("ph-total").textContent = isRanked(currentPlayer) ? `${Math.round(currentPlayer.ratingPoints)} ${t("pts")}` : "—";
+  $("ph-total").textContent = `${Math.round(currentPlayer.ratingPoints ?? 0)} ${t("pts")}`;
 
   try {
     const snap = await getDocs(query(collection(db, "ratingHistory"), where("playerId", "==", currentPlayer.id)));
@@ -1708,7 +1711,7 @@ async function generateAndShareProfileCard() {
     const pillY = avatarY + avatarSize + 200;
     ctx.font = "800 34px 'Cairo', sans-serif";
     const shareRanked = isRanked(currentPlayer);
-    const pillText = shareRanked ? tierLabelOrHidden(meta) : t("unranked_label");
+    const pillText = shareRanked ? tierLabelOrHidden(meta) : t("tier_hidden_label");
     const pillWidth = ctx.measureText(pillText).width + 80;
     ctx.fillStyle = "rgba(255,255,255,0.06)";
     roundRect(ctx, W / 2 - pillWidth / 2, pillY - 44, pillWidth, 76, 38);
@@ -1719,7 +1722,7 @@ async function generateAndShareProfileCard() {
     // stats row
     const statsY = pillY + 150;
     const stats = [
-      [shareRanked ? `${Math.round(currentPlayer.ratingPoints)}` : "—", t("pts")],
+      [`${Math.round(currentPlayer.ratingPoints ?? 0)}`, t("pts")],
       [`${currentPlayer.matchesPlayed ?? 0}`, t("profile_matches")],
       [(currentPlayer.matchesPlayed ?? 0) > 0 ? `${Math.round(((currentPlayer.wins ?? 0) / currentPlayer.matchesPlayed) * 100)}%` : "—", t("profile_winrate")]
     ];
@@ -1801,6 +1804,10 @@ async function loadAppSettings() {
     console.error(err);
     tiersEnabled = false;
   }
+}
+
+function tierLabelFor(p) {
+  return isRanked(p) ? tierLabelOrHidden(tierMeta(tierFromPoints(p.ratingPoints))) : t("tier_hidden_label");
 }
 
 function tierLabelOrHidden(meta) {
