@@ -190,6 +190,8 @@
                 <th>Status</th>
                 <th>Date</th>
                 <th>Registered</th>
+                <th>Fee</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="tournaments-tbody"></tbody>
@@ -332,6 +334,11 @@
               <label for="tr-total-teams">Number of teams</label>
               <input type="number" id="tr-total-teams" value="12" min="2" max="64" step="1">
               <div class="hint">The Tournament Manager will show this many numbered team slots.</div>
+            </div>
+            <div class="field">
+              <label for="tr-fee">Registration fee (EGP, optional)</label>
+              <input type="number" id="tr-fee" min="0" step="1" placeholder="e.g. 100">
+              <div class="hint">Shown to players on the tournament card. Leave empty if it is free.</div>
             </div>
             <div class="field">
               <label for="tr-deadline">Registration deadline (optional)</label>
@@ -492,6 +499,22 @@
       <div class="admin-tab-panel hidden" id="admin-tab-market">
 
         <div class="panel">
+          <h1>Filters</h1>
+          <p class="sub">Categories players can filter the Market by (e.g. "Rackets", "Apparel"). Optional — items with no filter still show under "All".</p>
+          <div class="msg error" id="mf-error"></div>
+          <form id="market-filter-form" style="display:flex; gap:8px; align-items:flex-end;">
+            <div class="field" style="flex:1; margin-bottom:0;">
+              <label for="mf-name">Filter name</label>
+              <input type="text" id="mf-name" required placeholder="e.g. Rackets">
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm" id="mf-btn" style="flex-shrink:0;">Add filter</button>
+          </form>
+          <div id="mf-loading" style="font-size:13px; color:var(--text-soft); margin-top:14px;"><span class="spinner"></span> Loading...</div>
+          <div class="hidden" id="mf-list" style="margin-top:12px; display:flex; flex-wrap:wrap; gap:8px;"></div>
+          <div class="hint hidden" id="mf-empty">No filters yet.</div>
+        </div>
+
+        <div class="panel" style="margin-top:16px;">
           <h1>Add a store item</h1>
           <p class="sub">Appears to every player in the Market tab as soon as it's added.</p>
           <div class="msg error" id="mi-error"></div>
@@ -513,6 +536,11 @@
               <label for="mi-image">Photo</label>
               <input type="file" id="mi-image" accept="image/*" required>
             </div>
+            <div class="field">
+              <label>Filters (optional)</label>
+              <div id="mi-filters" style="display:flex; flex-wrap:wrap; gap:10px;"></div>
+              <div class="hint">Pick which filters this item shows under. Leave all unchecked and it only shows under "All".</div>
+            </div>
             <button type="submit" class="btn btn-primary" id="mi-btn">Add item</button>
           </form>
         </div>
@@ -523,6 +551,14 @@
           <div id="mi-list-loading" style="font-size:13px; color:var(--text-soft);"><span class="spinner"></span> Loading...</div>
           <div class="hidden" id="mi-list"></div>
           <div class="hint hidden" id="mi-list-empty">No items added yet.</div>
+        </div>
+
+        <div class="panel hidden" id="edit-item-filters-card" style="margin-top:16px;">
+          <h1>Edit item filters</h1>
+          <p class="sub" id="eif-sub">—</p>
+          <div class="msg error" id="eif-error"></div>
+          <div id="eif-list" style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px;"></div>
+          <button type="button" class="btn btn-primary" id="eif-btn">Save filters</button>
         </div>
 
         <div class="panel" style="margin-top:16px; margin-bottom:16px;">

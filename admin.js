@@ -277,7 +277,7 @@ $("add-form").addEventListener("submit", async (e) => {
     $("new-pass").textContent = password;
     $("credentials-card").classList.remove("hidden");
     $("copy-creds").onclick = () => {
-      const msg = `Hey ${name}! Here are your login details for Padel X:\nCode: ${playerCode}\nPassword: ${password}`;
+      const msg = `Hey ${name}! Here are your login details for Padel X:\nCode: ${playerCode}\nPassword: ${password}\nWebsite: padelx.me`;
       navigator.clipboard.writeText(msg);
       $("copy-creds").textContent = "Copied ✓";
       setTimeout(() => { $("copy-creds").textContent = "Copy WhatsApp-ready message"; }, 1800);
@@ -286,6 +286,7 @@ $("add-form").addEventListener("submit", async (e) => {
     showMsg(okEl, `${name} added successfully. Assign them to a team in the Tournament Manager tab whenever you're ready.`);
     $("add-form").reset();
     syncRankPointsField();
+    await markPendingRequestApproved(phone);
     loadPlayers();
     loadMatchFormOptions();
     initCoinLogTab();
@@ -527,6 +528,8 @@ $("tournament-form").addEventListener("submit", async (e) => {
   const totalTeams = parseInt($("tr-total-teams").value, 10) || 12;
   const deadlineRaw = $("tr-deadline").value;
   const championName = $("tr-champion").value.trim();
+  const feeRaw = $("tr-fee").value;
+  const fee = feeRaw === "" ? null : Math.max(0, Number(feeRaw));
   const btn = $("tr-btn");
 
   if (!name) return;
@@ -541,6 +544,7 @@ $("tournament-form").addEventListener("submit", async (e) => {
       dateLabel,
       status,
       totalTeams,
+      fee,
       registrationDeadline: deadlineRaw ? new Date(deadlineRaw) : null,
       championName: status === "completed" ? championName : "",
       participantIds: [],
@@ -584,11 +588,16 @@ async function loadTournaments() {
         <td><span class="badge-pill ${statusClass}">${t.status || "upcoming"}</span></td>
         <td>${escapeHtml(t.dateLabel || "—")}</td>
         <td>${(t.participantIds || []).length}</td>
+        <td>${t.fee ? escapeHtml(String(t.fee)) + " EGP" : "—"}</td>
+        <td><button class="link-btn" data-delete-tournament="${d.id}" type="button" style="font-size:12px; color:var(--danger);">Delete</button></td>
       `;
       tbody.appendChild(tr);
     });
     loadingEl.classList.add("hidden");
     tableEl.classList.remove("hidden");
+    tbody.querySelectorAll("[data-delete-tournament]").forEach((btn) => {
+      btn.addEventListener("click", () => deleteTournamentCompletely(btn.dataset.deleteTournament, btn.closest("tr").children[0].textContent, btn));
+    });
   } catch (err) {
     console.error(err);
     loadingEl.textContent = "Couldn't load tournaments.";
@@ -1389,6 +1398,24 @@ async function loadCoinLog(playerId) {
 // =========================================================================
 
 let joinRequestsCache = [];
+let pendingApprovalRequestId = null; // request whose Add Player form is pre-filled but not yet submitted
+
+async function markPendingRequestApproved(submittedPhone) {
+  if (!pendingApprovalRequestId) return;
+  const req = joinRequestsCache.find((r) => r.id === pendingApprovalRequestId);
+  const clean = (v) => (v || "").replace(/\s+/g, "");
+  if (!req || clean(req.phone) !== clean(submittedPhone)) return; // unrelated player, leave the request pending
+  try {
+    await updateDoc(doc(db, "joinRequests", pendingApprovalRequestId), {
+      status: "approved",
+      reviewedAt: serverTimestamp()
+    });
+    pendingApprovalRequestId = null;
+    initJoinRequestsTab();
+  } catch (err) {
+    console.error(err);
+  }
+}
 
 async function initJoinRequestsTab() {
   const loadingP = $("jr-pending-loading");
@@ -1498,10 +1525,9 @@ async function approveJoinRequest(requestId) {
       if (!proceed) return;
     }
 
-    await updateDoc(doc(db, "joinRequests", requestId), {
-      status: "approved",
-      reviewedAt: serverTimestamp()
-    });
+    // Not marked "approved" yet — only once the player is actually created
+    // (see markPendingRequestApproved), so leaving the form doesn't lose it.
+    pendingApprovalRequestId = requestId;
 
     // Jump to Overview and pre-fill the existing Add Player form — reuses
     // the exact same account-creation flow/logic, nothing duplicated here.
@@ -1806,17 +1832,20 @@ $("market-item-form").addEventListener("submit", async (e) => {
   btn.textContent = "Adding...";
 
   try {
+    const filterIds = Array.from($("mi-filters").querySelectorAll('input[name="mi-filter-checkbox"]:checked')).map((cb) => cb.value);
     const imageUrl = await resizeItemImageToDataUrl(file, 640);
     await addDoc(collection(db, "marketItems"), {
       name,
       description,
       priceCoins,
       imageUrl,
+      filterIds,
       outOfStock: false,
       createdAt: serverTimestamp()
     });
     showMsg(okEl, `${name} added to the Market.`);
     $("market-item-form").reset();
+    renderItemFilterCheckboxes();
     loadMarketItems();
   } catch (err) {
     console.error(err);
@@ -1827,7 +1856,91 @@ $("market-item-form").addEventListener("submit", async (e) => {
   }
 });
 
+let marketFiltersCache = [];
+
+async function loadMarketFilters() {
+  const loadingEl = $("mf-loading");
+  const listEl = $("mf-list");
+  const emptyEl = $("mf-empty");
+  loadingEl.classList.remove("hidden");
+  listEl.classList.add("hidden");
+  emptyEl.classList.add("hidden");
+
+  try {
+    const snap = await getDocs(query(collection(db, "marketFilters"), orderBy("createdAt", "asc")));
+    marketFiltersCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    loadingEl.classList.add("hidden");
+
+    if (marketFiltersCache.length === 0) {
+      emptyEl.classList.remove("hidden");
+    } else {
+      listEl.innerHTML = marketFiltersCache.map((f) => `
+        <span class="badge-pill silver" style="display:inline-flex; align-items:center; gap:6px;">
+          ${escapeHtml(f.name || "—")}
+          <button type="button" data-delete-filter="${f.id}" data-filter-name="${escapeHtml(f.name || "—")}" style="background:none; border:none; color:inherit; cursor:pointer; font-size:12px; padding:0;">×</button>
+        </span>
+      `).join("");
+      listEl.classList.remove("hidden");
+      listEl.querySelectorAll("[data-delete-filter]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (!confirm(`Delete the "${btn.dataset.filterName}" filter? Items keep their data, they just won't be filterable by it anymore.`)) return;
+          try {
+            await deleteDoc(doc(db, "marketFilters", btn.dataset.deleteFilter));
+            await loadMarketFilters();
+            renderItemFilterCheckboxes();
+          } catch (err) {
+            console.error(err);
+          }
+        });
+      });
+    }
+  } catch (err) {
+    console.error(err);
+    loadingEl.textContent = "Couldn't load filters.";
+  }
+  renderItemFilterCheckboxes();
+}
+
+$("market-filter-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errEl = $("mf-error");
+  hideMsg(errEl);
+  const name = $("mf-name").value.trim();
+  if (!name) return;
+  const btn = $("mf-btn");
+  btn.disabled = true;
+  try {
+    await addDoc(collection(db, "marketFilters"), { name, createdAt: serverTimestamp() });
+    $("market-filter-form").reset();
+    await loadMarketFilters();
+  } catch (err) {
+    console.error(err);
+    showMsg(errEl, "Something went wrong adding the filter. Try again.");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Renders the "which filters does this item belong to" checkbox row —
+// shared markup builder used by both the Add Item form and the per-item
+// Edit Filters card.
+function filterCheckboxesHtml(name, checkedIds) {
+  if (marketFiltersCache.length === 0) return '<div class="hint">No filters created yet — add one above first.</div>';
+  const checked = new Set(checkedIds || []);
+  return marketFiltersCache.map((f) => `
+    <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--text-soft);">
+      <input type="checkbox" name="${name}" value="${f.id}" ${checked.has(f.id) ? "checked" : ""} style="width:auto;">
+      ${escapeHtml(f.name || "—")}
+    </label>
+  `).join("");
+}
+
+function renderItemFilterCheckboxes() {
+  $("mi-filters").innerHTML = filterCheckboxesHtml("mi-filter-checkbox", []);
+}
+
 async function initMarketItemsTab() {
+  await loadMarketFilters();
   await loadMarketItems();
 }
 
@@ -1861,11 +1974,16 @@ async function loadMarketItems() {
             <input type="checkbox" data-toggle-stock="${d.id}" ${it.outOfStock ? "checked" : ""} style="width:auto;">
             Out of stock
           </label>
+          <button class="link-btn" data-edit-item-filters="${d.id}" data-item-name="${escapeHtml(it.name || "—")}" data-item-filters="${(it.filterIds || []).join(",")}" type="button" style="font-size:12px;">Filters</button>
           <button class="link-btn" data-delete-item="${d.id}" data-item-name="${escapeHtml(it.name || "—")}" type="button" style="font-size:12px; color:var(--danger);">Delete</button>
         </div>
       `;
     }).join("");
     listEl.classList.remove("hidden");
+
+    listEl.querySelectorAll("[data-edit-item-filters]").forEach((btn) => {
+      btn.addEventListener("click", () => openEditItemFiltersCard(btn.dataset.editItemFilters, btn.dataset.itemName, btn.dataset.itemFilters ? btn.dataset.itemFilters.split(",") : []));
+    });
 
     listEl.querySelectorAll("[data-toggle-stock]").forEach((cb) => {
       cb.addEventListener("change", async () => {
@@ -2040,5 +2158,84 @@ $("edit-player-form").addEventListener("submit", async (e) => {
   } finally {
     btn.disabled = false;
     btn.textContent = "Save";
+  }
+});
+
+// =========================================================================
+// ---------------- Delete a tournament ----------------
+// Removes the tournament and its teams. Recorded matches, rating history and
+// coin transactions are NOT touched — points/coins already given stay.
+// =========================================================================
+async function deleteTournamentCompletely(tournamentId, name, btn) {
+  let matchCount = 0;
+  try {
+    const snap = await getDocs(query(collection(db, "matches"), where("tournamentId", "==", tournamentId)));
+    matchCount = snap.size;
+  } catch (err) {
+    console.error(err);
+  }
+  const warn = matchCount > 0
+    ? `\n\nHeads up: ${matchCount} recorded match(es) belong to this tournament. Deleting it does NOT undo the points players already got from them, and coins already awarded stay too.`
+    : "";
+  if (!confirm(`Permanently delete "${name}"?\n\nThis removes the tournament, its teams and registrations. This CANNOT be undone.${warn}`)) return;
+
+  btn.disabled = true;
+  btn.textContent = "Deleting...";
+  try {
+    const teams = await fetchTeams(tournamentId);
+    for (const tm of teams) {
+      await deleteDoc(doc(db, "tournaments", tournamentId, "teams", tm.id));
+    }
+    await deleteDoc(doc(db, "tournaments", tournamentId));
+    loadTournaments();
+    loadTMTournamentSelect();
+    loadMatchFormOptions();
+    initCoinParticipationTab();
+    initCoinAdvancementTab();
+    initCoinPlacementTab();
+  } catch (err) {
+    console.error(err);
+    alert(`Something went wrong deleting "${name}". Try again.`);
+    btn.disabled = false;
+    btn.textContent = "Delete";
+  }
+}
+
+// =========================================================================
+// ---------------- Edit an existing item's filters ----------------
+// =========================================================================
+
+let editingItemFiltersId = null;
+
+function openEditItemFiltersCard(itemId, itemName, currentFilterIds) {
+  editingItemFiltersId = itemId;
+  hideMsg($("eif-error"));
+  $("eif-sub").textContent = `Which filters should "${itemName}" show under?`;
+  $("eif-list").innerHTML = filterCheckboxesHtml("eif-filter-checkbox", currentFilterIds);
+  const card = $("edit-item-filters-card");
+  card.classList.remove("hidden");
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+$("eif-btn").addEventListener("click", async () => {
+  const errEl = $("eif-error");
+  hideMsg(errEl);
+  if (!editingItemFiltersId) return;
+
+  const filterIds = Array.from($("eif-list").querySelectorAll('input[name="eif-filter-checkbox"]:checked')).map((cb) => cb.value);
+  const btn = $("eif-btn");
+  btn.disabled = true;
+  btn.textContent = "Saving...";
+  try {
+    await updateDoc(doc(db, "marketItems", editingItemFiltersId), { filterIds });
+    $("edit-item-filters-card").classList.add("hidden");
+    editingItemFiltersId = null;
+    loadMarketItems();
+  } catch (err) {
+    console.error(err);
+    showMsg(errEl, "Something went wrong saving the filters. Try again.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Save filters";
   }
 });

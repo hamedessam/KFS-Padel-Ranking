@@ -100,8 +100,8 @@ function refreshProfileDisplay(player) {
   $("pf-shield").className = "tier-shield " + meta.cssClass;
   const ranked = isRanked(player);
   $("pf-shield").classList.toggle("hidden", !tiersEnabled || !ranked);
-  $("pf-tier-name").textContent = ranked ? tierLabelOrHidden(meta) : t("unranked_label");
-  $("pf-points").textContent = ranked ? `${Math.round(player.ratingPoints)} ${t("pts")}` : "—";
+  $("pf-tier-name").textContent = ranked ? tierLabelOrHidden(meta) : t("tier_hidden_label");
+  $("pf-points").textContent = `${Math.round(player.ratingPoints ?? 0)} ${t("pts")}`;
   $("pf-side-select").value = player.playingSide || "";
 
   $("pf-matches").textContent = player.matchesPlayed ?? 0;
@@ -411,7 +411,7 @@ async function buildRequestCard(tournamentId, team, requesterId) {
       </div>
     </div>
     <div class="request-card-stats">
-      <div class="stat-box"><div class="num">${isRanked(p) ? Math.round(p.ratingPoints) : "—"}</div><div class="lbl">${t("pts")}</div></div>
+      <div class="stat-box"><div class="num">${Math.round(p.ratingPoints ?? 0)}</div><div class="lbl">${t("pts")}</div></div>
       <div class="stat-box"><div class="num">${matches}</div><div class="lbl">${t("profile_matches")}</div></div>
       <div class="stat-box"><div class="num">${winRate}</div><div class="lbl">${t("profile_winrate")}</div></div>
     </div>
@@ -462,9 +462,11 @@ async function ensureLeaderboardData(forceRefresh = false) {
     orderBy("ratingPoints", "desc")
   );
   const snap = await getDocs(q);
+  // Unranked players (ratingPoints null) count as 0, so they sit at the end.
   leaderboardCache = snap.docs
-    .filter((d) => d.data().ratingPoints != null) // unranked players stay off the leaderboard
-    .map((d, i) => ({ id: d.id, rank: i + 1, ...d.data() }));
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.ratingPoints ?? 0) - (a.ratingPoints ?? 0))
+    .map((p, i) => ({ ...p, rank: i + 1 }));
   return leaderboardCache;
 }
 
@@ -478,8 +480,8 @@ async function loadHome() {
   $("hm-shield").className = "tier-shield " + meta.cssClass;
   const homeRanked = isRanked(currentPlayer);
   $("hm-shield").classList.toggle("hidden", !tiersEnabled || !homeRanked);
-  $("hm-tier-name").textContent = homeRanked ? tierLabelOrHidden(meta) : t("unranked_label");
-  $("hm-points").textContent = homeRanked ? `${Math.round(currentPlayer.ratingPoints)} ${t("pts")}` : "—";
+  $("hm-tier-name").textContent = homeRanked ? tierLabelOrHidden(meta) : t("tier_hidden_label");
+  $("hm-points").textContent = `${Math.round(currentPlayer.ratingPoints ?? 0)} ${t("pts")}`;
 
   loadAnnouncement();
   loadHomeTournaments();
@@ -487,7 +489,7 @@ async function loadHome() {
   try {
     const data = await ensureLeaderboardData();
     const mine = data.find((p) => p.id === currentPlayer.id);
-    $("hm-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : (homeRanked ? "—" : t("unranked_label"));
+    $("hm-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : "—";
     renderTopPlayers(data.slice(0, 3));
     if (mine) updateRankTrend(mine.rank);
   } catch (err) {
@@ -549,9 +551,9 @@ function renderTopPlayers(list) {
       <span class="lb-avatar${founding ? " founding-ring" : ""}">${avatarHtml(p)}</span>
       <span class="lb-mid">
         <div class="lb-name">${founding ? '<span class="founding-star" title="Founding Member">🌟</span> ' : ""}${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
-        <div class="lb-tier">${tierLabelOrHidden(meta)}</div>
+        <div class="lb-tier">${tierLabelFor(p)}</div>
       </span>
-      <span class="lb-points">${Math.round(p.ratingPoints ?? 1000)}</span>
+      <span class="lb-points">${Math.round(p.ratingPoints ?? 0)}</span>
     `;
     el.appendChild(row);
   });
@@ -677,6 +679,7 @@ async function loadTournamentsTab() {
         ${tr.location ? `<div class="tourney-meta">${PIN_SVG}${tr.location}</div>` : ""}
         ${tr.dateLabel ? `<div class="tourney-meta">${CAL_SVG}${tr.dateLabel}</div>` : ""}
         ${deadline ? `<div class="tourney-meta">${CAL_SVG}${t("deadline_label")}: ${deadline.toLocaleString(getLang() === "ar" ? "ar-EG" : "en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>` : ""}
+        ${tr.fee > 0 ? `<div class="tourney-meta">${t("fee_label")}: ${tr.fee} ${t("fee_currency")}</div>` : ""}
         ${tr.championName ? `<div class="tourney-champion">🏆 ${t("champion_label")}: ${tr.championName}</div>` : ""}
         <div class="tourney-actions">
           ${viewParticipantsHtml}
@@ -1037,15 +1040,15 @@ async function loadLeaderboard() {
         <span class="lb-avatar${founding ? " founding-ring" : ""}">${avatarHtml(p)}</span>
         <span class="lb-mid">
           <div class="lb-name">${founding ? '<span class="founding-star" title="Founding Member">🌟</span> ' : ""}${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
-          <div class="lb-tier">${tierLabelOrHidden(meta)}</div>
+          <div class="lb-tier">${tierLabelFor(p)}</div>
         </span>
-        <span class="lb-points">${Math.round(p.ratingPoints ?? 1000)}</span>
+        <span class="lb-points">${Math.round(p.ratingPoints ?? 0)}</span>
       `;
       listEl.appendChild(li);
     });
 
     const mine = data.find((p) => p.id === currentPlayer.id);
-    $("my-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : (isRanked(currentPlayer) ? "—" : t("unranked_label"));
+    $("my-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : "—";
 
     loadingEl.classList.add("hidden");
     listEl.classList.remove("hidden");
@@ -1057,12 +1060,23 @@ async function loadLeaderboard() {
 
 // ---------------- marketplace tab ----------------
 let marketItemsCache = null;
+let marketFiltersCache = null;
+let marketSelectedFilter = null; // filter id, or null = "All"
+let marketSortMode = "price_asc"; // default: cheapest first
+let marketSortListenerBound = false;
 
 async function ensureMarketItemsData(forceRefresh = false) {
   if (marketItemsCache && !forceRefresh) return marketItemsCache;
   const snap = await getDocs(query(collection(db, "marketItems"), orderBy("createdAt", "asc")));
   marketItemsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   return marketItemsCache;
+}
+
+async function ensureMarketFiltersData(forceRefresh = false) {
+  if (marketFiltersCache && !forceRefresh) return marketFiltersCache;
+  const snap = await getDocs(query(collection(db, "marketFilters"), orderBy("createdAt", "asc")));
+  marketFiltersCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return marketFiltersCache;
 }
 
 async function loadMarketTab() {
@@ -1073,64 +1087,133 @@ async function loadMarketTab() {
   listEl.classList.add("hidden");
   emptyEl.classList.add("hidden");
 
-  $("mk-balance-value").textContent = `${Math.round(currentPlayer.coinsBalance ?? 0)} ${t("coins_label")}`;
+  $("mk-balance-value").textContent = `${Math.round(currentPlayer.coinsBalance ?? 0)} 🪙`;
 
   try {
-    const items = await ensureMarketItemsData(true);
+    const [items, filters] = await Promise.all([ensureMarketItemsData(true), ensureMarketFiltersData(true)]);
     loadingEl.classList.add("hidden");
 
     if (items.length === 0) {
       emptyEl.classList.remove("hidden");
+      $("mk-filter-bar").classList.add("hidden");
+      $("mk-sort-field").classList.add("hidden");
       return;
     }
 
-    const balance = currentPlayer.coinsBalance ?? 0;
-
-    listEl.innerHTML = items.map((it) => {
-      const price = it.priceCoins ?? 0;
-      const canAffordOne = balance >= price;
-      let controlsHtml;
-      if (it.outOfStock) {
-        controlsHtml = `<button class="btn btn-ghost btn-sm" disabled>${t("out_of_stock_label")}</button>`;
-      } else if (!canAffordOne) {
-        controlsHtml = `<button class="btn btn-ghost btn-sm" disabled>${t("not_enough_coins_label")}</button>`;
-      } else {
-        controlsHtml = `
-          <input type="number" class="market-qty-input" min="1" value="1" step="1" data-qty-input="${it.id}">
-          <button class="btn btn-primary btn-sm" data-buy-item="${it.id}" type="button">${t("buy_btn")}</button>
-        `;
-      }
-      return `
-        <div class="market-item-card">
-          <div class="market-item-imgwrap"><img class="market-item-img" src="${it.imageUrl}" alt=""></div>
-          <div class="market-item-body">
-            <div class="market-item-name">${it.name || "—"}</div>
-            ${it.description ? `<div class="market-item-desc">${it.description}</div>` : ""}
-            <div class="market-item-price" data-price-display="${it.id}">${Math.round(price)} ${t("coins_label")}</div>
-            <div class="market-item-buy">${controlsHtml}</div>
-          </div>
-        </div>
-      `;
-    }).join("");
-    listEl.classList.remove("hidden");
-
-    listEl.querySelectorAll("[data-qty-input]").forEach((input) => {
-      input.addEventListener("input", () => updateBuyButtonForQty(input, items, balance));
-      updateBuyButtonForQty(input, items, balance);
-    });
-
-    listEl.querySelectorAll("[data-buy-item]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const item = items.find((x) => x.id === btn.dataset.buyItem);
-        const qtyInput = listEl.querySelector(`[data-qty-input="${btn.dataset.buyItem}"]`);
-        const qty = Math.max(1, parseInt(qtyInput?.value, 10) || 1);
-        if (item) purchaseItem(item, qty, btn);
-      });
-    });
+    buildMarketFilterBar(filters);
+    buildMarketSortControl();
+    renderMarketItems();
   } catch (err) {
     console.error(err);
     loadingEl.textContent = t("leaderboard_err");
   }
+}
+
+// Rebuilds the filter-pill row (All + one pill per admin-defined filter).
+// Selecting a pill never re-fetches — it just re-renders the already
+// cached items, same as the existing Tournaments/Requests sub-tab pattern.
+function buildMarketFilterBar(filters) {
+  const bar = $("mk-filter-bar");
+  if (filters.length === 0) {
+    bar.classList.add("hidden");
+    bar.innerHTML = "";
+    marketSelectedFilter = null;
+    return;
+  }
+  bar.classList.remove("hidden");
+  bar.innerHTML =
+    `<button class="subtab-btn${marketSelectedFilter === null ? " active" : ""}" data-mk-filter="" type="button">${t("filter_all")}</button>` +
+    filters.map((f) => `<button class="subtab-btn${marketSelectedFilter === f.id ? " active" : ""}" data-mk-filter="${f.id}" type="button">${f.name || "—"}</button>`).join("");
+  bar.querySelectorAll("[data-mk-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      marketSelectedFilter = btn.dataset.mkFilter || null;
+      bar.querySelectorAll(".subtab-btn").forEach((b) => b.classList.toggle("active", b === btn));
+      renderMarketItems();
+    });
+  });
+}
+
+function buildMarketSortControl() {
+  $("mk-sort-field").classList.remove("hidden");
+  $("mk-sort").value = marketSortMode;
+  if (!marketSortListenerBound) {
+    $("mk-sort").addEventListener("change", (e) => {
+      marketSortMode = e.target.value;
+      renderMarketItems();
+    });
+    marketSortListenerBound = true;
+  }
+}
+
+// Applies the current filter + sort over the already-cached items and
+// (re)renders the grid — no network call, safe to call on every pill/sort change.
+function renderMarketItems() {
+  const listEl = $("mk-list");
+  const emptyEl = $("mk-empty");
+  const balance = currentPlayer.coinsBalance ?? 0;
+
+  let items = marketItemsCache || [];
+  if (marketSelectedFilter) {
+    items = items.filter((it) => (it.filterIds || []).includes(marketSelectedFilter));
+  }
+  items = [...items].sort((a, b) => {
+    if (marketSortMode === "price_desc") return (b.priceCoins ?? 0) - (a.priceCoins ?? 0);
+    if (marketSortMode === "newest") {
+      const at = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+      const bt = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+      return bt - at;
+    }
+    return (a.priceCoins ?? 0) - (b.priceCoins ?? 0); // price_asc — default
+  });
+
+  if (items.length === 0) {
+    listEl.classList.add("hidden");
+    emptyEl.classList.remove("hidden");
+    return;
+  }
+  emptyEl.classList.add("hidden");
+
+  listEl.innerHTML = items.map((it) => {
+    const price = it.priceCoins ?? 0;
+    const canAffordOne = balance >= price;
+    let controlsHtml;
+    if (it.outOfStock) {
+      controlsHtml = `<button class="btn btn-ghost btn-sm" disabled>${t("out_of_stock_label")}</button>`;
+    } else if (!canAffordOne) {
+      controlsHtml = `<button class="btn btn-ghost btn-sm" disabled>${t("not_enough_coins_label")}</button>`;
+    } else {
+      controlsHtml = `
+        <input type="number" class="market-qty-input" min="1" value="1" step="1" data-qty-input="${it.id}">
+        <button class="btn btn-primary btn-sm" data-buy-item="${it.id}" type="button">${t("buy_btn")}</button>
+      `;
+    }
+    return `
+      <div class="market-item-card">
+        <div class="market-item-imgwrap"><img class="market-item-img" src="${it.imageUrl}" alt=""></div>
+        <div class="market-item-body">
+          <div class="market-item-name">${it.name || "—"}</div>
+          ${it.description ? `<div class="market-item-desc">${it.description}</div>` : ""}
+          <div class="market-item-price" data-price-display="${it.id}">${Math.round(price)} 🪙</div>
+          <div class="market-item-buy">${controlsHtml}</div>
+        </div>
+      </div>
+    `;
+  }).join("");
+  listEl.classList.remove("hidden");
+
+  listEl.querySelectorAll("[data-qty-input]").forEach((input) => {
+    input.addEventListener("input", () => updateBuyButtonForQty(input, items, balance));
+    updateBuyButtonForQty(input, items, balance);
+  });
+
+  listEl.querySelectorAll("[data-buy-item]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const item = items.find((x) => x.id === btn.dataset.buyItem);
+      const qtyInput = listEl.querySelector(`[data-qty-input="${btn.dataset.buyItem}"]`);
+      const qty = Math.max(1, parseInt(qtyInput?.value, 10) || 1);
+      if (item) purchaseItem(item, qty, btn);
+    });
+  });
 }
 
 // Keeps a card's price line and Buy button in sync with its quantity input —
@@ -1149,7 +1232,7 @@ function updateBuyButtonForQty(input, items, balance) {
   const total = (item.priceCoins ?? 0) * qty;
   btn.disabled = total > balance;
   btn.textContent = btn.disabled ? t("not_enough_coins_label") : t("buy_btn");
-  if (priceEl) priceEl.textContent = `${Math.round(total)} ${t("coins_label")}`;
+  if (priceEl) priceEl.textContent = `${Math.round(total)} 🪙`;
 }
 
 async function purchaseItem(item, qty, btn) {
@@ -1230,7 +1313,7 @@ async function loadPointsHistory() {
   loadingEl.classList.remove("hidden");
   listEl.classList.add("hidden");
   emptyEl.classList.add("hidden");
-  $("ph-total").textContent = isRanked(currentPlayer) ? `${Math.round(currentPlayer.ratingPoints)} ${t("pts")}` : "—";
+  $("ph-total").textContent = `${Math.round(currentPlayer.ratingPoints ?? 0)} ${t("pts")}`;
 
   try {
     const snap = await getDocs(query(collection(db, "ratingHistory"), where("playerId", "==", currentPlayer.id)));
@@ -1499,6 +1582,13 @@ $("about-app-link").addEventListener("click", () => {
   else stopStoryAutoplay();
 });
 
+$("market-faq-link").addEventListener("click", () => {
+  const wrap = $("market-faq-wrap");
+  const wasHidden = wrap.classList.contains("hidden");
+  wrap.classList.toggle("hidden");
+  $("market-faq-chevron").style.transform = wasHidden ? "rotate(90deg)" : "rotate(0deg)";
+});
+
 // ---------------- login ----------------
 $("login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -1708,7 +1798,7 @@ async function generateAndShareProfileCard() {
     const pillY = avatarY + avatarSize + 200;
     ctx.font = "800 34px 'Cairo', sans-serif";
     const shareRanked = isRanked(currentPlayer);
-    const pillText = shareRanked ? tierLabelOrHidden(meta) : t("unranked_label");
+    const pillText = shareRanked ? tierLabelOrHidden(meta) : t("tier_hidden_label");
     const pillWidth = ctx.measureText(pillText).width + 80;
     ctx.fillStyle = "rgba(255,255,255,0.06)";
     roundRect(ctx, W / 2 - pillWidth / 2, pillY - 44, pillWidth, 76, 38);
@@ -1719,7 +1809,7 @@ async function generateAndShareProfileCard() {
     // stats row
     const statsY = pillY + 150;
     const stats = [
-      [shareRanked ? `${Math.round(currentPlayer.ratingPoints)}` : "—", t("pts")],
+      [`${Math.round(currentPlayer.ratingPoints ?? 0)}`, t("pts")],
       [`${currentPlayer.matchesPlayed ?? 0}`, t("profile_matches")],
       [(currentPlayer.matchesPlayed ?? 0) > 0 ? `${Math.round(((currentPlayer.wins ?? 0) / currentPlayer.matchesPlayed) * 100)}%` : "—", t("profile_winrate")]
     ];
@@ -1801,6 +1891,10 @@ async function loadAppSettings() {
     console.error(err);
     tiersEnabled = false;
   }
+}
+
+function tierLabelFor(p) {
+  return isRanked(p) ? tierLabelOrHidden(tierMeta(tierFromPoints(p.ratingPoints))) : t("tier_hidden_label");
 }
 
 function tierLabelOrHidden(meta) {

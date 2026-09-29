@@ -125,6 +125,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /marketFilters/{filterId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /storeOrders/{orderId} {
       allow read, update: if isAdmin();
       // A signed-in player creates their own order as part of the buy

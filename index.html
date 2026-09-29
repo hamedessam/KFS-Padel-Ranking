@@ -215,6 +215,34 @@
           <strong id="mk-balance-value">—</strong>
         </div>
 
+        <button id="market-faq-link" type="button" style="width:100%; display:flex; align-items:center; justify-content:space-between; background:var(--panel); border:1.5px solid var(--border); border-radius:var(--radius-sm); padding:15px 16px; margin-top:14px; cursor:pointer;">
+          <span style="font-family:var(--font-display); font-weight:800; font-size:14px; color:var(--text);">🪙 <span data-i18n="market_faq_link">How do I earn coins?</span></span>
+          <span style="color:var(--ball); font-size:20px; line-height:1;" id="market-faq-chevron">›</span>
+        </button>
+        <div class="hidden" id="market-faq-wrap" style="margin-top:12px;">
+          <div style="background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px 16px;">
+            <div style="font-size:13px; line-height:2.1; color:var(--text-soft);">
+              <div><span data-i18n="market_faq_participation">Join a tournament</span> — <strong style="color:var(--ball); font-family:var(--font-mono);">+10 🪙</strong></div>
+              <div><span data-i18n="market_faq_advancement">Advance from the group stage</span> — <strong style="color:var(--ball); font-family:var(--font-mono);">+20 🪙</strong></div>
+              <div><span data-i18n="market_faq_place3">3rd place</span> — <strong style="color:var(--ball); font-family:var(--font-mono);">+75 🪙</strong></div>
+              <div><span data-i18n="market_faq_place2">2nd place</span> — <strong style="color:var(--ball); font-family:var(--font-mono);">+100 🪙</strong></div>
+              <div><span data-i18n="market_faq_place1">1st place</span> — <strong style="color:var(--ball); font-family:var(--font-mono);">+150 🪙</strong></div>
+            </div>
+            <div style="border-top:1px solid var(--border); margin-top:10px; padding-top:10px; font-size:12px; color:var(--text-soft); line-height:1.8;" data-i18n="market_faq_example">Example: if you and your partner advance and finish 1st, you each get 10 + 20 + 150 = 180 coins.</div>
+          </div>
+        </div>
+
+        <div class="subtab-bar hidden" id="mk-filter-bar" style="margin-top:16px; flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;"></div>
+
+        <div class="field hidden" id="mk-sort-field">
+          <label for="mk-sort" data-i18n="sort_by_label">Sort by</label>
+          <select id="mk-sort">
+            <option value="price_asc" data-i18n="sort_price_asc">Price: Low to High</option>
+            <option value="price_desc" data-i18n="sort_price_desc">Price: High to Low</option>
+            <option value="newest" data-i18n="sort_newest">Newest</option>
+          </select>
+        </div>
+
         <div id="mk-loading" style="font-size:13px; color:var(--text-soft); margin-top:14px;">
           <span class="spinner"></span> <span data-i18n="loading">Loading...</span>
         </div>
