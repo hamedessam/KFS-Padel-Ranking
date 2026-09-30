@@ -866,6 +866,22 @@ body {
   margin-top: 0;
   flex-shrink: 0;
 }
+.market-item-row { cursor: pointer; }
+
+.product-imgwrap {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--panel-alt);
+  margin-bottom: 16px;
+}
+.product-imgwrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 
 /* ---------- bottom tab bar ---------- */
 .tabbar {

@@ -14,6 +14,8 @@ const viewSettings = $("view-settings");
 const tabbar = $("tabbar");
 const settingsBtn = $("settings-btn");
 const settingsBackBtn = $("settings-back-btn");
+const viewProduct = $("view-product");
+let productOverlayOpen = false;
 
 let currentPlayer = null; // { id, ...data }
 let lastTabBeforeSettings = "home";
@@ -180,6 +182,10 @@ settingsBtn.addEventListener("click", () => {
 });
 
 settingsBackBtn.addEventListener("click", () => {
+  if (productOverlayOpen) {
+    closeProductView();
+    return;
+  }
   viewSettings.classList.add("hidden");
   viewApp.classList.remove("hidden");
   tabbar.classList.remove("hidden");
@@ -187,6 +193,79 @@ settingsBackBtn.addEventListener("click", () => {
   settingsBackBtn.classList.add("hidden");
   switchTab(lastTabBeforeSettings);
 });
+
+// ---------------- product view (opened by tapping a Market item) ----------------
+function openProductView(item) {
+  viewApp.classList.add("hidden");
+  tabbar.classList.add("hidden");
+  settingsBtn.classList.add("hidden");
+  settingsBackBtn.classList.remove("hidden");
+  viewProduct.classList.remove("hidden");
+  productOverlayOpen = true;
+  renderProductView(item);
+}
+
+function closeProductView() {
+  viewProduct.classList.add("hidden");
+  viewApp.classList.remove("hidden");
+  tabbar.classList.remove("hidden");
+  settingsBtn.classList.remove("hidden");
+  settingsBackBtn.classList.add("hidden");
+  productOverlayOpen = false;
+}
+
+function renderProductView(item) {
+  $("pd-img").src = item.imageUrl;
+  $("pd-name").textContent = item.name || "—";
+  const descEl = $("pd-desc");
+  if (item.description) {
+    descEl.textContent = item.description;
+    descEl.classList.remove("hidden");
+  } else {
+    descEl.classList.add("hidden");
+  }
+  $("pd-delivery-value").textContent = item.delivery === "unknown" ? t("delivery_unknown") : t("delivery_next_tournament");
+
+  const qtyInput = $("pd-qty");
+  qtyInput.value = 1;
+  const update = () => updateProductTotal(item);
+  qtyInput.oninput = update;
+  update();
+
+  $("pd-buy-btn").onclick = () => {
+    const qty = Math.max(1, parseInt(qtyInput.value, 10) || 1);
+    purchaseItem(item, qty, $("pd-buy-btn"), () => {
+      closeProductView();
+      loadMarketTab();
+    });
+  };
+}
+
+// Keeps the total price (and the Buy button's enabled state) in sync with
+// the quantity field on the product page — same logic as the list view's
+// updateBuyButtonForQty, just against a single fixed item instead of a row.
+function updateProductTotal(item) {
+  const qtyInput = $("pd-qty");
+  let qty = parseInt(qtyInput.value, 10);
+  if (!qty || qty < 1) qty = 1;
+  qtyInput.value = qty;
+
+  const total = (item.priceCoins ?? 0) * qty;
+  $("pd-total-value").innerHTML = `${Math.round(total)}${COIN_SVG}`;
+
+  const balance = currentPlayer.coinsBalance ?? 0;
+  const btn = $("pd-buy-btn");
+  if (item.outOfStock) {
+    btn.disabled = true;
+    btn.textContent = t("out_of_stock_label");
+  } else if (total > balance) {
+    btn.disabled = true;
+    btn.textContent = t("not_enough_coins_label");
+  } else {
+    btn.disabled = false;
+    btn.textContent = t("buy_btn");
+  }
+}
 
 function updateLangButtons() {
   const lang = getLang();
@@ -1190,7 +1269,7 @@ function renderMarketItems() {
       `;
     }
     return `
-      <div class="market-item-row">
+      <div class="market-item-row" data-open-product="${it.id}">
         <div class="market-item-row-imgwrap"><img class="market-item-row-img" src="${it.imageUrl}" alt=""></div>
         <div class="market-item-row-body">
           <div class="market-item-row-name">${it.name || "—"}</div>
@@ -1218,6 +1297,14 @@ function renderMarketItems() {
       if (item) purchaseItem(item, qty, btn);
     });
   });
+
+  listEl.querySelectorAll(".market-item-row").forEach((row) => {
+    row.addEventListener("click", (e) => {
+      if (e.target.closest(".market-item-row-buy")) return; // qty input / Buy button handle themselves
+      const item = items.find((x) => x.id === row.dataset.openProduct);
+      if (item) openProductView(item);
+    });
+  });
 }
 
 // Keeps a card's price line and Buy button in sync with its quantity input —
@@ -1239,7 +1326,7 @@ function updateBuyButtonForQty(input, items, balance) {
   if (priceEl) priceEl.innerHTML = `${Math.round(total)}${COIN_SVG}`;
 }
 
-async function purchaseItem(item, qty, btn) {
+async function purchaseItem(item, qty, btn, onSuccess) {
   const total = (item.priceCoins ?? 0) * qty;
   const confirmMsg = t("confirm_purchase")
     .replace("{qty}", qty)
@@ -1299,7 +1386,8 @@ async function purchaseItem(item, qty, btn) {
     currentPlayer.coinsBalance = newBalance;
     renderBadges(currentPlayer);
     alert(t("purchase_success_msg").replace("{item}", item.name || ""));
-    loadMarketTab();
+    if (onSuccess) onSuccess();
+    else loadMarketTab();
   } catch (err) {
     console.error(err);
     if (err.message === "INSUFFICIENT") alert(t("purchase_err_insufficient"));

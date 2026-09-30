@@ -431,6 +431,34 @@
       </div>
     </div>
 
+    <!-- ===================== PRODUCT VIEW ===================== -->
+    <div class="hidden" id="view-product">
+      <div class="panel">
+        <div class="product-imgwrap">
+          <img id="pd-img" src="" alt="">
+        </div>
+        <h1 id="pd-name">—</h1>
+        <p class="sub hidden" id="pd-desc"></p>
+
+        <div class="my-rank-strip" id="pd-delivery-strip">
+          <span data-i18n="delivery_label">Delivery</span>
+          <strong id="pd-delivery-value">—</strong>
+        </div>
+
+        <div class="field" style="margin-top:18px;">
+          <label for="pd-qty" data-i18n="quantity_label">Quantity</label>
+          <input type="number" id="pd-qty" min="1" value="1" step="1">
+        </div>
+
+        <div class="my-rank-strip" id="pd-total-strip">
+          <span data-i18n="total_price_label">Total</span>
+          <strong id="pd-total-value">—</strong>
+        </div>
+
+        <button class="btn btn-primary" id="pd-buy-btn" type="button" data-i18n="buy_btn" style="margin-top:16px;">Buy</button>
+      </div>
+    </div>
+
   </div>
 
   <!-- ---- bottom tab bar ---- -->
