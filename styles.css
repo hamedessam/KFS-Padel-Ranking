@@ -383,9 +383,12 @@ body {
 .tier-shield.gold { background: linear-gradient(160deg, #f3d178, var(--gold)); }
 .tier-shield.silver { background: linear-gradient(160deg, #e4e9eb, var(--silver)); }
 .tier-shield.bronze { background: linear-gradient(160deg, #d5a878, var(--bronze)); }
+.tier-shield.coin { background: linear-gradient(160deg, #e9f7ab, var(--ball)); }
 .tier-info { color: var(--text); }
 .tier-name { font-family: var(--font-display); font-weight: 800; font-size: 16px; }
 .tier-points { font-family: var(--font-mono); font-size: 12px; color: var(--text-soft); margin-top: 2px; }
+.coin-balance-label { font-size: 11px; color: var(--text-soft); }
+.coin-balance-value { font-family: var(--font-mono); font-weight: 700; font-size: 20px; color: var(--ball); margin-top: 2px; }
 
 .stat-row {
   display: flex;
@@ -790,6 +793,78 @@ body {
 .market-item-buy .btn-ghost.btn-sm {
   font-size: 10.5px;
   padding: 8px 2px;
+}
+
+/* ---------- market items v2 (horizontal rows — "neon scoreboard") ---------- */
+.market-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.market-item-row {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  background: var(--panel);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+}
+.market-item-row-imgwrap {
+  width: 76px;
+  height: 76px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel-alt);
+}
+.market-item-row-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.market-item-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+.market-item-row-name {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.3;
+}
+.market-item-row-desc {
+  font-size: 10.5px;
+  color: var(--text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.market-item-row-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+.market-item-row-price {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--ball);
+  flex-shrink: 0;
+}
+.market-item-row-buy {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 0;
+  flex-shrink: 0;
 }
 
 /* ---------- bottom tab bar ---------- */

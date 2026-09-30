@@ -154,7 +154,7 @@ function renderBadges(player) {
   else if (matches >= 3) activityKey = "badge_regular";
   el.innerHTML += `<span class="badge-pill activity">${t(activityKey)}</span>`;
 
-  el.innerHTML += `<span class="badge-pill gold">🪙 ${Math.round(player.coinsBalance ?? 0)} ${t("coins_label")}</span>`;
+  el.innerHTML += `<span class="badge-pill gold">${Math.round(player.coinsBalance ?? 0)} ${t("coins_label")}${COIN_SVG}</span>`;
 }
 
 function showLogin() {
@@ -1058,6 +1058,8 @@ async function loadLeaderboard() {
   }
 }
 
+const COIN_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align:-2px; margin-inline-start:3px;"><circle cx="12" cy="12" r="9"></circle><path d="M9 12h6M12 9v6"></path></svg>';
+
 // ---------------- marketplace tab ----------------
 let marketItemsCache = null;
 let marketFiltersCache = null;
@@ -1087,7 +1089,7 @@ async function loadMarketTab() {
   listEl.classList.add("hidden");
   emptyEl.classList.add("hidden");
 
-  $("mk-balance-value").textContent = `${Math.round(currentPlayer.coinsBalance ?? 0)} 🪙`;
+  $("mk-balance-value").textContent = `${Math.round(currentPlayer.coinsBalance ?? 0)}`;
 
   try {
     const [items, filters] = await Promise.all([ensureMarketItemsData(true), ensureMarketFiltersData(true)]);
@@ -1188,13 +1190,15 @@ function renderMarketItems() {
       `;
     }
     return `
-      <div class="market-item-card">
-        <div class="market-item-imgwrap"><img class="market-item-img" src="${it.imageUrl}" alt=""></div>
-        <div class="market-item-body">
-          <div class="market-item-name">${it.name || "—"}</div>
-          ${it.description ? `<div class="market-item-desc">${it.description}</div>` : ""}
-          <div class="market-item-price" data-price-display="${it.id}">${Math.round(price)} 🪙</div>
-          <div class="market-item-buy">${controlsHtml}</div>
+      <div class="market-item-row">
+        <div class="market-item-row-imgwrap"><img class="market-item-row-img" src="${it.imageUrl}" alt=""></div>
+        <div class="market-item-row-body">
+          <div class="market-item-row-name">${it.name || "—"}</div>
+          ${it.description ? `<div class="market-item-row-desc">${it.description}</div>` : ""}
+          <div class="market-item-row-footer">
+            <span class="market-item-row-price" data-price-display="${it.id}">${Math.round(price)}${COIN_SVG}</span>
+            <div class="market-item-row-buy market-item-buy">${controlsHtml}</div>
+          </div>
         </div>
       </div>
     `;
@@ -1222,7 +1226,7 @@ function renderMarketItems() {
 function updateBuyButtonForQty(input, items, balance) {
   const item = items.find((x) => x.id === input.dataset.qtyInput);
   if (!item) return;
-  const card = input.closest(".market-item-card");
+  const card = input.closest(".market-item-row");
   const btn = card?.querySelector("[data-buy-item]");
   const priceEl = card?.querySelector("[data-price-display]");
   if (!btn) return;
@@ -1232,7 +1236,7 @@ function updateBuyButtonForQty(input, items, balance) {
   const total = (item.priceCoins ?? 0) * qty;
   btn.disabled = total > balance;
   btn.textContent = btn.disabled ? t("not_enough_coins_label") : t("buy_btn");
-  if (priceEl) priceEl.textContent = `${Math.round(total)} 🪙`;
+  if (priceEl) priceEl.innerHTML = `${Math.round(total)}${COIN_SVG}`;
 }
 
 async function purchaseItem(item, qty, btn) {
