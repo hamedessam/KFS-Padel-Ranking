@@ -1177,7 +1177,7 @@ async function loadMarketTab() {
     if (items.length === 0) {
       emptyEl.classList.remove("hidden");
       $("mk-filter-bar").classList.add("hidden");
-      $("mk-sort-field").classList.add("hidden");
+      $("mk-sort").classList.add("hidden");
       return;
     }
 
@@ -1215,7 +1215,7 @@ function buildMarketFilterBar(filters) {
 }
 
 function buildMarketSortControl() {
-  $("mk-sort-field").classList.remove("hidden");
+  $("mk-sort").classList.remove("hidden");
   $("mk-sort").value = marketSortMode;
   if (!marketSortListenerBound) {
     $("mk-sort").addEventListener("change", (e) => {
