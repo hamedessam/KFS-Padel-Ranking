@@ -868,32 +868,38 @@ body {
 }
 .market-item-row { cursor: pointer; }
 
-.coin-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  background: var(--panel);
-  border: 1px solid rgba(201,242,76,0.3);
-  border-radius: 999px;
-  padding: 6px 16px 6px 6px;
-}
-[dir="rtl"] .coin-pill { padding: 6px 6px 6px 16px; }
-.coin-pill-dot {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: var(--ball);
-  box-shadow: 0 0 14px 3px rgba(201,242,76,0.55);
+.coin-pill-floating {
   display: flex;
   align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-soft);
 }
-.coin-pill-value {
-  font-family: var(--font-mono);
+
+.mk-filter-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-top: 16px;
+  padding-bottom: 2px;
+}
+.mk-filter-chip {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  background: var(--panel);
+  color: var(--text-soft);
+  font-family: var(--font-display);
   font-weight: 700;
-  font-size: 15px;
-  color: var(--text);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.mk-filter-chip.active {
+  background: var(--ball);
+  border-color: var(--ball);
+  color: #0a1615;
 }
 
 .mk-sort-select {

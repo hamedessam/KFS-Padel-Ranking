@@ -1168,7 +1168,7 @@ async function loadMarketTab() {
   listEl.classList.add("hidden");
   emptyEl.classList.add("hidden");
 
-  $("mk-balance-value").textContent = `${Math.round(currentPlayer.coinsBalance ?? 0)}`;
+  $("mk-balance-value").innerHTML = `${Math.round(currentPlayer.coinsBalance ?? 0)}${COIN_SVG}`;
 
   try {
     const [items, filters] = await Promise.all([ensureMarketItemsData(true), ensureMarketFiltersData(true)]);
@@ -1203,12 +1203,12 @@ function buildMarketFilterBar(filters) {
   }
   bar.classList.remove("hidden");
   bar.innerHTML =
-    `<button class="subtab-btn${marketSelectedFilter === null ? " active" : ""}" data-mk-filter="" type="button">${t("filter_all")}</button>` +
-    filters.map((f) => `<button class="subtab-btn${marketSelectedFilter === f.id ? " active" : ""}" data-mk-filter="${f.id}" type="button">${f.name || "—"}</button>`).join("");
+    `<button class="mk-filter-chip${marketSelectedFilter === null ? " active" : ""}" data-mk-filter="" type="button">${t("filter_all")}</button>` +
+    filters.map((f) => `<button class="mk-filter-chip${marketSelectedFilter === f.id ? " active" : ""}" data-mk-filter="${f.id}" type="button">${f.name || "—"}</button>`).join("");
   bar.querySelectorAll("[data-mk-filter]").forEach((btn) => {
     btn.addEventListener("click", () => {
       marketSelectedFilter = btn.dataset.mkFilter || null;
-      bar.querySelectorAll(".subtab-btn").forEach((b) => b.classList.toggle("active", b === btn));
+      bar.querySelectorAll(".mk-filter-chip").forEach((b) => b.classList.toggle("active", b === btn));
       renderMarketItems();
     });
   });

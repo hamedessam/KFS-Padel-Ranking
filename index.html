@@ -207,21 +207,17 @@
 
       <!-- ---- tab: marketplace ---- -->
       <div class="panel hidden" id="tab-marketplace">
-        <h1 data-i18n="marketplace_title">Marketplace</h1>
-        <p class="sub" data-i18n="marketplace_sub">Soon you'll be able to buy custom codes, padel gear, and book courts directly from here. Stay tuned.</p>
-
-        <div style="text-align:center; margin:4px 0 20px;">
-          <div style="font-size:11px; color:var(--text-soft); margin-bottom:6px;" data-i18n="current_coins_strip">Your current coin balance</div>
-          <div class="coin-pill" id="mk-balance-strip">
-            <span class="coin-pill-dot">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0a1615" stroke-width="2.4"><circle cx="12" cy="12" r="9"></circle><path d="M9 12h6M12 9v6"></path></svg>
-            </span>
-            <span class="coin-pill-value" id="mk-balance-value">—</span>
-          </div>
+        <div class="coin-pill-floating" id="mk-balance-strip">
+          <span data-i18n="market_balance_label">Your coins</span>
+          <span class="market-item-row-price" id="mk-balance-value">—</span>
         </div>
 
-        <div style="display:flex; align-items:center; gap:10px;">
-          <div class="subtab-bar hidden" id="mk-filter-bar" style="flex:1; min-width:0; margin-bottom:0; border-bottom:none; padding-bottom:0; flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;"></div>
+        <h1 data-i18n="marketplace_title" style="margin-top:6px;">Market</h1>
+        <p class="sub" data-i18n="marketplace_sub">Spend the coins you've earned on real stuff.</p>
+
+        <div class="mk-filter-row hidden" id="mk-filter-bar"></div>
+
+        <div style="display:flex; justify-content:flex-end; margin-top:10px;">
           <select id="mk-sort" class="mk-sort-select hidden" aria-label="Sort by">
             <option value="price_asc" data-i18n="sort_price_asc">Price: Low to High</option>
             <option value="price_desc" data-i18n="sort_price_desc">Price: High to Low</option>
@@ -229,7 +225,7 @@
           </select>
         </div>
 
-        <div id="mk-loading" style="font-size:13px; color:var(--text-soft); margin-top:14px;">
+        <div id="mk-loading" style="font-size:13px; color:var(--text-soft); margin-top:16px;">
           <span class="spinner"></span> <span data-i18n="loading">Loading...</span>
         </div>
         <div class="hidden market-list" id="mk-list"></div>
@@ -251,6 +247,7 @@
             <div style="border-top:1px solid var(--border); margin-top:10px; padding-top:10px; font-size:12px; color:var(--text-soft); line-height:1.8;" data-i18n="market_faq_example">Example: if you and your partner advance and finish 1st, you each get 10 + 20 + 150 = 180 coins.</div>
           </div>
         </div>
+      </div>
       </div>
 
       <!-- ---- tab: leaderboard ---- -->
