@@ -1,5 +1,5 @@
 // Bump CACHE_NAME on every deploy to bust stale caches (lesson learned from previous PWAs)
-const CACHE_NAME = "padelx-v43";
+const CACHE_NAME = "padelx-v44";
 const ASSETS = [
   "./index.html",
   "./styles.css",
