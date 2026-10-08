@@ -868,6 +868,17 @@ body {
 }
 .market-item-row { cursor: pointer; }
 
+.mk-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.mk-header-row h1 { margin: 0; }
+.mk-balance-big { font-size: 20px; display: inline-flex; align-items: center; }
+.mk-balance-big svg { width: 20px; height: 20px; }
+
 .coin-pill-floating {
   display: flex;
   align-items: center;

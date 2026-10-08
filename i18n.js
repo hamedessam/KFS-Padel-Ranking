@@ -7,7 +7,7 @@ const translations = {
     app_name: "Padel X",
     loading: "جاري التحميل...",
     tab_home: "الرئيسية",
-    tab_market: "المتجر",
+    tab_market: "الماركت",
     tab_leaderboard: "الترتيب",
     tab_profile: "البروفايل",
     // login
@@ -117,7 +117,7 @@ const translations = {
     leaderboard_err: "حصل خطأ في تحميل الترتيب.",
     // marketplace
     marketplace_badge: "قريبًا",
-    marketplace_title: "المتجر",
+    marketplace_title: "الماركت",
     marketplace_sub: "اصرف الكوينز اللي كسبتها في حاجات حقيقية.",
     market_empty: "لسه مفيش حاجة في الاستور.",
     buy_btn: "اشتري",

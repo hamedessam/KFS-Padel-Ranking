@@ -207,17 +207,17 @@
 
       <!-- ---- tab: marketplace ---- -->
       <div class="panel hidden" id="tab-marketplace">
-        <div class="coin-pill-floating" id="mk-balance-strip">
-          <span data-i18n="market_balance_label">Your coins</span>
-          <span class="market-item-row-price" id="mk-balance-value">—</span>
+        <div class="mk-header-row">
+          <h1 data-i18n="marketplace_title">Market</h1>
+          <div class="coin-pill-floating" id="mk-balance-strip">
+            <span class="market-item-row-price mk-balance-big" id="mk-balance-value">—</span>
+          </div>
         </div>
-
-        <h1 data-i18n="marketplace_title" style="margin-top:6px;">Market</h1>
         <p class="sub" data-i18n="marketplace_sub">Spend the coins you've earned on real stuff.</p>
 
         <div class="mk-filter-row hidden" id="mk-filter-bar"></div>
 
-        <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+        <div style="display:flex; justify-content:flex-end; margin-top:10px; margin-bottom:16px;">
           <select id="mk-sort" class="mk-sort-select hidden" aria-label="Sort by">
             <option value="price_asc" data-i18n="sort_price_asc">Price: Low to High</option>
             <option value="price_desc" data-i18n="sort_price_desc">Price: High to Low</option>
