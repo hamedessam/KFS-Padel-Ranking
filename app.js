@@ -1193,6 +1193,12 @@ async function loadMarketTab() {
 // Rebuilds the filter-pill row (All + one pill per admin-defined filter).
 // Selecting a pill never re-fetches — it just re-renders the already
 // cached items, same as the existing Tournaments/Requests sub-tab pattern.
+// Arabic users see the filter's Arabic name if the admin set one, otherwise
+// the English name (so existing filters without an Arabic name keep working).
+function marketFilterLabel(f) {
+  return (getLang() === "ar" && f.nameAr) ? f.nameAr : (f.name || "—");
+}
+
 function buildMarketFilterBar(filters) {
   const bar = $("mk-filter-bar");
   if (filters.length === 0) {
@@ -1204,7 +1210,7 @@ function buildMarketFilterBar(filters) {
   bar.classList.remove("hidden");
   bar.innerHTML =
     `<button class="mk-filter-chip${marketSelectedFilter === null ? " active" : ""}" data-mk-filter="" type="button">${t("filter_all")}</button>` +
-    filters.map((f) => `<button class="mk-filter-chip${marketSelectedFilter === f.id ? " active" : ""}" data-mk-filter="${f.id}" type="button">${f.name || "—"}</button>`).join("");
+    filters.map((f) => `<button class="mk-filter-chip${marketSelectedFilter === f.id ? " active" : ""}" data-mk-filter="${f.id}" type="button">${marketFilterLabel(f)}</button>`).join("");
   bar.querySelectorAll("[data-mk-filter]").forEach((btn) => {
     btn.addEventListener("click", () => {
       marketSelectedFilter = btn.dataset.mkFilter || null;

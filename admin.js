@@ -1876,11 +1876,27 @@ async function loadMarketFilters() {
     } else {
       listEl.innerHTML = marketFiltersCache.map((f) => `
         <span class="badge-pill silver" style="display:inline-flex; align-items:center; gap:6px;">
-          ${escapeHtml(f.name || "—")}
-          <button type="button" data-delete-filter="${f.id}" data-filter-name="${escapeHtml(f.name || "—")}" style="background:none; border:none; color:inherit; cursor:pointer; font-size:12px; padding:0;">×</button>
+          ${escapeHtml(f.name || "—")}${f.nameAr ? " · " + escapeHtml(f.nameAr) : ""}
+          <button type="button" data-edit-filter="${f.id}" data-filter-name="${escapeHtml(f.name || "").replace(/"/g, "&quot;")}" data-filter-name-ar="${escapeHtml(f.nameAr || "").replace(/"/g, "&quot;")}" title="Edit names" style="background:none; border:none; color:inherit; cursor:pointer; font-size:12px; padding:0;">✎</button>
+          <button type="button" data-delete-filter="${f.id}" data-filter-name="${escapeHtml(f.name || "—").replace(/"/g, "&quot;")}" style="background:none; border:none; color:inherit; cursor:pointer; font-size:12px; padding:0;">×</button>
         </span>
       `).join("");
       listEl.classList.remove("hidden");
+      listEl.querySelectorAll("[data-edit-filter]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const newName = prompt("Filter name (English):", btn.dataset.filterName || "");
+          if (newName === null || !newName.trim()) return;
+          const newAr = prompt("Arabic name (leave empty to show the English name to Arabic users):", btn.dataset.filterNameAr || "");
+          if (newAr === null) return;
+          try {
+            await updateDoc(doc(db, "marketFilters", btn.dataset.editFilter), { name: newName.trim(), nameAr: newAr.trim() });
+            await loadMarketFilters();
+          } catch (err) {
+            console.error(err);
+            alert("Something went wrong saving the filter. Try again.");
+          }
+        });
+      });
       listEl.querySelectorAll("[data-delete-filter]").forEach((btn) => {
         btn.addEventListener("click", async () => {
           if (!confirm(`Delete the "${btn.dataset.filterName}" filter? Items keep their data, they just won't be filterable by it anymore.`)) return;
@@ -1906,11 +1922,12 @@ $("market-filter-form").addEventListener("submit", async (e) => {
   const errEl = $("mf-error");
   hideMsg(errEl);
   const name = $("mf-name").value.trim();
+  const nameAr = $("mf-name-ar").value.trim();
   if (!name) return;
   const btn = $("mf-btn");
   btn.disabled = true;
   try {
-    await addDoc(collection(db, "marketFilters"), { name, createdAt: serverTimestamp() });
+    await addDoc(collection(db, "marketFilters"), { name, nameAr, createdAt: serverTimestamp() });
     $("market-filter-form").reset();
     await loadMarketFilters();
   } catch (err) {

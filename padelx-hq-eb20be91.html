@@ -502,13 +502,18 @@
           <h1>Filters</h1>
           <p class="sub">Categories players can filter the Market by (e.g. "Rackets", "Apparel"). Optional — items with no filter still show under "All".</p>
           <div class="msg error" id="mf-error"></div>
-          <form id="market-filter-form" style="display:flex; gap:8px; align-items:flex-end;">
-            <div class="field" style="flex:1; margin-bottom:0;">
-              <label for="mf-name">Filter name</label>
-              <input type="text" id="mf-name" required placeholder="e.g. Rackets">
+          <form id="market-filter-form" style="display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end;">
+            <div class="field" style="flex:1 1 140px; margin-bottom:0;">
+              <label for="mf-name">Filter name (English)</label>
+              <input type="text" id="mf-name" required placeholder="e.g. Accessories">
+            </div>
+            <div class="field" style="flex:1 1 140px; margin-bottom:0;">
+              <label for="mf-name-ar">Arabic name (optional)</label>
+              <input type="text" id="mf-name-ar" dir="rtl" placeholder="مثال: إكسسوارات">
             </div>
             <button type="submit" class="btn btn-primary btn-sm" id="mf-btn" style="flex-shrink:0;">Add filter</button>
           </form>
+          <div class="hint" style="margin-top:8px;">Arabic users see the Arabic name; English users see the English one. If you leave the Arabic name empty, Arabic users see the English name. Use the ✎ on any existing filter to add or change its Arabic name.</div>
           <div id="mf-loading" style="font-size:13px; color:var(--text-soft); margin-top:14px;"><span class="spinner"></span> Loading...</div>
           <div class="hidden" id="mf-list" style="margin-top:12px; display:flex; flex-wrap:wrap; gap:8px;"></div>
           <div class="hint hidden" id="mf-empty">No filters yet.</div>
