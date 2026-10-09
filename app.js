@@ -737,9 +737,17 @@ async function loadTournamentsTab() {
       let actionHtml = "";
       if (tr.status === "upcoming") {
         if (isRegistered) {
-          actionHtml = isPastDeadline
-            ? `<button class="btn btn-ghost btn-sm" disabled>${t("registered_btn")}</button>`
-            : `<button class="btn btn-ghost btn-sm" data-unregister="${tr.id}">${t("unregister_btn")}</button>`;
+          // Waiting-list players are also in participantIds, so they used to get
+          // a plain "Unregister" button and never saw they were on the list.
+          const waitPos = (tr.waitingList || []).indexOf(currentPlayer.id);
+          if (waitPos !== -1) {
+            actionHtml = `<button class="btn btn-ghost btn-sm" disabled>${t("waiting_list_label")} #${waitPos + 1}</button>`
+              + (isPastDeadline ? "" : `<button class="link-btn" data-unregister="${tr.id}" type="button" style="font-size:12px;">${t("leave_waitlist_btn")}</button>`);
+          } else {
+            actionHtml = isPastDeadline
+              ? `<button class="btn btn-ghost btn-sm" disabled>${t("registered_btn")}</button>`
+              : `<button class="btn btn-ghost btn-sm" data-unregister="${tr.id}">${t("unregister_btn")}</button>`;
+          }
         } else if (isPastDeadline) {
           actionHtml = `<span class="hint">${t("registration_closed")}</span>`;
         } else {
@@ -1033,6 +1041,12 @@ async function renderTeamGrid(tournamentId, container) {
       .filter((p) => p.isActive !== false && !assignedIds.has(p.id) && p.id !== currentPlayer.id);
     const candidateOptions = candidates.map((p) => `<option value="${p.id}">${p.name} (${p.playerCode})</option>`).join("");
 
+    // fresh waiting list (not the cached tournament doc) + names from the
+    // players snapshot already fetched above — no extra per-player reads
+    const freshTourney = await getDoc(doc(db, "tournaments", tournamentId));
+    const waitingList = freshTourney.exists() ? (freshTourney.data().waitingList || []) : [];
+    const allNameById = new Map(allActiveSnap.docs.map((d) => [d.id, `${d.data().name || "—"} (${d.data().playerCode || "—"})`]));
+
     const teamByNumber = new Map(teams.map((tm) => [tm.teamNumber, tm]));
 
     let html = "";
@@ -1069,6 +1083,14 @@ async function renderTeamGrid(tournamentId, container) {
           </div>
         </div>
       `;
+    }
+
+    if (waitingList.length > 0) {
+      html += `<div class="tourney-participants-group" style="margin-top:20px;">${t("waiting_list_heading")} (${waitingList.length})</div>`
+        + waitingList.map((id, i) => {
+          const mine = id === currentPlayer.id;
+          return `<div class="team-slot-row"><div class="team-slot-player"><span class="team-slot-number">#${i + 1}</span><span class="team-slot-player-name"${mine ? ' style="color:var(--ball);"' : ""}>${allNameById.get(id) || "—"}${mine ? " " + t("you_suffix") : ""}</span></div></div>`;
+        }).join("");
     }
 
     container.innerHTML = html;
