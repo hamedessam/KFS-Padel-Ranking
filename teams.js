@@ -4,7 +4,7 @@
 // they're reading and writing through the exact same functions.
 
 import {
-  db, collection, doc, getDoc, getDocs, updateDoc, deleteDoc, addDoc,
+  db, collection, doc, getDoc, getDocs, updateDoc, deleteDoc, addDoc, runTransaction,
   arrayUnion, arrayRemove, serverTimestamp
 } from "./firebase-config.js";
 
@@ -19,29 +19,84 @@ export function findTeamOf(teams, playerId) {
   return teams.find((t) => t.player1Id === playerId || t.player2Id === playerId) || null;
 }
 
+// ---------------- race-safe team-number claiming ----------------
+// New teams get a deterministic document id ("slot-<number>") and are created
+// inside a transaction that first checks the id doesn't exist yet. So even if
+// 50 players tap "Register a team" in the same second, Firestore itself
+// guarantees only ONE of them gets any given number — the others simply move
+// on to the next free number (or the waiting list). Older teams that were
+// created before this change keep their random ids and keep working as-is.
+const slotDocId = (n) => `slot-${n}`;
+
+// Small retry with jitter for transient failures (busy server, contention).
+async function withRetry(fn, attempts = 4) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (err && err.code === "permission-denied") throw err;
+      await new Promise((r) => setTimeout(r, 250 * (i + 1) + Math.random() * 400));
+    }
+  }
+  throw lastErr;
+}
+
+// Creates team #teamNumber only if nobody has taken it yet. Returns the new
+// team's doc id, or null if the number was already taken.
+async function tryCreateSlotTeam(tournamentId, teamNumber, players) {
+  const ref = doc(db, "tournaments", tournamentId, "teams", slotDocId(teamNumber));
+  return withRetry(() => runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists()) return null;
+    tx.set(ref, {
+      teamNumber,
+      player1Id: players.player1Id ?? null,
+      player2Id: players.player2Id ?? null,
+      group: null,
+      createdAt: serverTimestamp()
+    });
+    return ref.id;
+  }));
+}
+
+// Walks the numbers that looked free in `teams` (a recent fetch) from lowest
+// to highest and claims the first one that is genuinely still free.
+async function claimLowestFreeSlot(tournamentId, totalTeams, teams, players) {
+  const used = new Set(teams.map((tm) => tm.teamNumber).filter(Boolean));
+  for (let n = 1; n <= totalTeams; n++) {
+    if (used.has(n)) continue;
+    const id = await tryCreateSlotTeam(tournamentId, n, players);
+    if (id) return { id, teamNumber: n };
+  }
+  return null;
+}
+
 // Player registers themselves: claims the next free team number (1..totalTeams)
 // as player1 with an open player2 slot. If the tournament is full, they go on
 // the waiting list instead (still counted in participantIds). Safe to call
 // twice (idempotent) if they already have a team.
 export async function registerPlayer(tournamentId, playerId, totalTeams) {
+  const tRef = doc(db, "tournaments", tournamentId);
   const teams = await fetchTeams(tournamentId);
   const already = findTeamOf(teams, playerId);
-  await updateDoc(doc(db, "tournaments", tournamentId), { participantIds: arrayUnion(playerId) });
+  await withRetry(() => updateDoc(tRef, { participantIds: arrayUnion(playerId) }));
   if (already) return { ...already, waiting: false };
 
-  const used = new Set(teams.map((t) => t.teamNumber).filter(Boolean));
-  let nextNum = null;
-  for (let n = 1; n <= (totalTeams || 12); n++) {
-    if (!used.has(n)) { nextNum = n; break; }
+  try {
+    const claimed = await claimLowestFreeSlot(tournamentId, totalTeams || 12, teams, { player1Id: playerId, player2Id: null });
+    if (!claimed) {
+      await withRetry(() => updateDoc(tRef, { waitingList: arrayUnion(playerId) }));
+      return { waiting: true };
+    }
+    return { id: claimed.id, teamNumber: claimed.teamNumber, player1Id: playerId, player2Id: null, group: null, waiting: false };
+  } catch (err) {
+    // Don't leave a "ghost" registration (counted as registered, but with no
+    // team and not on the waiting list) if claiming a spot failed.
+    try { await updateDoc(tRef, { participantIds: arrayRemove(playerId) }); } catch (e) { console.error(e); }
+    throw err;
   }
-  if (!nextNum) {
-    await updateDoc(doc(db, "tournaments", tournamentId), { waitingList: arrayUnion(playerId) });
-    return { waiting: true };
-  }
-  const ref = await addDoc(collection(db, "tournaments", tournamentId, "teams"), {
-    teamNumber: nextNum, player1Id: playerId, player2Id: null, group: null, createdAt: serverTimestamp()
-  });
-  return { id: ref.id, teamNumber: nextNum, player1Id: playerId, player2Id: null, group: null, waiting: false };
 }
 
 // Removes a player from whichever slot they're in (if any) WITHOUT touching
@@ -130,19 +185,11 @@ async function claimFreeNumberFromWaitlist(tournamentId) {
   const tSnap = await getDoc(doc(db, "tournaments", tournamentId));
   const totalTeams = tSnap.exists() ? (tSnap.data().totalTeams || 12) : 12;
   const teams = await fetchTeams(tournamentId);
-  const used = new Set(teams.map((t) => t.teamNumber).filter(Boolean));
-  let num = null;
-  for (let n = 1; n <= totalTeams; n++) {
-    if (!used.has(n)) { num = n; break; }
-  }
-  if (num == null) {
+  const claimed = await claimLowestFreeSlot(tournamentId, totalTeams, teams, { player1Id: nextId, player2Id: null });
+  if (!claimed) {
     // nothing actually free (shouldn't normally happen) — put them back
     await updateDoc(doc(db, "tournaments", tournamentId), { waitingList: arrayUnion(nextId) });
-    return;
   }
-  await addDoc(collection(db, "tournaments", tournamentId, "teams"), {
-    teamNumber: num, player1Id: nextId, player2Id: null, group: null, createdAt: serverTimestamp()
-  });
 }
 
 // Fills a team's open slot with partnerId. If partnerId already has their own
@@ -174,13 +221,16 @@ export async function assignToSlot(tournamentId, teamNumber, slot, playerId) {
   const teams = await fetchTeams(tournamentId);
   const existing = teams.find((t) => t.teamNumber === teamNumber);
   if (!existing) {
-    await addDoc(collection(db, "tournaments", tournamentId, "teams"), {
-      teamNumber,
+    const created = await tryCreateSlotTeam(tournamentId, teamNumber, {
       player1Id: slot === "player1" ? playerId : null,
-      player2Id: slot === "player2" ? playerId : null,
-      group: null,
-      createdAt: serverTimestamp()
+      player2Id: slot === "player2" ? playerId : null
     });
+    if (created) return;
+    // A player claimed that number a moment ago — fill the slot of the team
+    // that now exists instead, as long as that slot is still empty.
+    const fresh = (await fetchTeams(tournamentId)).find((t) => t.teamNumber === teamNumber);
+    if (!fresh || fresh[`${slot}Id`]) throw new Error("That spot was just taken — refresh and try again.");
+    await updateDoc(doc(db, "tournaments", tournamentId, "teams", fresh.id), { [`${slot}Id`]: playerId });
     return;
   }
   await updateDoc(doc(db, "tournaments", tournamentId, "teams", existing.id), { [`${slot}Id`]: playerId });

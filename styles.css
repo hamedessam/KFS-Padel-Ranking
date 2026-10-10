@@ -1066,6 +1066,15 @@ table.players tr:last-child td { border-bottom: none; }
   padding: 12px 0;
   border-bottom: 1px solid var(--border);
 }
+/* the signed-in player's own team (and their waiting-list entry) */
+.team-slot-row.mine {
+  padding: 12px;
+  margin: 6px 0;
+  border: 1.5px solid var(--ball-dim);
+  border-radius: var(--radius-sm);
+  background: rgba(201,242,76,0.08);
+}
+.team-slot-row.mine .team-slot-number { color: var(--ball); }
 .team-slot-row-head {
   display: flex;
   align-items: center;

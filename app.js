@@ -931,6 +931,7 @@ async function registerForTournament(tournamentId, btn) {
     console.error(err);
     btn.disabled = false;
     btn.textContent = t("register_own_team_btn");
+    alert(t("register_err_generic"));
   }
 }
 
@@ -1024,28 +1025,32 @@ async function renderTeamGrid(tournamentId, container) {
     const assignedIds = new Set();
     teams.forEach((tm) => { if (tm.player1Id) assignedIds.add(tm.player1Id); if (tm.player2Id) assignedIds.add(tm.player2Id); });
 
-    // resolve names for everyone currently on a team
-    const playerDocs = await Promise.all([...assignedIds].map((id) => getDoc(doc(db, "players", id))));
-    const nameById = new Map();
-    playerDocs.forEach((d) => {
-      if (d.exists()) {
-        const pd = d.data();
-        nameById.set(d.id, `${pd.name || "—"} (${pd.playerCode || "—"})`);
-      }
-    });
-
-    // candidates for the partner picker: active players not on any team here yet
-    const allActiveSnap = await getDocs(query(collection(db, "players"), orderBy("name")));
-    const candidates = allActiveSnap.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
-      .filter((p) => p.isActive !== false && !assignedIds.has(p.id) && p.id !== currentPlayer.id);
-    const candidateOptions = candidates.map((p) => `<option value="${p.id}">${p.name} (${p.playerCode})</option>`).join("");
-
-    // fresh waiting list (not the cached tournament doc) + names from the
-    // players snapshot already fetched above — no extra per-player reads
+    // fresh waiting list (the cached tournament doc can be stale)
     const freshTourney = await getDoc(doc(db, "tournaments", tournamentId));
     const waitingList = freshTourney.exists() ? (freshTourney.data().waitingList || []) : [];
-    const allNameById = new Map(allActiveSnap.docs.map((d) => [d.id, `${d.data().name || "—"} (${d.data().playerCode || "—"})`]));
+
+    // Only a player with an open slot of their own ever sees the partner
+    // picker, so only then do we need the whole player list. Everyone else
+    // just needs names for who's on a team / the waiting list — taken from the
+    // already-loaded leaderboard cache where possible, to save Firestore reads.
+    const hasMyOpenSlot = teams.some((tm) =>
+      (tm.player1Id === currentPlayer.id && !tm.player2Id) || (tm.player2Id === currentPlayer.id && !tm.player1Id));
+    const fmtName = (pd) => `${pd.name || "—"} (${pd.playerCode || "—"})`;
+    const nameById = new Map();
+    let candidateOptions = "";
+    if (hasMyOpenSlot) {
+      const allSnap = await getDocs(query(collection(db, "players"), orderBy("name")));
+      const allPlayers = allSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      allPlayers.forEach((pd) => nameById.set(pd.id, fmtName(pd)));
+      candidateOptions = allPlayers
+        .filter((pd) => pd.isActive !== false && !assignedIds.has(pd.id) && pd.id !== currentPlayer.id)
+        .map((pd) => `<option value="${pd.id}">${pd.name} (${pd.playerCode})</option>`).join("");
+    } else {
+      (leaderboardCache || []).forEach((pd) => nameById.set(pd.id, fmtName(pd)));
+    }
+    const missingIds = [...new Set([...assignedIds, ...waitingList])].filter((id) => !nameById.has(id));
+    const missingDocs = await Promise.all(missingIds.map((id) => getDoc(doc(db, "players", id))));
+    missingDocs.forEach((d) => { if (d.exists()) nameById.set(d.id, fmtName(d.data())); });
 
     const teamByNumber = new Map(teams.map((tm) => [tm.teamNumber, tm]));
 
@@ -1071,10 +1076,11 @@ async function renderTeamGrid(tournamentId, container) {
         return `<div class="team-slot-player"><span class="team-slot-player-name" style="opacity:.4;">—</span></div>`;
       };
 
+      const myTeam = Boolean(team) && (team.player1Id === currentPlayer.id || team.player2Id === currentPlayer.id);
       html += `
-        <div class="team-slot-row">
+        <div class="team-slot-row${myTeam ? " mine" : ""}">
           <div class="team-slot-row-head">
-            <span class="team-slot-number">${t("team_label")} ${n}</span>
+            <span class="team-slot-number">${t("team_label")} ${n}${myTeam ? " · " + t("my_team_tag") : ""}</span>
             <span class="team-slot-group-tag">${team?.group ? `${t("group_label")} ${team.group}` : "—"}</span>
           </div>
           <div class="team-slot-players">
@@ -1089,7 +1095,7 @@ async function renderTeamGrid(tournamentId, container) {
       html += `<div class="tourney-participants-group" style="margin-top:20px;">${t("waiting_list_heading")} (${waitingList.length})</div>`
         + waitingList.map((id, i) => {
           const mine = id === currentPlayer.id;
-          return `<div class="team-slot-row"><div class="team-slot-player"><span class="team-slot-number">#${i + 1}</span><span class="team-slot-player-name"${mine ? ' style="color:var(--ball);"' : ""}>${allNameById.get(id) || "—"}${mine ? " " + t("you_suffix") : ""}</span></div></div>`;
+          return `<div class="team-slot-row${mine ? " mine" : ""}"><div class="team-slot-player"><span class="team-slot-number">#${i + 1}</span><span class="team-slot-player-name">${nameById.get(id) || "—"}${mine ? " " + t("you_suffix") : ""}</span></div></div>`;
         }).join("");
     }
 
