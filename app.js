@@ -1014,6 +1014,15 @@ async function toggleTeamGridView(tournamentId) {
   await renderTeamGrid(tournamentId, container);
 }
 
+// Loose matching for the partner search: ignores case, spaces/dashes, Arabic
+// diacritics and the common alef / ya / ta-marbuta spelling variants.
+function normSearch(s) {
+  return String(s || "").toLowerCase()
+    .replace(/[\u064B-\u0652\u0640]/g, "")
+    .replace(/[أإآ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه")
+    .replace(/[\s\-_]/g, "");
+}
+
 async function renderTeamGrid(tournamentId, container) {
   container.innerHTML = `<span class="spinner"></span> ${t("loading")}`;
 
@@ -1038,12 +1047,14 @@ async function renderTeamGrid(tournamentId, container) {
     const fmtName = (pd) => `${pd.name || "—"} (${pd.playerCode || "—"})`;
     const nameById = new Map();
     let candidateOptions = "";
+    let candidateList = [];
     if (hasMyOpenSlot) {
       const allSnap = await getDocs(query(collection(db, "players"), orderBy("name")));
       const allPlayers = allSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
       allPlayers.forEach((pd) => nameById.set(pd.id, fmtName(pd)));
-      candidateOptions = allPlayers
-        .filter((pd) => pd.isActive !== false && !assignedIds.has(pd.id) && pd.id !== currentPlayer.id)
+      candidateList = allPlayers
+        .filter((pd) => pd.isActive !== false && !assignedIds.has(pd.id) && pd.id !== currentPlayer.id);
+      candidateOptions = candidateList
         .map((pd) => `<option value="${pd.id}">${pd.name} (${pd.playerCode})</option>`).join("");
     } else {
       (leaderboardCache || []).forEach((pd) => nameById.set(pd.id, fmtName(pd)));
@@ -1065,12 +1076,15 @@ async function renderTeamGrid(tournamentId, container) {
         const isMyOpenSlot = team && otherId === currentPlayer.id;
         if (isMyOpenSlot) {
           return `
-            <div class="team-slot-player my-team-picker">
-              <select class="team-slot-add-select" id="grid-partner-select-${tournamentId}-${n}">
-                <option value="">${t("choose_partner_placeholder")}</option>
-                ${candidateOptions}
-              </select>
-              <button class="btn btn-ghost btn-sm" data-add-partner-grid="${team.id}" data-select-id="grid-partner-select-${tournamentId}-${n}" data-tournament="${tournamentId}" type="button">${t("add_partner_btn")}</button>
+            <div class="team-slot-player my-team-picker partner-picker-col">
+              <input type="text" class="partner-search-input" data-partner-search="grid-partner-select-${tournamentId}-${n}" placeholder="${t("partner_search_placeholder")}" autocomplete="off">
+              <div class="partner-picker-row">
+                <select class="team-slot-add-select" id="grid-partner-select-${tournamentId}-${n}">
+                  <option value="">${t("choose_partner_placeholder")}</option>
+                  ${candidateOptions}
+                </select>
+                <button class="btn btn-ghost btn-sm" data-add-partner-grid="${team.id}" data-select-id="grid-partner-select-${tournamentId}-${n}" data-tournament="${tournamentId}" type="button">${t("add_partner_btn")}</button>
+              </div>
             </div>`;
         }
         return `<div class="team-slot-player"><span class="team-slot-player-name" style="opacity:.4;">—</span></div>`;
@@ -1100,6 +1114,35 @@ async function renderTeamGrid(tournamentId, container) {
     }
 
     container.innerHTML = html;
+
+    container.querySelectorAll("[data-partner-search]").forEach((input) => {
+      const select = $(input.dataset.partnerSearch);
+      input.addEventListener("input", () => {
+        const q = normSearch(input.value);
+        const previous = select.value;
+        const matches = candidateList.filter((pd) => !q || normSearch(pd.name).includes(q) || normSearch(pd.playerCode).includes(q));
+        select.innerHTML = "";
+        const ph = document.createElement("option");
+        ph.value = "";
+        ph.textContent = t("choose_partner_placeholder");
+        select.appendChild(ph);
+        if (matches.length === 0) {
+          const none = document.createElement("option");
+          none.value = "";
+          none.disabled = true;
+          none.textContent = t("partner_search_empty");
+          select.appendChild(none);
+        }
+        matches.forEach((pd) => {
+          const o = document.createElement("option");
+          o.value = pd.id;
+          o.textContent = `${pd.name} (${pd.playerCode})`;
+          select.appendChild(o);
+        });
+        if (matches.some((pd) => pd.id === previous)) select.value = previous;
+        else if (q && matches.length === 1) select.value = matches[0].id; // single match: pre-selected
+      });
+    });
 
     container.querySelectorAll("[data-add-partner-grid]").forEach((addBtn) => {
       addBtn.addEventListener("click", async () => {
