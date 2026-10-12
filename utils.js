@@ -30,25 +30,34 @@ import { getLang } from "./i18n.js";
 
 // Tier is always derived from points — never chosen manually — so nobody
 // can dispute "why did you put me in Silver". The math decides, not a person.
-// Everyone starts at 1000 points, which lands in Silver 3 by design.
+//
+// 5 ranks of 500 points each (Bronze 0-500, Silver 501-1000, Gold 1001-1500,
+// Diamond 1501-2000), each split into 3 tiers of ~167 points. A HIGHER number
+// is a HIGHER tier (Gold 3 is above Gold 1). Elite is 2001+ with no ceiling
+// and no sub-tiers. `start` is where a player is placed when the admin gives
+// them that tier: the middle of the tier, so one lost match can't demote them.
 const TIER_THRESHOLDS = [
-  { min: 1500, tier: "gold_1" },
-  { min: 1400, tier: "gold_2" },
-  { min: 1300, tier: "gold_3" },
-  { min: 1200, tier: "silver_1" },
-  { min: 1100, tier: "silver_2" },
-  { min: 1000, tier: "silver_3" },
-  { min: 900, tier: "bronze_1" },
-  { min: 800, tier: "bronze_2" },
-  { min: -Infinity, tier: "bronze_3" }
+  { min: 2001, tier: "elite", start: 2100 },
+  { min: 1835, tier: "diamond_3", start: 1918 },
+  { min: 1668, tier: "diamond_2", start: 1751 },
+  { min: 1501, tier: "diamond_1", start: 1584 },
+  { min: 1335, tier: "gold_3", start: 1418 },
+  { min: 1168, tier: "gold_2", start: 1251 },
+  { min: 1001, tier: "gold_1", start: 1084 },
+  { min: 835, tier: "silver_3", start: 918 },
+  { min: 668, tier: "silver_2", start: 751 },
+  { min: 501, tier: "silver_1", start: 584 },
+  { min: 334, tier: "bronze_3", start: 417 },
+  { min: 167, tier: "bronze_2", start: 250 },
+  { min: -Infinity, tier: "bronze_1", start: 83 }
 ];
 
 export function tierFromPoints(points) {
-  const p = Math.round(points ?? 1000);
+  const p = Math.round(points ?? 0);
   for (const t of TIER_THRESHOLDS) {
     if (p >= t.min) return t.tier;
   }
-  return "bronze_3";
+  return "bronze_1";
 }
 
 // A player with no rating yet (ratingPoints null/absent) is "unranked".
@@ -56,28 +65,26 @@ export function isRanked(player) {
   return player.ratingPoints !== null && player.ratingPoints !== undefined;
 }
 
-// Starting points for each tier (lowest -> highest), read straight from
-// TIER_THRESHOLDS so it can never drift from the real tier boundaries.
-// The lowest tier has no lower bound (-Infinity), so it gets a concrete 700.
+// Starting points for each tier (lowest -> highest) — the middle of the tier,
+// read straight from TIER_THRESHOLDS so it can never drift from the real
+// tier boundaries.
 export function tierStartOptions() {
-  return [...TIER_THRESHOLDS].reverse().map((t) => ({
-    tier: t.tier,
-    points: Number.isFinite(t.min) ? t.min : 700
-  }));
+  return [...TIER_THRESHOLDS].reverse().map((t) => ({ tier: t.tier, points: t.start }));
 }
 
 export function tierMeta(tierId) {
-  // tierId format: "silver_3", "gold_1", "bronze_2" etc.
-  const [family, level] = (tierId || "bronze_3").split("_");
+  // tierId format: "silver_3", "gold_1", "diamond_2" etc. — or just "elite"
+  // (no sub-tiers).
+  const [family, level] = (tierId || "bronze_1").split("_");
   const names = {
-    ar: { bronze: "برونزي", silver: "فضي", gold: "ذهبي" },
-    en: { bronze: "Bronze", silver: "Silver", gold: "Gold" }
+    ar: { bronze: "برونزي", silver: "فضي", gold: "ذهبي", diamond: "دايموند", elite: "إيليت" },
+    en: { bronze: "Bronze", silver: "Silver", gold: "Gold", diamond: "Diamond", elite: "Elite" }
   };
   const lang = getLang();
   const familyNames = names[lang] || names.en;
   return {
     family,
-    level,
+    level: level || "E", // text shown inside the shield badge
     displayName: `${familyNames[family] || family} ${level || ""}`.trim(),
     cssClass: family
   };
@@ -138,11 +145,14 @@ export function computeMatchPointChanges(team1, team2, team1Games, team2Games) {
     const expectedScore = 1 / (1 + Math.pow(10, (opponentAvg - ratingBefore) / 400));
     const actualResult = won ? 1 : 0;
     const k = kFactorFor(player.matchesPlayed);
-    const pointsChange = k * multiplier * (actualResult - expectedScore);
+    // Ratings never go below 0 (Bronze starts at 0), so a loss can't push
+    // anyone negative — and pointsChange reflects what was really applied.
+    const ratingAfter = Math.max(0, ratingBefore + k * multiplier * (actualResult - expectedScore));
+    const pointsChange = ratingAfter - ratingBefore;
     return {
       playerId: player.id,
       ratingBefore,
-      ratingAfter: ratingBefore + pointsChange,
+      ratingAfter,
       opponentAvg,
       expectedScore,
       actualResult,

@@ -24,6 +24,9 @@
   --silver: #b9c2c8;
   --bronze: #b98a5a;
 
+  --diamond: #7fd6f5;
+  --elite: #b98cff;
+
   --danger: #e0654f;
   --live: #33d17a;
 
@@ -384,6 +387,8 @@ body {
 .tier-shield.silver { background: linear-gradient(160deg, #e4e9eb, var(--silver)); }
 .tier-shield.bronze { background: linear-gradient(160deg, #d5a878, var(--bronze)); }
 .tier-shield.coin { background: linear-gradient(160deg, #e9f7ab, var(--ball)); }
+.tier-shield.diamond { background: linear-gradient(160deg, #cdf3ff, var(--diamond)); }
+.tier-shield.elite { background: linear-gradient(160deg, #e3d0ff, var(--elite)); }
 .tier-info { color: var(--text); }
 .tier-name { font-family: var(--font-display); font-weight: 800; font-size: 16px; }
 .tier-points { font-family: var(--font-mono); font-size: 12px; color: var(--text-soft); margin-top: 2px; }
@@ -1050,11 +1055,14 @@ table.players tr:last-child td { border-bottom: none; }
 .badge-pill.gold { background: rgba(227,183,78,0.18); color: var(--gold); }
 .badge-pill.silver { background: rgba(185,194,200,0.18); color: var(--silver); }
 .badge-pill.bronze { background: rgba(185,138,90,0.18); color: var(--bronze); }
+.badge-pill.diamond { background: rgba(127,214,245,0.18); color: var(--diamond); }
+.badge-pill.elite { background: rgba(185,140,255,0.18); color: var(--elite); }
 
 .hidden { display: none !important; }
 
 /* ---------- admin tabs ---------- */
 .admin-tabbar {
+  overflow-x: auto;
   display: flex;
   gap: 6px;
   margin-bottom: 18px;
@@ -1062,6 +1070,8 @@ table.players tr:last-child td { border-bottom: none; }
   padding-bottom: 2px;
 }
 .admin-tab-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
   background: none;
   border: none;
   color: var(--text-soft);

@@ -90,18 +90,27 @@ service cloud.firestore {
         // Manager — any signed-in user for now (documented gap above).
         allow write: if isSignedIn();
       }
+
+      // Group-stage / knockout matches + their scores (admin "Results" tab).
+      // Points are only written later, in one transaction, by the admin.
+      match /fixtures/{fixtureId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
     }
 
     match /matches/{id} {
       allow read: if true;
       allow create: if isAdmin();
-      // No edit/delete feature exists in the app — matches are an
-      // immutable audit trail once recorded.
+      // Never edited. Deleted ONLY by the admin's "Undo tournament points"
+      // (which first checks that nobody's numbers changed since).
+      allow delete: if isAdmin();
     }
 
     match /ratingHistory/{id} {
       allow read: if true;
       allow create: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     match /coinTransactions/{id} {

@@ -5,6 +5,11 @@ import {
 } from "./firebase-config.js";
 import { hashPassword, randomSalt, generatePassword, playerCodeFromSeq, tierMeta, tierFromPoints, isFoundingMember, computeMatchPointChanges, isRanked, tierStartOptions } from "./utils.js";
 import { fetchTeams, assignToSlot, unregisterPlayer, setTeamGroup } from "./teams.js";
+import {
+  checkReadiness, generateGroupFixtures, deriveBracket, computeTournamentPoints, fixturePlayerIds,
+  fetchFixtures, createFixtures, saveFixtureScore, deleteFixtures, saveOverrides,
+  applyTournamentPoints, verifyApplied, revertTournamentPoints
+} from "./bracket.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -27,12 +32,12 @@ const SIDE_LABELS = { right: "Right", left: "Left", both: "Both" };
 function sideLabel(v) { return SIDE_LABELS[v] || "—"; }
 function tierLabel(id) {
   const [family, level] = id.split("_");
-  return `${family.charAt(0).toUpperCase()}${family.slice(1)} ${level}`;
+  return `${family.charAt(0).toUpperCase()}${family.slice(1)}${level ? " " + level : ""}`;
 }
 function fillRankSelect(sel, leadingOptions) {
   sel.innerHTML =
     leadingOptions.map((o) => `<option value="${o.value}">${o.label}</option>`).join("") +
-    TIER_START.map((o) => `<option value="${o.tier}">${tierLabel(o.tier)} (from ${o.points})</option>`).join("") +
+    TIER_START.map((o) => `<option value="${o.tier}">${tierLabel(o.tier)} (starts at ${o.points})</option>`).join("") +
     '<option value="custom">Custom points…</option>';
 }
 fillRankSelect($("ap-rank"), [{ value: "", label: "No rank yet (unranked)" }]);
@@ -161,6 +166,7 @@ function enterAdmin() {
   loadAvailableCodes();
   initMarketItemsTab();
   initStoreOrdersTab();
+  initResultsTab();
 }
 
 // ---------------- admin tab switcher ----------------
@@ -2203,6 +2209,8 @@ async function deleteTournamentCompletely(tournamentId, name, btn) {
     for (const tm of teams) {
       await deleteDoc(doc(db, "tournaments", tournamentId, "teams", tm.id));
     }
+    const fixtures = await fetchFixtures(tournamentId);
+    await deleteFixtures(tournamentId, fixtures.map((f) => f.id));
     await deleteDoc(doc(db, "tournaments", tournamentId));
     loadTournaments();
     loadTMTournamentSelect();
@@ -2256,3 +2264,424 @@ $("eif-btn").addEventListener("click", async () => {
     btn.textContent = "Save filters";
   }
 });
+
+// =========================================================================
+// ---------------- Results: groups -> knockout -> points for everyone ----------------
+// Scores are entered match by match; NO points move while doing that. Points
+// are only written when the admin confirms at the end, for all players at once
+// (all-or-nothing), then double-checked. See bracket.js for the logic.
+// =========================================================================
+
+const rs = { tid: null, tournament: null, teams: [], fixtures: [], playersById: new Map(), bracket: null, calc: null, busy: false };
+
+const rsOk = (msg) => showMsg($("rs-success"), msg);
+const rsErr = (msg) => showMsg($("rs-error"), msg);
+const rsClear = () => { hideMsg($("rs-error")); hideMsg($("rs-success")); };
+const rsPlayerName = (id) => (rs.playersById.get(id) || {}).name || "Unknown";
+const rsName = (id) => escapeHtml(rsPlayerName(id));
+const rsTeam = (players, number) =>
+  `<span style="font-family:var(--font-mono); font-size:11px; color:var(--text-soft);">T${number}</span> ${players.map(rsName).join(" &amp; ")}`;
+const rsTeamPlain = (t) => `T${t.teamNumber} — ${[t.player1Id, t.player2Id].map(rsPlayerName).join(" & ")}`;
+
+async function initResultsTab() {
+  const tournaments = await loadCoinTournamentSelect("rs-tournament");
+  if (tournaments.length > 0) loadResults(tournaments[0].id);
+}
+
+$("rs-tournament").addEventListener("change", (e) => {
+  if (e.target.value) loadResults(e.target.value);
+});
+
+async function loadResults(tid) {
+  rs.tid = tid;
+  rs.calc = null;
+  rsClear();
+  $("rs-loading").classList.remove("hidden");
+  $("rs-body").classList.add("hidden");
+  try {
+    const [tSnap, teams, fixtures] = await Promise.all([
+      getDoc(doc(db, "tournaments", tid)),
+      fetchTeams(tid),
+      fetchFixtures(tid)
+    ]);
+    if (!tSnap.exists()) { $("rs-loading").textContent = "Tournament not found."; return; }
+    rs.tournament = { id: tid, ...tSnap.data() };
+    rs.teams = teams;
+    rs.fixtures = fixtures;
+    const ids = new Set(fixturePlayerIds(fixtures));
+    teams.forEach((tm) => { if (tm.player1Id) ids.add(tm.player1Id); if (tm.player2Id) ids.add(tm.player2Id); });
+    const players = await fetchPlayersByIds([...ids]);
+    rs.playersById = new Map(players.map((p) => [p.id, p]));
+    renderResults();
+    $("rs-loading").classList.add("hidden");
+    $("rs-body").classList.remove("hidden");
+  } catch (err) {
+    console.error(err);
+    $("rs-loading").classList.remove("hidden");
+    $("rs-loading").textContent = "Couldn't load this tournament's results.";
+  }
+}
+
+function rsFixtureRow(f, locked) {
+  const dis = locked ? "disabled" : "";
+  const input = (n, val) => `<input type="number" min="0" max="20" value="${val}" data-score="${n}" ${dis} style="width:58px; flex-shrink:0; padding:8px 6px; text-align:center; border-radius:8px; border:1.5px solid var(--border); background:var(--panel); color:var(--text); font-family:var(--font-mono); font-size:14px;">`;
+  const line = (team, n, val) => `
+    <div style="display:flex; align-items:center; gap:8px; margin-top:6px;">
+      <div style="flex:1; min-width:0; font-size:13px;">${team}</div>
+      ${input(n, val)}
+    </div>`;
+  return `
+    <div data-fx-row="${f.id}" style="padding:12px 0; border-bottom:1px solid var(--border);">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-family:var(--font-mono); font-size:11px; color:var(--text-soft);">#${f.order} · ${escapeHtml(f.label)}</span>
+        ${f.done ? '<span class="badge-pill gold">✓ Done</span>' : '<span class="badge-pill silver">To play</span>'}
+      </div>
+      ${line(rsTeam(f.team1Players, f.team1Number), 1, f.done ? f.score1 : "")}
+      ${line(rsTeam(f.team2Players, f.team2Number), 2, f.done ? f.score2 : "")}
+      ${locked ? "" : `<button class="btn btn-ghost btn-sm" data-save-fx="${f.id}" type="button" style="margin-top:8px;">Save result</button>`}
+    </div>`;
+}
+
+function rsStandingsTable(s) {
+  const rows = s.rows.map((r, i) => {
+    const q = s.complete && !s.unresolved && i < 2;
+    return `<tr${q ? ' style="color:var(--ball);"' : ""}>
+      <td>${i + 1}</td><td style="white-space:normal;">${rsTeam(r.players, r.teamNumber)}</td>
+      <td>${r.played}</td><td>${r.wins}</td><td>${r.diff > 0 ? "+" : ""}${r.diff}</td></tr>`;
+  }).join("");
+  return `<table class="players"><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>+/-</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function rsGroupBlock(g, s, groupFixtures, locked) {
+  const note = s.complete && !s.unresolved ? ' <span style="color:var(--ball); font-size:12px;">· top 2 qualify</span>' : "";
+  return `<div style="margin-top:22px;">
+    <h2 style="font-family:var(--font-display); font-weight:800; font-size:16px; margin:0 0 2px;">Group ${g}${note}</h2>
+    ${rsStandingsTable(s)}
+    ${groupFixtures.map((f) => rsFixtureRow(f, locked)).join("")}
+  </div>`;
+}
+
+function rsDecisionsHtml(needs) {
+  return needs.map((n) => {
+    if (n.type === "group") {
+      const opts = n.rows.map((r) => `<option value="${r.teamId}">${escapeHtml(rsTeamPlain({ teamNumber: r.teamNumber, player1Id: r.players[0], player2Id: r.players[1] }))}</option>`).join("");
+      return `<div class="msg info show" style="margin-top:14px;">
+        <strong>Group ${n.group}: tie for the qualifying spots.</strong> The teams are level on wins, game difference and games won. Pick who finishes 1st and 2nd.
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+          <select class="team-slot-add-select" data-ov-first="${n.group}"><option value="">1st place…</option>${opts}</select>
+          <select class="team-slot-add-select" data-ov-second="${n.group}"><option value="">2nd place…</option>${opts}</select>
+          <button class="btn btn-primary btn-sm" data-save-group-ov="${n.group}" type="button">Save</button>
+        </div></div>`;
+    }
+    const opts = n.candidates.map((c) => `<option value="${c.id}">${escapeHtml(rsTeamPlain(c))}</option>`).join("");
+    return `<div class="msg info show" style="margin-top:14px;">
+      <strong>Knockout: tie for the best result.</strong> The winning margins are identical. Pick which team goes straight to the final.
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+        <select class="team-slot-add-select" data-ov-bye><option value="">Choose…</option>${opts}</select>
+        <button class="btn btn-primary btn-sm" data-save-bye-ov type="button">Save</button>
+      </div></div>`;
+  }).join("");
+}
+
+// Warn if teams were edited in Tournament Manager after the matches were generated.
+function rsTeamsChanged() {
+  const current = new Map(rs.teams.map((tm) => [tm.id, tm]));
+  const key = (a, b) => [a, b].sort().join("|");
+  return rs.fixtures.some((f) => [[f.team1Id, f.team1Players], [f.team2Id, f.team2Players]].some(([id, players]) => {
+    const tm = current.get(id);
+    if (!tm) return true;
+    if (f.stage === "group" && tm.group !== f.group) return true;
+    return key(tm.player1Id, tm.player2Id) !== key(players[0], players[1]);
+  }));
+}
+
+function renderResults() {
+  const t = rs.tournament;
+  const applied = !!t.pointsApplied;
+  const overrides = t.bracketOverrides || {};
+  const fixtures = rs.fixtures;
+  let html = "";
+
+  if (applied) {
+    const when = t.appliedAt && t.appliedAt.toDate ? t.appliedAt.toDate().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "—";
+    html += `<div class="msg success show">Points for this tournament were calculated and saved (${escapeHtml(when)}). The results are locked.</div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+        <button class="btn btn-ghost btn-sm" id="rs-verify-btn" type="button">Verify saved points</button>
+        <button class="btn btn-danger btn-sm" id="rs-undo-btn" type="button">Undo tournament points</button>
+      </div>
+      <div id="rs-verify-out"></div>`;
+  }
+
+  if (fixtures.length === 0) {
+    const { blocking, warnings } = checkReadiness(rs.teams, rs.playersById);
+    html += `<p class="sub" style="margin-bottom:10px;">No matches yet. They're created from the teams and groups set in Tournament Manager.</p>
+      ${blocking.length ? `<div class="msg error show" style="white-space:pre-line;">${blocking.map(escapeHtml).join("\n")}</div>` : '<div class="msg success show">All 12 teams are in place — ready to create the group matches.</div>'}
+      ${warnings.length ? `<div class="msg info show" style="white-space:pre-line;">${warnings.map(escapeHtml).join("\n")}</div>` : ""}
+      <button class="btn btn-primary" id="rs-generate-groups" type="button" ${blocking.length ? "disabled" : ""}>Generate group matches (18)</button>`;
+  } else {
+    const br = deriveBracket(fixtures, overrides);
+    rs.bracket = br;
+    if (!applied && rsTeamsChanged()) {
+      html += '<div class="msg error show">The teams or groups were changed after these matches were generated. Use "Reset all matches" and generate them again so the matches match the teams.</div>';
+    }
+    if (!applied) {
+      const label = br.next ? { ko: "knockout matches (3)", semi: "semi-final", final: "final" }[br.next.stage] : null;
+      html += `<div style="display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 4px;">
+        ${label ? `<button class="btn btn-primary btn-sm" id="rs-generate-next" type="button">Generate ${label}</button>` : ""}
+        <button class="btn btn-ghost btn-sm" id="rs-reset" type="button" style="color:var(--danger);">Reset all matches</button>
+      </div>`;
+      html += rsDecisionsHtml(br.needs);
+    }
+    [1, 2, 3].forEach((g) => {
+      html += rsGroupBlock(g, br.standings[g], fixtures.filter((f) => f.stage === "group" && f.group === g), applied);
+    });
+    const later = fixtures.filter((f) => f.stage !== "group");
+    if (later.length) {
+      html += `<div style="margin-top:22px;"><h2 style="font-family:var(--font-display); font-weight:800; font-size:16px; margin:0;">Knockout</h2>${later.map((f) => rsFixtureRow(f, applied)).join("")}</div>`;
+    }
+    if (br.placement) {
+      const p = br.placement;
+      html += `<div class="msg success show" style="margin-top:18px;"><strong>Final result</strong><br>
+        🥇 ${escapeHtml(rsTeamPlain(p.champion))}<br>🥈 ${escapeHtml(rsTeamPlain(p.runnerUp))}<br>🥉 ${escapeHtml(rsTeamPlain(p.third))}</div>`;
+    }
+    if (!applied) {
+      const allDone = fixtures.length === 23 && fixtures.every((f) => f.done);
+      html += `<div style="margin-top:26px; padding-top:18px; border-top:1px solid var(--border);">
+        <h2 style="font-family:var(--font-display); font-weight:800; font-size:16px; margin:0 0 4px;">Calculate points</h2>
+        <p class="sub" style="margin-bottom:12px;">You'll see a preview first. Nothing is saved to the players until you confirm.${allDone ? "" : " Available once all 23 matches have a result."}</p>
+        <button class="btn btn-primary" id="rs-preview-btn" type="button" ${allDone ? "" : "disabled"}>Calculate points (preview)</button>
+        <div id="rs-preview" style="margin-top:14px;"></div>
+      </div>`;
+    }
+  }
+  $("rs-body").innerHTML = html;
+}
+
+// One click handler for the whole tab (set up once, so re-rendering never stacks listeners)
+$("rs-body").addEventListener("click", (e) => {
+  const t = e.target;
+  if (rs.busy) return;
+  let el;
+  if ((el = t.closest("[data-save-fx]"))) rsSaveFixture(el.dataset.saveFx);
+  else if (t.closest("#rs-generate-groups")) rsGenerateGroups();
+  else if (t.closest("#rs-generate-next")) rsGenerateNext();
+  else if (t.closest("#rs-reset")) rsResetAll();
+  else if ((el = t.closest("[data-save-group-ov]"))) rsSaveGroupOverride(el.dataset.saveGroupOv);
+  else if (t.closest("[data-save-bye-ov]")) rsSaveByeOverride();
+  else if (t.closest("#rs-preview-btn")) rsPreview();
+  else if (t.closest("#rs-apply-btn")) rsApply();
+  else if (t.closest("#rs-verify-btn")) rsVerify();
+  else if (t.closest("#rs-undo-btn")) rsUndo();
+});
+
+async function rsRun(fn) {
+  rs.busy = true;
+  try { await fn(); } finally { rs.busy = false; }
+}
+
+async function rsGenerateGroups() {
+  rsClear();
+  const { blocking } = checkReadiness(rs.teams, rs.playersById);
+  if (blocking.length) { rsErr(blocking.join("\n")); return; }
+  if (!confirm("Create the 18 group matches now?\n\nMake sure the teams and groups are final — if you change a team later you'll need to reset the matches and generate them again.")) return;
+  await rsRun(async () => {
+    try {
+      await createFixtures(rs.tid, generateGroupFixtures(rs.teams));
+      await loadResults(rs.tid);
+      rsOk("Group matches created. Enter each result as it's played.");
+    } catch (err) {
+      console.error(err);
+      rsErr("Something went wrong creating the matches. Try again.");
+    }
+  });
+}
+
+async function rsGenerateNext() {
+  rsClear();
+  const br = rs.bracket;
+  if (!br || !br.next) return;
+  await rsRun(async () => {
+    try {
+      await createFixtures(rs.tid, br.next.fixtures);
+      await loadResults(rs.tid);
+      rsOk("Matches created.");
+    } catch (err) {
+      console.error(err);
+      rsErr("Something went wrong creating the matches. Try again.");
+    }
+  });
+}
+
+async function rsResetAll() {
+  rsClear();
+  if (!confirm("Delete ALL generated matches and their results for this tournament?\n\nPlayers' points are not affected (they're only added at the very end).")) return;
+  await rsRun(async () => {
+    try {
+      await deleteFixtures(rs.tid, rs.fixtures.map((f) => f.id));
+      await saveOverrides(rs.tid, null);
+      await loadResults(rs.tid);
+      rsOk("All matches were deleted.");
+    } catch (err) {
+      console.error(err);
+      rsErr("Something went wrong resetting the matches. Try again.");
+    }
+  });
+}
+
+// Deleting later rounds is only needed when an earlier change alters who plays in them.
+function rsConfirmStale(staleIds) {
+  const names = staleIds.map((id) => (rs.fixtures.find((f) => f.id === id) || {}).label || id).join(", ");
+  return confirm(`This changes who plays in the later rounds. These matches (and their results) will be deleted so you can generate them again:\n\n${names}\n\nContinue?`);
+}
+
+async function rsSaveFixture(fxId) {
+  rsClear();
+  const row = document.querySelector(`[data-fx-row="${fxId}"]`);
+  if (!row) return;
+  const s1 = parseInt(row.querySelector('[data-score="1"]').value, 10);
+  const s2 = parseInt(row.querySelector('[data-score="2"]').value, 10);
+  if (Number.isNaN(s1) || Number.isNaN(s2) || s1 < 0 || s2 < 0) { rsErr("Enter both scores as numbers."); return; }
+  if (s1 === s2) { rsErr("A set can't end in a tie — one team has to win."); return; }
+  const hi = Math.max(s1, s2), lo = Math.min(s1, s2);
+  const usual = (hi === 6 && lo <= 4) || (hi === 7 && (lo === 5 || lo === 6));
+  if (!usual && !confirm(`${s1}-${s2} isn't a usual score for one set (first to 6). Save it anyway?`)) return;
+
+  const updated = rs.fixtures.map((f) => (f.id === fxId ? { ...f, score1: s1, score2: s2, done: true } : f));
+  const br = deriveBracket(updated, rs.tournament.bracketOverrides || {});
+  if (br.staleIds.length && !rsConfirmStale(br.staleIds)) return;
+
+  await rsRun(async () => {
+    try {
+      await saveFixtureScore(rs.tid, fxId, s1, s2);
+      if (br.staleIds.length) await deleteFixtures(rs.tid, br.staleIds);
+      await loadResults(rs.tid);
+      rsOk("Result saved.");
+    } catch (err) {
+      console.error(err);
+      rsErr("Something went wrong saving that result. Try again.");
+    }
+  });
+}
+
+async function rsSaveOverrides(overrides) {
+  const br = deriveBracket(rs.fixtures, overrides);
+  if (br.staleIds.length && !rsConfirmStale(br.staleIds)) return;
+  await rsRun(async () => {
+    try {
+      await saveOverrides(rs.tid, overrides);
+      if (br.staleIds.length) await deleteFixtures(rs.tid, br.staleIds);
+      await loadResults(rs.tid);
+      rsOk("Saved.");
+    } catch (err) {
+      console.error(err);
+      rsErr("Something went wrong saving that choice. Try again.");
+    }
+  });
+}
+
+async function rsSaveGroupOverride(g) {
+  rsClear();
+  const first = document.querySelector(`[data-ov-first="${g}"]`).value;
+  const second = document.querySelector(`[data-ov-second="${g}"]`).value;
+  if (!first || !second || first === second) { rsErr("Pick two different teams for 1st and 2nd."); return; }
+  const ov = { ...(rs.tournament.bracketOverrides || {}) };
+  ov.groups = { ...(ov.groups || {}), [g]: [first, second] };
+  await rsSaveOverrides(ov);
+}
+
+async function rsSaveByeOverride() {
+  rsClear();
+  const id = document.querySelector("[data-ov-bye]").value;
+  if (!id) { rsErr("Pick a team."); return; }
+  await rsSaveOverrides({ ...(rs.tournament.bracketOverrides || {}), bye: id });
+}
+
+async function rsPreview() {
+  rsClear();
+  const out = $("rs-preview");
+  out.innerHTML = '<span class="spinner"></span> Calculating...';
+  await rsRun(async () => {
+    try {
+      const players = await fetchPlayersByIds(fixturePlayerIds(rs.fixtures));
+      rs.playersById = new Map(players.map((p) => [p.id, p]));
+      const calc = computeTournamentPoints(rs.fixtures, rs.playersById);
+      if (!calc.ok) {
+        out.innerHTML = `<div class="msg error show" style="white-space:pre-line;">Can't calculate yet:\n${calc.errors.map(escapeHtml).join("\n")}</div>`;
+        return;
+      }
+      rs.calc = calc;
+      const rows = [...calc.players]
+        .sort((a, b) => (b.after.rating - b.before.rating) - (a.after.rating - a.before.rating))
+        .map((p) => {
+          const d = p.after.rating - p.before.rating;
+          return `<tr><td>${escapeHtml(p.name)}</td><td>${Math.round(p.before.rating)} → ${Math.round(p.after.rating)}</td>
+            <td style="color:${d >= 0 ? "var(--live)" : "var(--danger)"}; font-family:var(--font-mono); font-weight:700;">${d >= 0 ? "+" : ""}${d.toFixed(1)}</td>
+            <td>${p.after.matchesPlayed - p.before.matchesPlayed}</td></tr>`;
+        }).join("");
+      out.innerHTML = `<p class="sub" style="margin-bottom:6px;">Preview: ${calc.players.length} players, ${calc.matches.length} matches. Nothing has been saved yet.</p>
+        <table class="players"><thead><tr><th>Player</th><th>Points</th><th>Change</th><th>Matches</th></tr></thead><tbody>${rows}</tbody></table>
+        <button class="btn btn-primary" id="rs-apply-btn" type="button" style="margin-top:14px;">Confirm &amp; add points to all ${calc.players.length} players</button>`;
+    } catch (err) {
+      console.error(err);
+      out.innerHTML = '<div class="msg error show">Something went wrong calculating the preview. Try again.</div>';
+    }
+  });
+}
+
+async function rsApply() {
+  rsClear();
+  if (!rs.calc) return;
+  const n = rs.calc.players.length;
+  if (!confirm(`Add the points to all ${n} players now?\n\nIt's all-or-nothing: either every player is updated, or nobody is.`)) return;
+  const btn = $("rs-apply-btn");
+  btn.disabled = true;
+  btn.textContent = "Saving...";
+  await rsRun(async () => {
+    try {
+      const res = await applyTournamentPoints(rs.tid, rs.fixtures);
+      const v = await verifyApplied(rs.tid);
+      await loadResults(rs.tid);
+      if (v.ok) rsOk(`Done ✓ Points were added for ${res.players.length} of ${n} players. ${v.matchCount} matches and ${v.historyCount} history entries were saved and double-checked.`);
+      else rsErr("The points were saved, but the double-check found differences:\n" + v.mismatches.join("\n"));
+    } catch (err) {
+      console.error(err);
+      if (err.code === "validation") rsErr("Nothing was changed. Problems found:\n" + err.errors.join("\n"));
+      else rsErr("Something went wrong, so NOTHING was changed (the save is all-or-nothing). Try again.\n" + (err.message || ""));
+      btn.disabled = false;
+      btn.textContent = `Confirm & add points to all ${n} players`;
+    }
+  });
+}
+
+async function rsVerify() {
+  rsClear();
+  const out = $("rs-verify-out");
+  out.innerHTML = '<span class="spinner"></span> Checking...';
+  await rsRun(async () => {
+    try {
+      const v = await verifyApplied(rs.tid);
+      out.innerHTML = v.ok
+        ? `<div class="msg success show">✓ All ${v.total} players match the saved calculation. ${v.matchCount} matches and ${v.historyCount} history entries found.</div>`
+        : `<div class="msg error show" style="white-space:pre-line;">Differences found:\n${v.mismatches.map(escapeHtml).join("\n")}\n\n(If players have played other matches since, their numbers will naturally differ.)</div>`;
+    } catch (err) {
+      console.error(err);
+      out.innerHTML = '<div class="msg error show">Couldn\'t run the check. Try again.</div>';
+    }
+  });
+}
+
+async function rsUndo() {
+  rsClear();
+  if (!confirm("Undo this tournament's points?\n\nEvery player goes back to their exact numbers from before the calculation, and the matches/history entries it created are removed. The scores you entered stay, so you can fix them and calculate again.")) return;
+  await rsRun(async () => {
+    try {
+      const res = await revertTournamentPoints(rs.tid);
+      await loadResults(rs.tid);
+      rsOk(`Undone ✓ ${res.restored} players were restored to their previous points.`);
+    } catch (err) {
+      console.error(err);
+      if (err.code === "validation") rsErr("Nothing was changed — it can't be undone safely:\n" + err.errors.join("\n"));
+      else rsErr("Something went wrong, so nothing was changed. " + (err.message || ""));
+    }
+  });
+}

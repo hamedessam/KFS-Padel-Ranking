@@ -69,8 +69,28 @@ function startSessionWatch(player) {
     const data = snap.data();
     if (data.passwordHash !== expectedPasswordHash) {
       forceLogout("forced_logout_password_changed");
+      return;
     }
+    syncCurrentPlayerFromSnapshot(data);
   }, (err) => console.error(err));
+}
+
+// The same live listener also keeps the player's own numbers fresh: when the
+// admin records matches, awards coins or changes the rank while the app is
+// open, points / matches / wins / losses / coins update on screen without
+// needing to close and reopen the app. Only reacts when one of those numbers
+// actually differs, so the player's own writes (avatar, purchases, rank
+// snapshot) can't cause a loop.
+function syncCurrentPlayerFromSnapshot(data) {
+  if (!currentPlayer) return;
+  const fields = ["ratingPoints", "matchesPlayed", "wins", "losses", "coinsBalance"];
+  const changed = fields.some((f) => (data[f] ?? null) !== (currentPlayer[f] ?? null));
+  if (!changed) return;
+  fields.forEach((f) => { currentPlayer[f] = data[f]; });
+  refreshProfileDisplay(currentPlayer);
+  $("mk-balance-value").innerHTML = `${Math.round(currentPlayer.coinsBalance ?? 0)}${COIN_SVG}`;
+  leaderboardCache = null; // rank may have moved — next view reloads it
+  loadHome();
 }
 
 function stopSessionWatch() {
@@ -1963,7 +1983,7 @@ async function generateAndShareProfileCard() {
 
     // tier pill (or plain points pill while tiers are hidden)
     const meta = tierMeta(tierFromPoints(currentPlayer.ratingPoints));
-    const tierColors = { gold: "#e3b74e", silver: "#b9c2c8", bronze: "#b98a5a" };
+    const tierColors = { gold: "#e3b74e", silver: "#b9c2c8", bronze: "#b98a5a", diamond: "#7fd6f5", elite: "#b98cff" };
     const pillY = avatarY + avatarSize + 200;
     ctx.font = "800 34px 'Cairo', sans-serif";
     const shareRanked = isRanked(currentPlayer);
