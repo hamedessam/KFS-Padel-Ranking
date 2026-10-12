@@ -31,22 +31,27 @@ import { getLang } from "./i18n.js";
 // Tier is always derived from points — never chosen manually — so nobody
 // can dispute "why did you put me in Silver". The math decides, not a person.
 //
-// 5 ranks of 500 points each (Bronze 0-500, Silver 501-1000, Gold 1001-1500,
-// Diamond 1501-2000), each split into 3 tiers of ~167 points. A HIGHER number
-// is a HIGHER tier (Gold 3 is above Gold 1). Elite is 2001+ with no ceiling
-// and no sub-tiers. `start` is where a player is placed when the admin gives
-// them that tier: the middle of the tier, so one lost match can't demote them.
+// 5 ranks of 500 points each, every rank starting on a multiple of 500:
+// Bronze 0-499, Silver 500-999, Gold 1000-1499, Diamond 1500-1999 (so exactly
+// 1000 is Gold 1), each split into 3 tiers of ~167 points. A HIGHER number is a
+// HIGHER tier (Gold 3 is above Gold 1). Elite is 2000+ with no ceiling and no
+// sub-tiers.
+//
+// `min` = the first point of the tier (this is what decides the tier).
+// `start` = where a player is PLACED when the admin gives them that tier: the
+// middle of the tier, so one lost match can't demote them straight away.
+// (Elite has no ceiling, so it gets a small cushion above 2000.)
 const TIER_THRESHOLDS = [
-  { min: 2001, tier: "elite", start: 2100 },
-  { min: 1835, tier: "diamond_3", start: 1918 },
-  { min: 1668, tier: "diamond_2", start: 1751 },
-  { min: 1501, tier: "diamond_1", start: 1584 },
-  { min: 1335, tier: "gold_3", start: 1418 },
-  { min: 1168, tier: "gold_2", start: 1251 },
-  { min: 1001, tier: "gold_1", start: 1084 },
-  { min: 835, tier: "silver_3", start: 918 },
-  { min: 668, tier: "silver_2", start: 751 },
-  { min: 501, tier: "silver_1", start: 584 },
+  { min: 2000, tier: "elite", start: 2050 },
+  { min: 1834, tier: "diamond_3", start: 1917 },
+  { min: 1667, tier: "diamond_2", start: 1750 },
+  { min: 1500, tier: "diamond_1", start: 1583 },
+  { min: 1334, tier: "gold_3", start: 1417 },
+  { min: 1167, tier: "gold_2", start: 1250 },
+  { min: 1000, tier: "gold_1", start: 1083 },
+  { min: 834, tier: "silver_3", start: 917 },
+  { min: 667, tier: "silver_2", start: 750 },
+  { min: 500, tier: "silver_1", start: 583 },
   { min: 334, tier: "bronze_3", start: 417 },
   { min: 167, tier: "bronze_2", start: 250 },
   { min: -Infinity, tier: "bronze_1", start: 83 }
@@ -65,11 +70,17 @@ export function isRanked(player) {
   return player.ratingPoints !== null && player.ratingPoints !== undefined;
 }
 
-// Starting points for each tier (lowest -> highest) — the middle of the tier,
+// Every tier (lowest -> highest) with its real range and its starting points,
 // read straight from TIER_THRESHOLDS so it can never drift from the real
-// tier boundaries.
+// boundaries. `max` is null for Elite (no ceiling).
 export function tierStartOptions() {
-  return [...TIER_THRESHOLDS].reverse().map((t) => ({ tier: t.tier, points: t.start }));
+  const asc = [...TIER_THRESHOLDS].reverse();
+  return asc.map((t, i) => ({
+    tier: t.tier,
+    points: t.start,
+    min: Number.isFinite(t.min) ? t.min : 0,
+    max: i + 1 < asc.length ? asc[i + 1].min - 1 : null
+  }));
 }
 
 export function tierMeta(tierId) {

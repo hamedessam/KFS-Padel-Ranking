@@ -37,7 +37,7 @@ function tierLabel(id) {
 function fillRankSelect(sel, leadingOptions) {
   sel.innerHTML =
     leadingOptions.map((o) => `<option value="${o.value}">${o.label}</option>`).join("") +
-    TIER_START.map((o) => `<option value="${o.tier}">${tierLabel(o.tier)} (starts at ${o.points})</option>`).join("") +
+    TIER_START.map((o) => `<option value="${o.tier}">${tierLabel(o.tier)} · ${o.max === null ? o.min + "+" : o.min + "–" + o.max} · starts at ${o.points}</option>`).join("") +
     '<option value="custom">Custom points…</option>';
 }
 fillRankSelect($("ap-rank"), [{ value: "", label: "No rank yet (unranked)" }]);
