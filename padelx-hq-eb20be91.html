@@ -199,6 +199,49 @@
           </table>
         </div>
 
+        <div class="panel hidden" id="edit-tournament-card" style="margin-top:16px;">
+          <h1>Edit tournament</h1>
+          <p class="sub">Change anything after the tournament was created — e.g. set it to <strong>Live</strong> when it starts, or <strong>Completed</strong> (with the champion) when it's over. Registration only stays open while the status is "Upcoming". The number of teams can't be changed here because teams are already numbered.</p>
+          <div class="msg error" id="edit-tournament-error"></div>
+          <form id="edit-tournament-form">
+            <div class="field">
+              <label for="et-name">Tournament name</label>
+              <input type="text" id="et-name" required>
+            </div>
+            <div class="field">
+              <label for="et-location">Location</label>
+              <input type="text" id="et-location">
+            </div>
+            <div class="field">
+              <label for="et-date">Date label</label>
+              <input type="text" id="et-date">
+            </div>
+            <div class="field">
+              <label for="et-status">Status</label>
+              <select id="et-status">
+                <option value="upcoming">Upcoming (open for registration)</option>
+                <option value="live">Live</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="et-fee">Registration fee (EGP, optional)</label>
+              <input type="number" id="et-fee" min="0" step="1">
+            </div>
+            <div class="field">
+              <label for="et-deadline">Registration deadline (optional)</label>
+              <input type="datetime-local" id="et-deadline">
+              <div class="hint">Empty = no deadline.</div>
+            </div>
+            <div class="field">
+              <label for="et-champion">Champion (only used when Completed)</label>
+              <input type="text" id="et-champion" placeholder="e.g. Ahmed &amp; Omar">
+            </div>
+            <button type="submit" class="btn btn-primary" id="et-btn">Save changes</button>
+            <button type="button" class="btn btn-ghost" id="et-cancel" style="margin-top:8px;">Cancel</button>
+          </form>
+        </div>
+
         <div class="panel" style="margin-top:16px;">
           <h1>All players</h1>
           <div id="players-loading" style="font-size:13px; color:var(--text-soft);">

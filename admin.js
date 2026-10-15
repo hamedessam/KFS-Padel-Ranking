@@ -595,12 +595,15 @@ async function loadTournaments() {
         <td>${escapeHtml(t.dateLabel || "—")}</td>
         <td>${(t.participantIds || []).length}</td>
         <td>${t.fee ? escapeHtml(String(t.fee)) + " EGP" : "—"}</td>
-        <td><button class="link-btn" data-delete-tournament="${d.id}" type="button" style="font-size:12px; color:var(--danger);">Delete</button></td>
+        <td style="white-space:nowrap;"><button class="link-btn" data-edit-tournament="${d.id}" type="button" style="font-size:12px;">Edit</button> <button class="link-btn" data-delete-tournament="${d.id}" type="button" style="font-size:12px; color:var(--danger);">Delete</button></td>
       `;
       tbody.appendChild(tr);
     });
     loadingEl.classList.add("hidden");
     tableEl.classList.remove("hidden");
+    tbody.querySelectorAll("[data-edit-tournament]").forEach((btn) => {
+      btn.addEventListener("click", () => openEditTournamentCard(btn.dataset.editTournament));
+    });
     tbody.querySelectorAll("[data-delete-tournament]").forEach((btn) => {
       btn.addEventListener("click", () => deleteTournamentCompletely(btn.dataset.deleteTournament, btn.closest("tr").children[0].textContent, btn));
     });
@@ -2685,3 +2688,89 @@ async function rsUndo() {
     }
   });
 }
+
+// =========================================================================
+// ---------------- Edit an existing tournament ----------------
+// Status / champion / deadline / fee / name can be changed after creation.
+// (The number of teams is deliberately NOT editable — teams are already numbered.)
+// =========================================================================
+
+let editingTournamentId = null;
+
+function toLocalInputValue(ts) {
+  if (!ts || !ts.toDate) return "";
+  const d = ts.toDate();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+async function openEditTournamentCard(tournamentId) {
+  hideMsg($("edit-tournament-error"));
+  try {
+    const snap = await getDoc(doc(db, "tournaments", tournamentId));
+    if (!snap.exists()) return;
+    const t = snap.data();
+    editingTournamentId = tournamentId;
+    $("et-name").value = t.name || "";
+    $("et-location").value = t.location || "";
+    $("et-date").value = t.dateLabel || "";
+    $("et-status").value = t.status || "upcoming";
+    $("et-fee").value = t.fee ?? "";
+    $("et-deadline").value = toLocalInputValue(t.registrationDeadline);
+    $("et-champion").value = t.championName || "";
+    const card = $("edit-tournament-card");
+    card.classList.remove("hidden");
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+  } catch (err) {
+    console.error(err);
+    alert("Couldn't open that tournament. Try again.");
+  }
+}
+
+$("et-cancel").addEventListener("click", () => {
+  $("edit-tournament-card").classList.add("hidden");
+  editingTournamentId = null;
+});
+
+$("edit-tournament-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errEl = $("edit-tournament-error");
+  hideMsg(errEl);
+  if (!editingTournamentId) return;
+
+  const name = $("et-name").value.trim();
+  if (!name) { showMsg(errEl, "Enter a name."); return; }
+  const status = $("et-status").value;
+  const feeRaw = $("et-fee").value;
+  const deadlineRaw = $("et-deadline").value;
+  const update = {
+    name,
+    location: $("et-location").value.trim(),
+    dateLabel: $("et-date").value.trim(),
+    status,
+    fee: feeRaw === "" ? null : Math.max(0, Number(feeRaw)),
+    registrationDeadline: deadlineRaw ? new Date(deadlineRaw) : null,
+    championName: status === "completed" ? $("et-champion").value.trim() : ""
+  };
+
+  const btn = $("et-btn");
+  btn.disabled = true;
+  btn.textContent = "Saving...";
+  try {
+    await updateDoc(doc(db, "tournaments", editingTournamentId), update);
+    // keep every tournament dropdown in the admin page in sync without re-reading Firestore
+    ["mt-tournament", "tm-tournament", "coin-p-tournament", "coin-a-tournament", "coin-pl-tournament", "rs-tournament"].forEach((selId) => {
+      const sel = $(selId);
+      const opt = sel && [...sel.options].find((o) => o.value === editingTournamentId);
+      if (opt) opt.textContent = `${name} (${status})`;
+    });
+    $("edit-tournament-card").classList.add("hidden");
+    editingTournamentId = null;
+    loadTournaments();
+  } catch (err) {
+    console.error(err);
+    showMsg(errEl, "Something went wrong saving the tournament. Try again.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Save changes";
+  }
+});
