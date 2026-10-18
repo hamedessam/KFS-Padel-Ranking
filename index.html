@@ -189,6 +189,13 @@
         </div>
 
         <div id="tournaments-subtab-list">
+          <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+            <select id="tr-filter" class="mk-sort-select" aria-label="Filter tournaments">
+              <option value="current" data-i18n="tr_filter_current">Current</option>
+              <option value="completed" data-i18n="tr_filter_completed">Completed</option>
+              <option value="all" data-i18n="tr_filter_all">All</option>
+            </select>
+          </div>
           <div id="tr-loading" style="font-size:13px; color:var(--text-soft);">
             <span class="spinner"></span> <span data-i18n="loading">Loading...</span>
           </div>

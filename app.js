@@ -379,6 +379,7 @@ const tabPanels = {
 };
 let leaderboardCache = null; // array of {id, rank, ...data}, shared between Home + Leaderboard tabs
 let tournamentsCache = null; // array of {id, ...data}, shared between Home + Tournaments tabs
+let tournamentsFilter = "current"; // Tournaments tab dropdown: "current" (upcoming + live) | "completed" | "all"
 
 function switchTab(target) {
   tabButtons.forEach((b) => b.classList.toggle("active", b.dataset.tab === target));
@@ -731,7 +732,7 @@ async function loadHomeTournaments() {
   }
 }
 
-async function loadTournamentsTab() {
+async function loadTournamentsTab(useCache = false) {
   const loadingEl = $("tr-loading");
   const listEl = $("tr-list");
   const emptyEl = $("tr-empty");
@@ -740,13 +741,23 @@ async function loadTournamentsTab() {
   emptyEl.classList.add("hidden");
 
   try {
-    const data = await ensureTournamentsData(true);
+    const all = await ensureTournamentsData(!useCache);
     loadingEl.classList.add("hidden");
-    if (data.length === 0) {
+    if (all.length === 0) {
       emptyEl.classList.remove("hidden");
       return;
     }
+    // "Current" = upcoming + live. Anything the admin marks Completed moves to
+    // the Completed list (same rule the status label already uses).
+    const isCurrent = (tr) => ["upcoming", "live"].includes(tr.status || "upcoming");
+    const data = all.filter((tr) => tournamentsFilter === "all" || (tournamentsFilter === "completed" ? !isCurrent(tr) : isCurrent(tr)));
     listEl.innerHTML = "";
+    if (data.length === 0) {
+      listEl.innerHTML = `<div class="tourney-empty">${t(tournamentsFilter === "completed" ? "tr_filter_empty_completed" : "tr_filter_empty_current")}</div>`;
+      listEl.classList.remove("hidden");
+      loadRequestsSubtab(); // keeps the "Requests" badge fresh
+      return;
+    }
     data.forEach((tr) => {
       const row = document.createElement("div");
       row.className = "tourney-row";
@@ -822,6 +833,11 @@ async function loadTournamentsTab() {
     loadingEl.textContent = t("leaderboard_err");
   }
 }
+
+$("tr-filter").addEventListener("change", (e) => {
+  tournamentsFilter = e.target.value;
+  loadTournamentsTab(true); // just re-filter the already-loaded list
+});
 
 // ---------------- register / join-a-team / pending-request states ----------------
 async function resolveRegisterActions(tournamentId) {
