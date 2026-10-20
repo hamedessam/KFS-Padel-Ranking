@@ -550,6 +550,7 @@ $("tournament-form").addEventListener("submit", async (e) => {
       dateLabel,
       status,
       totalTeams,
+      rank: $("tr-rank").value || null,
       fee,
       registrationDeadline: deadlineRaw ? new Date(deadlineRaw) : null,
       championName: status === "completed" ? championName : "",
@@ -592,6 +593,7 @@ async function loadTournaments() {
       tr.innerHTML = `
         <td>${escapeHtml(t.name || "—")}</td>
         <td><span class="badge-pill ${statusClass}">${t.status || "upcoming"}</span></td>
+        <td>${t.rank ? escapeHtml(t.rank.charAt(0).toUpperCase() + t.rank.slice(1)) : "Open"}</td>
         <td>${escapeHtml(t.dateLabel || "—")}</td>
         <td>${(t.participantIds || []).length}</td>
         <td>${t.fee ? escapeHtml(String(t.fee)) + " EGP" : "—"}</td>
@@ -2714,6 +2716,7 @@ async function openEditTournamentCard(tournamentId) {
     $("et-location").value = t.location || "";
     $("et-date").value = t.dateLabel || "";
     $("et-status").value = t.status || "upcoming";
+    $("et-rank").value = t.rank || "";
     $("et-fee").value = t.fee ?? "";
     $("et-deadline").value = toLocalInputValue(t.registrationDeadline);
     $("et-champion").value = t.championName || "";
@@ -2747,6 +2750,7 @@ $("edit-tournament-form").addEventListener("submit", async (e) => {
     location: $("et-location").value.trim(),
     dateLabel: $("et-date").value.trim(),
     status,
+    rank: $("et-rank").value || null,
     fee: feeRaw === "" ? null : Math.max(0, Number(feeRaw)),
     registrationDeadline: deadlineRaw ? new Date(deadlineRaw) : null,
     championName: status === "completed" ? $("et-champion").value.trim() : ""

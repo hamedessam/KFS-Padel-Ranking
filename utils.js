@@ -83,22 +83,62 @@ export function tierStartOptions() {
   }));
 }
 
+const FAMILY_NAMES = {
+  ar: { bronze: "برونزي", silver: "فضي", gold: "ذهبي", diamond: "دايموند", elite: "إيليت" },
+  en: { bronze: "Bronze", silver: "Silver", gold: "Gold", diamond: "Diamond", elite: "Elite" }
+};
+
+// "silver" -> "Silver" / "فضي" (no tier number) — for tournament rank badges
+export function rankFamilyLabel(family) {
+  const names = FAMILY_NAMES[getLang()] || FAMILY_NAMES.en;
+  return names[family] || family;
+}
+
 export function tierMeta(tierId) {
   // tierId format: "silver_3", "gold_1", "diamond_2" etc. — or just "elite"
   // (no sub-tiers).
   const [family, level] = (tierId || "bronze_1").split("_");
-  const names = {
-    ar: { bronze: "برونزي", silver: "فضي", gold: "ذهبي", diamond: "دايموند", elite: "إيليت" },
-    en: { bronze: "Bronze", silver: "Silver", gold: "Gold", diamond: "Diamond", elite: "Elite" }
-  };
-  const lang = getLang();
-  const familyNames = names[lang] || names.en;
+  const familyNames = FAMILY_NAMES[getLang()] || FAMILY_NAMES.en;
   return {
     family,
     level: level || "E", // text shown inside the shield badge
     displayName: `${familyNames[family] || family} ${level || ""}`.trim(),
     cssClass: family
   };
+}
+
+// ---------------- tournament rank rules ----------------
+// A tournament can be limited to one rank (bronze / silver / gold / diamond /
+// elite). No rank on the tournament = open to everyone (how every older
+// tournament behaves).
+//   - registering a team of your own: players OF that rank only
+//   - being picked as a partner / sending a join request: players of that
+//     rank, or of the rank directly below it (Bronze is the bottom: Bronze
+//     tournaments are Bronze only)
+// Players with no rank yet can't take part in a ranked tournament.
+export const RANK_FAMILIES = ["bronze", "silver", "gold", "diamond", "elite"];
+
+export function playerRankFamily(player) {
+  if (!isRanked(player)) return null;
+  return tierFromPoints(player.ratingPoints).split("_")[0];
+}
+
+export function rankBelow(family) {
+  const i = RANK_FAMILIES.indexOf(family);
+  return i > 0 ? RANK_FAMILIES[i - 1] : null;
+}
+
+export function canFoundTeam(player, tournament) {
+  const r = tournament && tournament.rank;
+  if (!r) return true;
+  return playerRankFamily(player) === r;
+}
+
+export function canBePartner(player, tournament) {
+  const r = tournament && tournament.rank;
+  if (!r) return true;
+  const f = playerRankFamily(player);
+  return f !== null && (f === r || f === rankBelow(r));
 }
 
 // Renders inner content for an avatar container (a div/span already carrying

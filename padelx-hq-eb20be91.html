@@ -189,6 +189,7 @@
               <tr>
                 <th>Name</th>
                 <th>Status</th>
+                <th>Rank</th>
                 <th>Date</th>
                 <th>Registered</th>
                 <th>Fee</th>
@@ -223,6 +224,18 @@
                 <option value="live">Live</option>
                 <option value="completed">Completed</option>
               </select>
+            </div>
+            <div class="field">
+              <label for="et-rank">Rank (who can register)</label>
+              <select id="et-rank">
+                <option value="">Open — all ranks</option>
+                <option value="bronze">Bronze</option>
+                <option value="silver">Silver</option>
+                <option value="gold">Gold</option>
+                <option value="diamond">Diamond</option>
+                <option value="elite">Elite</option>
+              </select>
+              <div class="hint">Everyone can SEE the tournament. Only players of this rank can register a team; players of this rank or the one below can be partners or send join requests (Bronze: Bronze only). "Open" = no restriction.</div>
             </div>
             <div class="field">
               <label for="et-fee">Registration fee (EGP, optional)</label>
@@ -378,6 +391,18 @@
               <label for="tr-total-teams">Number of teams</label>
               <input type="number" id="tr-total-teams" value="12" min="2" max="64" step="1">
               <div class="hint">The Tournament Manager will show this many numbered team slots.</div>
+            </div>
+            <div class="field">
+              <label for="tr-rank">Rank (who can register)</label>
+              <select id="tr-rank">
+                <option value="">Open — all ranks</option>
+                <option value="bronze">Bronze</option>
+                <option value="silver">Silver</option>
+                <option value="gold">Gold</option>
+                <option value="diamond">Diamond</option>
+                <option value="elite">Elite</option>
+              </select>
+              <div class="hint">Everyone can SEE the tournament. Only players of this rank can register a team; players of this rank or the one below can be partners or send join requests (Bronze: Bronze only). "Open" = no restriction.</div>
             </div>
             <div class="field">
               <label for="tr-fee">Registration fee (EGP, optional)</label>
