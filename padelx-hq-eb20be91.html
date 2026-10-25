@@ -226,16 +226,9 @@
               </select>
             </div>
             <div class="field">
-              <label for="et-rank">Rank (who can register)</label>
-              <select id="et-rank">
-                <option value="">Open — all ranks</option>
-                <option value="bronze">Bronze</option>
-                <option value="silver">Silver</option>
-                <option value="gold">Gold</option>
-                <option value="diamond">Diamond</option>
-                <option value="elite">Elite</option>
-              </select>
-              <div class="hint">Everyone can SEE the tournament. Only players of this rank can register a team; players of this rank or the one below can be partners or send join requests (Bronze: Bronze only). "Open" = no restriction.</div>
+              <label>Ranks (who can register)</label>
+              <div id="et-ranks" style="display:flex; flex-wrap:wrap; gap:14px;"></div>
+              <div class="hint">Tick every rank the tournament is open to. Players of ANY ticked rank can register a team, be picked as a partner, or send a join request — partners must also be one of the ticked ranks. Everyone can still SEE the tournament. Leave all unticked = open to everyone.</div>
             </div>
             <div class="field">
               <label for="et-fee">Registration fee (EGP, optional)</label>
@@ -393,16 +386,9 @@
               <div class="hint">The Tournament Manager will show this many numbered team slots.</div>
             </div>
             <div class="field">
-              <label for="tr-rank">Rank (who can register)</label>
-              <select id="tr-rank">
-                <option value="">Open — all ranks</option>
-                <option value="bronze">Bronze</option>
-                <option value="silver">Silver</option>
-                <option value="gold">Gold</option>
-                <option value="diamond">Diamond</option>
-                <option value="elite">Elite</option>
-              </select>
-              <div class="hint">Everyone can SEE the tournament. Only players of this rank can register a team; players of this rank or the one below can be partners or send join requests (Bronze: Bronze only). "Open" = no restriction.</div>
+              <label>Ranks (who can register)</label>
+              <div id="tr-ranks" style="display:flex; flex-wrap:wrap; gap:14px;"></div>
+              <div class="hint">Tick every rank the tournament is open to. Players of ANY ticked rank can register a team, be picked as a partner, or send a join request — partners must also be one of the ticked ranks. Everyone can still SEE the tournament. Leave all unticked = open to everyone.</div>
             </div>
             <div class="field">
               <label for="tr-fee">Registration fee (EGP, optional)</label>

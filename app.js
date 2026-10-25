@@ -3,7 +3,7 @@ import {
   auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential
 } from "./firebase-config.js";
 import { registerPlayer, unregisterPlayer, addPartner, fetchTeams, findTeamOf, requestToJoinTeam, cancelJoinRequest, acceptJoinRequest, declineJoinRequest, getOpenTeams, myPendingRequestTeams, myIncomingRequests } from "./teams.js";
-import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFoundingMember, isRanked, rankFamilyLabel, canFoundTeam, canBePartner } from "./utils.js";
+import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFoundingMember, isRanked, rankFamilyLabel, canFoundTeam, canBePartner, tournamentRanks } from "./utils.js";
 import { t, getLang, setLang, applyStaticTranslations } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
@@ -692,15 +692,20 @@ async function ensureTournamentsData(forceRefresh = false) {
   return tournamentsCache;
 }
 
-// Small rank pill on a tournament that is limited to one rank (nothing for open ones)
+// One small rank pill per rank the tournament is open to (nothing for open ones)
 function rankBadgeHtml(tr) {
-  return tr.rank ? `<span class="badge-pill ${tr.rank}" style="margin-inline-start:6px; vertical-align:2px;">${rankFamilyLabel(tr.rank)}</span>` : "";
+  return tournamentRanks(tr).map((r) => `<span class="badge-pill ${r}">${rankFamilyLabel(r)}</span>`).join("");
+}
+
+// Status pill + rank pills in one flex row so they always line up the same way
+function tourneyBadgesHtml(tr) {
+  const statusDot = tr.status === "live" ? '<span class="dot-live"></span>' : "";
+  return `<div class="tourney-badges"><span class="tourney-status ${tr.status || "upcoming"}">${statusDot}${statusLabel(tr.status)}</span>${rankBadgeHtml(tr)}</div>`;
 }
 
 function tourneyCardHtml(tr) {
-  const statusDot = tr.status === "live" ? '<span class="dot-live"></span>' : "";
   return `
-    <span class="tourney-status ${tr.status || "upcoming"}">${statusDot}${statusLabel(tr.status)}</span>${rankBadgeHtml(tr)}
+    ${tourneyBadgesHtml(tr)}
     <div class="tourney-name">${tr.name || "—"}</div>
     ${tr.location ? `<div class="tourney-meta">${PIN_SVG}${tr.location}</div>` : ""}
     ${tr.dateLabel ? `<div class="tourney-meta">${CAL_SVG}${tr.dateLabel}</div>` : ""}
@@ -795,7 +800,7 @@ async function loadTournamentsTab(useCache = false) {
       row.innerHTML = `
         <div class="tourney-row-top">
           <div>
-            <span class="tourney-status ${tr.status || "upcoming"}">${tr.status === "live" ? '<span class="dot-live"></span>' : ""}${statusLabel(tr.status)}</span>${rankBadgeHtml(tr)}
+            ${tourneyBadgesHtml(tr)}
             <div class="tourney-name">${tr.name || "—"}</div>
           </div>
         </div>
@@ -890,8 +895,8 @@ async function resolveRegisterActions(tournamentId) {
     // Show Register/Join immediately — previously these were hidden until
     // the player tapped "View registered players" first, but that made it
     // unclear people could even register at all. Show them right away now.
-    // What this player may do depends on the tournament's rank (if it has one):
-    // same rank -> register a team or join one; the rank below -> join only;
+    // What this player may do depends on the tournament's ranks (if it has any):
+    // a player whose rank is one of them can register a team or join one;
     // anyone else (or no rank yet) -> closed.
     const tourney = tSnap.exists() ? tSnap.data() : {};
     if (!canBePartner(currentPlayer, tourney)) {

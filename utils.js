@@ -128,17 +128,29 @@ export function rankBelow(family) {
   return i > 0 ? RANK_FAMILIES[i - 1] : null;
 }
 
+// The ranks a tournament is open to, as an array in ladder order. New
+// tournaments store `ranks: [...]`; older ones only have a single `rank`
+// string (still understood). Empty array = open to everyone.
+export function tournamentRanks(tournament) {
+  if (!tournament) return [];
+  const list = Array.isArray(tournament.ranks)
+    ? tournament.ranks
+    : (tournament.rank ? [tournament.rank] : []);
+  return RANK_FAMILIES.filter((f) => list.includes(f));
+}
+
+// Founding a team and being a partner follow the same rule now: the player's
+// rank must be one of the tournament's selected ranks (no "one rank below"
+// extra any more). Open tournaments (no ranks) = everyone.
 export function canFoundTeam(player, tournament) {
-  const r = tournament && tournament.rank;
-  if (!r) return true;
-  return playerRankFamily(player) === r;
+  const ranks = tournamentRanks(tournament);
+  if (ranks.length === 0) return true;
+  const f = playerRankFamily(player);
+  return f !== null && ranks.includes(f);
 }
 
 export function canBePartner(player, tournament) {
-  const r = tournament && tournament.rank;
-  if (!r) return true;
-  const f = playerRankFamily(player);
-  return f !== null && (f === r || f === rankBelow(r));
+  return canFoundTeam(player, tournament);
 }
 
 // Renders inner content for an avatar container (a div/span already carrying

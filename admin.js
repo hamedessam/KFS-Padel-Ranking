@@ -3,7 +3,7 @@ import {
   query, orderBy, where, runTransaction, writeBatch, increment, arrayUnion, serverTimestamp,
   auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged
 } from "./firebase-config.js";
-import { hashPassword, randomSalt, generatePassword, playerCodeFromSeq, tierMeta, tierFromPoints, isFoundingMember, computeMatchPointChanges, isRanked, tierStartOptions } from "./utils.js";
+import { hashPassword, randomSalt, generatePassword, playerCodeFromSeq, tierMeta, tierFromPoints, isFoundingMember, computeMatchPointChanges, isRanked, tierStartOptions, RANK_FAMILIES, tournamentRanks } from "./utils.js";
 import { fetchTeams, assignToSlot, unregisterPlayer, setTeamGroup } from "./teams.js";
 import {
   checkReadiness, generateGroupFixtures, deriveBracket, computeTournamentPoints, fixturePlayerIds,
@@ -45,6 +45,27 @@ function syncRankPointsField() {
   $("ap-points-field").classList.toggle("hidden", $("ap-rank").value !== "custom");
 }
 $("ap-rank").addEventListener("change", syncRankPointsField);
+
+// ---------------- tournament rank checkboxes (shared by Add + Edit tournament) ----------------
+function renderRankChecks(containerId, selected) {
+  const sel = new Set(selected || []);
+  $(containerId).innerHTML = RANK_FAMILIES.map((f) => `
+    <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text);">
+      <input type="checkbox" value="${f}" ${sel.has(f) ? "checked" : ""} style="width:auto;">
+      ${f.charAt(0).toUpperCase() + f.slice(1)}
+    </label>`).join("");
+}
+function readRankChecks(containerId) {
+  const on = Array.from($(containerId).querySelectorAll('input[type="checkbox"]:checked')).map((cb) => cb.value);
+  return RANK_FAMILIES.filter((f) => on.includes(f));
+}
+// Saved as `ranks` (array). `rank` keeps the first one so older cached copies
+// of the player app still restrict the tournament instead of treating it as open.
+function rankFields(ranks) {
+  return { ranks, rank: ranks[0] || null };
+}
+renderRankChecks("tr-ranks", []);
+renderRankChecks("et-ranks", []);
 
 function showMsg(el, text) {
   el.textContent = text;
@@ -550,7 +571,7 @@ $("tournament-form").addEventListener("submit", async (e) => {
       dateLabel,
       status,
       totalTeams,
-      rank: $("tr-rank").value || null,
+      ...rankFields(readRankChecks("tr-ranks")),
       fee,
       registrationDeadline: deadlineRaw ? new Date(deadlineRaw) : null,
       championName: status === "completed" ? championName : "",
@@ -559,6 +580,7 @@ $("tournament-form").addEventListener("submit", async (e) => {
     });
     showMsg(okEl, `${name} added.`);
     $("tournament-form").reset();
+    renderRankChecks("tr-ranks", []);
     $("tr-status").value = "upcoming";
     $("tr-total-teams").value = "12";
     loadTournaments();
@@ -593,7 +615,7 @@ async function loadTournaments() {
       tr.innerHTML = `
         <td>${escapeHtml(t.name || "—")}</td>
         <td><span class="badge-pill ${statusClass}">${t.status || "upcoming"}</span></td>
-        <td>${t.rank ? escapeHtml(t.rank.charAt(0).toUpperCase() + t.rank.slice(1)) : "Open"}</td>
+        <td>${tournamentRanks(t).length ? tournamentRanks(t).map((r) => escapeHtml(r.charAt(0).toUpperCase() + r.slice(1))).join(", ") : "Open"}</td>
         <td>${escapeHtml(t.dateLabel || "—")}</td>
         <td>${(t.participantIds || []).length}</td>
         <td>${t.fee ? escapeHtml(String(t.fee)) + " EGP" : "—"}</td>
@@ -2716,7 +2738,7 @@ async function openEditTournamentCard(tournamentId) {
     $("et-location").value = t.location || "";
     $("et-date").value = t.dateLabel || "";
     $("et-status").value = t.status || "upcoming";
-    $("et-rank").value = t.rank || "";
+    renderRankChecks("et-ranks", tournamentRanks(t));
     $("et-fee").value = t.fee ?? "";
     $("et-deadline").value = toLocalInputValue(t.registrationDeadline);
     $("et-champion").value = t.championName || "";
@@ -2750,7 +2772,7 @@ $("edit-tournament-form").addEventListener("submit", async (e) => {
     location: $("et-location").value.trim(),
     dateLabel: $("et-date").value.trim(),
     status,
-    rank: $("et-rank").value || null,
+    ...rankFields(readRankChecks("et-ranks")),
     fee: feeRaw === "" ? null : Math.max(0, Number(feeRaw)),
     registrationDeadline: deadlineRaw ? new Date(deadlineRaw) : null,
     championName: status === "completed" ? $("et-champion").value.trim() : ""
