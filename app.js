@@ -3,7 +3,7 @@ import {
   auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential
 } from "./firebase-config.js";
 import { registerPlayer, unregisterPlayer, addPartner, fetchTeams, findTeamOf, requestToJoinTeam, cancelJoinRequest, acceptJoinRequest, declineJoinRequest, getOpenTeams, myPendingRequestTeams, myIncomingRequests } from "./teams.js";
-import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFoundingMember, isRanked, rankFamilyLabel, canFoundTeam, canBePartner, tournamentRanks } from "./utils.js";
+import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFoundingMember, isRanked, rankFamilyLabel, canFoundTeam, canBePartner, tournamentRanks, playerRankFamily, RANK_FAMILIES } from "./utils.js";
 import { t, getLang, setLang, applyStaticTranslations } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
@@ -1086,6 +1086,107 @@ function normSearch(s) {
     .replace(/[\s\-_]/g, "");
 }
 
+// ---------------- partner picker: search + rank filter live INSIDE the list ----------------
+let ppOutsideBound = false;
+function closePartnerPicker(pp) {
+  pp.classList.remove("open");
+  pp.querySelector(".pp-panel").classList.add("hidden");
+}
+
+function setupPartnerPickers(container, candidates) {
+  if (!ppOutsideBound) {
+    document.addEventListener("click", (e) => {
+      document.querySelectorAll(".pp.open").forEach((pp) => { if (!pp.contains(e.target)) closePartnerPicker(pp); });
+    });
+    ppOutsideBound = true;
+  }
+  // Rank names/filters follow the same rule as the rest of the app: only
+  // shown while the admin has tiers visible to players.
+  const showRanks = tiersEnabled;
+  const famOf = (pd) => (isRanked(pd) ? playerRankFamily(pd) : null);
+  const families = showRanks ? RANK_FAMILIES.filter((f) => candidates.some((pd) => famOf(pd) === f)) : [];
+  const hasUnranked = showRanks && candidates.some((pd) => !famOf(pd));
+  const chipKeys = ["all", ...families, ...(hasUnranked ? ["none"] : [])];
+
+  container.querySelectorAll("[data-pp]").forEach((pp) => {
+    const hidden = pp.querySelector('input[type="hidden"]');
+    const trigger = pp.querySelector("[data-pp-trigger]");
+    const label = pp.querySelector(".pp-trigger-label");
+    const panel = pp.querySelector(".pp-panel");
+    const search = pp.querySelector(".pp-search");
+    const chipsEl = pp.querySelector(".pp-chips");
+    const listEl = pp.querySelector(".pp-list");
+    let q = "";
+    let rank = "all";
+
+    const chipText = (k) => (k === "all" ? t("filter_all") : k === "none" ? t("partner_filter_unranked") : rankFamilyLabel(k));
+
+    function renderChips() {
+      if (chipKeys.length < 3) { chipsEl.classList.add("hidden"); return; } // nothing worth filtering
+      chipsEl.classList.remove("hidden");
+      chipsEl.innerHTML = "";
+      chipKeys.forEach((k) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "pp-chip" + (k === rank ? " active" : "");
+        b.textContent = chipText(k);
+        b.addEventListener("click", () => { rank = k; renderChips(); renderList(); });
+        chipsEl.appendChild(b);
+      });
+    }
+
+    function renderList() {
+      const matches = candidates.filter((pd) => {
+        const f = famOf(pd) || "none";
+        if (rank !== "all" && f !== rank) return false;
+        return !q || normSearch(pd.name).includes(q) || normSearch(pd.playerCode).includes(q);
+      });
+      listEl.innerHTML = "";
+      if (matches.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "pp-empty";
+        empty.textContent = t("partner_search_empty");
+        listEl.appendChild(empty);
+        return;
+      }
+      matches.forEach((pd) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "pp-item" + (hidden.value === pd.id ? " selected" : "");
+        const nameEl = document.createElement("span");
+        nameEl.className = "pp-item-name";
+        nameEl.textContent = `${pd.name || "—"} (${pd.playerCode || "—"})`;
+        item.appendChild(nameEl);
+        const f = famOf(pd);
+        if (showRanks && f) {
+          const pill = document.createElement("span");
+          pill.className = `badge-pill ${f}`;
+          pill.textContent = rankFamilyLabel(f);
+          item.appendChild(pill);
+        }
+        item.addEventListener("click", () => {
+          hidden.value = pd.id;
+          label.textContent = `${pd.name || "—"} (${pd.playerCode || "—"})`;
+          trigger.classList.add("has-value");
+          closePartnerPicker(pp);
+        });
+        listEl.appendChild(item);
+      });
+    }
+
+    trigger.addEventListener("click", () => {
+      if (pp.classList.contains("open")) { closePartnerPicker(pp); return; }
+      document.querySelectorAll(".pp.open").forEach(closePartnerPicker);
+      pp.classList.add("open");
+      panel.classList.remove("hidden");
+      renderChips();
+      renderList();
+      search.focus();
+    });
+    search.addEventListener("input", () => { q = normSearch(search.value); renderList(); });
+  });
+}
+
 async function renderTeamGrid(tournamentId, container) {
   container.innerHTML = `<span class="spinner"></span> ${t("loading")}`;
 
@@ -1109,7 +1210,6 @@ async function renderTeamGrid(tournamentId, container) {
       (tm.player1Id === currentPlayer.id && !tm.player2Id) || (tm.player2Id === currentPlayer.id && !tm.player1Id));
     const fmtName = (pd) => `${pd.name || "—"} (${pd.playerCode || "—"})`;
     const nameById = new Map();
-    let candidateOptions = "";
     let candidateList = [];
     if (hasMyOpenSlot) {
       const allSnap = await getDocs(query(collection(db, "players"), orderBy("name")));
@@ -1117,8 +1217,6 @@ async function renderTeamGrid(tournamentId, container) {
       allPlayers.forEach((pd) => nameById.set(pd.id, fmtName(pd)));
       candidateList = allPlayers
         .filter((pd) => pd.isActive !== false && !assignedIds.has(pd.id) && pd.id !== currentPlayer.id && canBePartner(pd, tr || {}));
-      candidateOptions = candidateList
-        .map((pd) => `<option value="${pd.id}">${pd.name} (${pd.playerCode})</option>`).join("");
     } else {
       (leaderboardCache || []).forEach((pd) => nameById.set(pd.id, fmtName(pd)));
     }
@@ -1140,12 +1238,18 @@ async function renderTeamGrid(tournamentId, container) {
         if (isMyOpenSlot) {
           return `
             <div class="team-slot-player my-team-picker partner-picker-col">
-              <input type="text" class="partner-search-input" data-partner-search="grid-partner-select-${tournamentId}-${n}" placeholder="${t("partner_search_placeholder")}" autocomplete="off">
               <div class="partner-picker-row">
-                <select class="team-slot-add-select" id="grid-partner-select-${tournamentId}-${n}">
-                  <option value="">${t("choose_partner_placeholder")}</option>
-                  ${candidateOptions}
-                </select>
+                <div class="pp" data-pp>
+                  <input type="hidden" id="grid-partner-select-${tournamentId}-${n}" value="">
+                  <button type="button" class="pp-trigger" data-pp-trigger>
+                    <span class="pp-trigger-label">${t("choose_partner_placeholder")}</span><span class="pp-caret">▾</span>
+                  </button>
+                  <div class="pp-panel hidden">
+                    <input type="text" class="pp-search" placeholder="${t("partner_search_placeholder")}" autocomplete="off">
+                    <div class="pp-chips hidden"></div>
+                    <div class="pp-list"></div>
+                  </div>
+                </div>
                 <button class="btn btn-ghost btn-sm" data-add-partner-grid="${team.id}" data-select-id="grid-partner-select-${tournamentId}-${n}" data-tournament="${tournamentId}" type="button">${t("add_partner_btn")}</button>
               </div>
             </div>`;
@@ -1178,34 +1282,7 @@ async function renderTeamGrid(tournamentId, container) {
 
     container.innerHTML = html;
 
-    container.querySelectorAll("[data-partner-search]").forEach((input) => {
-      const select = $(input.dataset.partnerSearch);
-      input.addEventListener("input", () => {
-        const q = normSearch(input.value);
-        const previous = select.value;
-        const matches = candidateList.filter((pd) => !q || normSearch(pd.name).includes(q) || normSearch(pd.playerCode).includes(q));
-        select.innerHTML = "";
-        const ph = document.createElement("option");
-        ph.value = "";
-        ph.textContent = t("choose_partner_placeholder");
-        select.appendChild(ph);
-        if (matches.length === 0) {
-          const none = document.createElement("option");
-          none.value = "";
-          none.disabled = true;
-          none.textContent = t("partner_search_empty");
-          select.appendChild(none);
-        }
-        matches.forEach((pd) => {
-          const o = document.createElement("option");
-          o.value = pd.id;
-          o.textContent = `${pd.name} (${pd.playerCode})`;
-          select.appendChild(o);
-        });
-        if (matches.some((pd) => pd.id === previous)) select.value = previous;
-        else if (q && matches.length === 1) select.value = matches[0].id; // single match: pre-selected
-      });
-    });
+    setupPartnerPickers(container, candidateList);
 
     container.querySelectorAll("[data-add-partner-grid]").forEach((addBtn) => {
       addBtn.addEventListener("click", async () => {
