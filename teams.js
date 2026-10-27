@@ -4,7 +4,7 @@
 // they're reading and writing through the exact same functions.
 
 import {
-  db, collection, doc, getDoc, getDocs, updateDoc, deleteDoc, addDoc, runTransaction,
+  db, collection, doc, getDoc, getDocs, updateDoc, deleteDoc, addDoc, runTransaction, writeBatch,
   arrayUnion, arrayRemove, serverTimestamp
 } from "./firebase-config.js";
 
@@ -47,6 +47,8 @@ async function withRetry(fn, attempts = 4) {
 // team's doc id, or null if the number was already taken.
 async function tryCreateSlotTeam(tournamentId, teamNumber, players) {
   const ref = doc(db, "tournaments", tournamentId, "teams", slotDocId(teamNumber));
+  const tRef = doc(db, "tournaments", tournamentId);
+  const joiner = players.player1Id || players.player2Id;
   return withRetry(() => runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
     if (snap.exists()) return null;
@@ -57,20 +59,128 @@ async function tryCreateSlotTeam(tournamentId, teamNumber, players) {
       group: null,
       createdAt: serverTimestamp()
     });
+    // Same transaction: the team and the player's "registered" mark are saved
+    // together or not at all, so an interrupted request can never leave
+    // someone registered without a team.
+    if (joiner) tx.update(tRef, { participantIds: arrayUnion(joiner), waitingList: arrayRemove(joiner) });
     return ref.id;
   }));
 }
 
-// Walks the numbers that looked free in `teams` (a recent fetch) from lowest
-// to highest and claims the first one that is genuinely still free.
-async function claimLowestFreeSlot(tournamentId, totalTeams, teams, players) {
-  const used = new Set(teams.map((tm) => tm.teamNumber).filter(Boolean));
+// A team document that exists but has nobody in it (both slots empty) still
+// "holds" its number in the grid. Re-use it instead of treating the number as
+// taken. Done in a transaction that re-checks it is still empty.
+async function tryClaimEmptyTeam(tournamentId, teamDocId, players) {
+  const ref = doc(db, "tournaments", tournamentId, "teams", teamDocId);
+  const tRef = doc(db, "tournaments", tournamentId);
+  const joiner = players.player1Id || players.player2Id;
+  return withRetry(() => runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return null;
+    const d = snap.data();
+    if (d.player1Id || d.player2Id) return null;
+    tx.update(ref, {
+      player1Id: players.player1Id ?? null,
+      player2Id: players.player2Id ?? null,
+      joinRequests: []
+    });
+    if (joiner) tx.update(tRef, { participantIds: arrayUnion(joiner), waitingList: arrayRemove(joiner) });
+    return ref.id;
+  }));
+}
+
+// Which team numbers (1..totalTeams) are really free, given a recent fetch?
+// A number is free if no team has it, or the team that has it is completely empty.
+function freeNumbers(teams, totalTeams) {
+  const byNum = new Map();
+  teams.forEach((tm) => {
+    if (!tm.teamNumber) return;
+    if (!byNum.has(tm.teamNumber)) byNum.set(tm.teamNumber, []);
+    byNum.get(tm.teamNumber).push(tm);
+  });
+  const out = [];
   for (let n = 1; n <= totalTeams; n++) {
-    if (used.has(n)) continue;
-    const id = await tryCreateSlotTeam(tournamentId, n, players);
-    if (id) return { id, teamNumber: n };
+    const list = byNum.get(n) || [];
+    if (list.some((tm) => tm.player1Id || tm.player2Id)) continue; // occupied
+    out.push({ number: n, emptyTeam: list[0] || null });
+  }
+  return out;
+}
+
+// Walks the free numbers from lowest to highest and claims the first one that
+// is genuinely still free (race-safe).
+async function claimLowestFreeSlot(tournamentId, totalTeams, teams, players) {
+  for (const f of freeNumbers(teams, totalTeams)) {
+    if (f.emptyTeam) {
+      const id = await tryClaimEmptyTeam(tournamentId, f.emptyTeam.id, players);
+      if (id) return { id, teamNumber: f.number };
+      continue;
+    }
+    const id = await tryCreateSlotTeam(tournamentId, f.number, players);
+    if (id) return { id, teamNumber: f.number };
   }
   return null;
+}
+
+// Takes the first player off the waiting list. Done in a transaction so two
+// devices running this at the same moment can never pull the same person.
+async function popWaitlist(tournamentId) {
+  const tRef = doc(db, "tournaments", tournamentId);
+  return withRetry(() => runTransaction(db, async (tx) => {
+    const snap = await tx.get(tRef);
+    const waitingList = snap.exists() ? (snap.data().waitingList || []) : [];
+    if (waitingList.length === 0) return null;
+    const [nextId, ...rest] = waitingList;
+    tx.update(tRef, { waitingList: rest });
+    return nextId;
+  }));
+}
+
+// Puts a player back at the FRONT of the waiting list (used when a promotion
+// fails half-way, so nobody is lost and nobody loses their place in line).
+async function putBackFirst(tournamentId, playerId) {
+  const tRef = doc(db, "tournaments", tournamentId);
+  await withRetry(() => runTransaction(db, async (tx) => {
+    const snap = await tx.get(tRef);
+    const wl = snap.exists() ? (snap.data().waitingList || []) : [];
+    tx.update(tRef, { waitingList: [playerId, ...wl.filter((x) => x !== playerId)] });
+  }));
+}
+
+// Moves people from the waiting list into any team NUMBER that is completely
+// free (nobody on it), first in line first. It never fills a single empty
+// partner slot of an existing team — a partner leaving still never pulls
+// anyone from the waiting list. Returns how many players were promoted.
+export async function promoteWaitlist(tournamentId) {
+  const tRef = doc(db, "tournaments", tournamentId);
+  let promoted = 0;
+  for (let guard = 0; guard < 64; guard++) {
+    const tSnap = await getDoc(tRef);
+    if (!tSnap.exists()) break;
+    const t = tSnap.data();
+    if ((t.waitingList || []).length === 0) break;
+    const totalTeams = t.totalTeams || 12;
+    const teams = await fetchTeams(tournamentId);
+    if (freeNumbers(teams, totalTeams).length === 0) break;
+
+    const nextId = await popWaitlist(tournamentId);
+    if (!nextId) break;
+    let claimed = null;
+    try {
+      claimed = await claimLowestFreeSlot(tournamentId, totalTeams, teams, { player1Id: nextId, player2Id: null });
+    } catch (err) {
+      // never lose a waiting player because of a network hiccup
+      try { await putBackFirst(tournamentId, nextId); } catch (e) { console.error(e); }
+      throw err;
+    }
+    if (!claimed) {
+      // someone else took the number first — put the player back and stop
+      await putBackFirst(tournamentId, nextId);
+      break;
+    }
+    promoted++;
+  }
+  return promoted;
 }
 
 // Player registers themselves: claims the next free team number (1..totalTeams)
@@ -79,24 +189,28 @@ async function claimLowestFreeSlot(tournamentId, totalTeams, teams, players) {
 // twice (idempotent) if they already have a team.
 export async function registerPlayer(tournamentId, playerId, totalTeams) {
   const tRef = doc(db, "tournaments", tournamentId);
-  const teams = await fetchTeams(tournamentId);
-  const already = findTeamOf(teams, playerId);
-  await withRetry(() => updateDoc(tRef, { participantIds: arrayUnion(playerId) }));
-  if (already) return { ...already, waiting: false };
+  const healRegistered = (team) =>
+    withRetry(() => updateDoc(tRef, { participantIds: arrayUnion(playerId) })).then(() => ({ ...team, waiting: false }));
 
-  try {
-    const claimed = await claimLowestFreeSlot(tournamentId, totalTeams || 12, teams, { player1Id: playerId, player2Id: null });
-    if (!claimed) {
-      await withRetry(() => updateDoc(tRef, { waitingList: arrayUnion(playerId) }));
-      return { waiting: true };
-    }
-    return { id: claimed.id, teamNumber: claimed.teamNumber, player1Id: playerId, player2Id: null, group: null, waiting: false };
-  } catch (err) {
-    // Don't leave a "ghost" registration (counted as registered, but with no
-    // team and not on the waiting list) if claiming a spot failed.
-    try { await updateDoc(tRef, { participantIds: arrayRemove(playerId) }); } catch (e) { console.error(e); }
-    throw err;
+  let teams = await fetchTeams(tournamentId);
+  let already = findTeamOf(teams, playerId);
+  if (already) return healRegistered(already);
+
+  // People already waiting get any free number first (first come, first served).
+  try { await promoteWaitlist(tournamentId); } catch (e) { console.error(e); }
+  teams = await fetchTeams(tournamentId);
+  already = findTeamOf(teams, playerId);
+  if (already) return healRegistered(already);
+
+  // Claiming the number also marks the player as registered, in the same
+  // transaction (see tryCreateSlotTeam / tryClaimEmptyTeam).
+  const claimed = await claimLowestFreeSlot(tournamentId, totalTeams || 12, teams, { player1Id: playerId, player2Id: null });
+  if (!claimed) {
+    // full: registered + waiting list in ONE write
+    await withRetry(() => updateDoc(tRef, { participantIds: arrayUnion(playerId), waitingList: arrayUnion(playerId) }));
+    return { waiting: true };
   }
+  return { id: claimed.id, teamNumber: claimed.teamNumber, player1Id: playerId, player2Id: null, group: null, waiting: false };
 }
 
 // Removes a player from whichever slot they're in (if any) WITHOUT touching
@@ -133,7 +247,15 @@ export async function removeFromSlot(tournamentId, playerId) {
 //    waitlist involved — this is also the default if omitted) or
 //    'fill-from-waitlist' (partner keeps their spot, someone from the waiting
 //    list takes over as the new founder).
+// Afterwards, any team number that is completely free is offered to the
+// waiting list (see promoteWaitlist) — this also heals a number that got
+// stuck free while people were waiting.
 export async function unregisterPlayer(tournamentId, playerId, founderChoice) {
+  await unregisterCore(tournamentId, playerId, founderChoice);
+  try { await promoteWaitlist(tournamentId); } catch (e) { console.error(e); }
+}
+
+async function unregisterCore(tournamentId, playerId, founderChoice) {
   const teams = await fetchTeams(tournamentId);
   const myTeam = findTeamOf(teams, playerId);
 
@@ -148,7 +270,12 @@ export async function unregisterPlayer(tournamentId, playerId, founderChoice) {
     // founder with a partner — behavior depends on their explicit choice
     if (founderChoice === "fill-from-waitlist") {
       const nextId = await popWaitlist(tournamentId);
-      await updateDoc(doc(db, "tournaments", tournamentId, "teams", myTeam.id), { player1Id: nextId || null });
+      try {
+        await updateDoc(doc(db, "tournaments", tournamentId, "teams", myTeam.id), { player1Id: nextId || null });
+      } catch (err) {
+        if (nextId) { try { await putBackFirst(tournamentId, nextId); } catch (e) { console.error(e); } }
+        throw err;
+      }
     } else {
       await updateDoc(doc(db, "tournaments", tournamentId, "teams", myTeam.id), {
         player1Id: myTeam.player2Id,
@@ -159,37 +286,14 @@ export async function unregisterPlayer(tournamentId, playerId, founderChoice) {
   }
 
   if (myTeam.player1Id === playerId) {
-    // solo founder leaving — the whole number frees up for the waiting list
+    // solo founder leaving — the whole number frees up (the waiting list is
+    // offered it right after, in unregisterPlayer)
     await deleteDoc(doc(db, "tournaments", tournamentId, "teams", myTeam.id));
-    await claimFreeNumberFromWaitlist(tournamentId);
     return;
   }
 
   // partner (player2) leaving — just open their slot, no waitlist promotion
   await updateDoc(doc(db, "tournaments", tournamentId, "teams", myTeam.id), { player2Id: null });
-}
-
-async function popWaitlist(tournamentId) {
-  const tSnap = await getDoc(doc(db, "tournaments", tournamentId));
-  const waitingList = tSnap.exists() ? (tSnap.data().waitingList || []) : [];
-  if (waitingList.length === 0) return null;
-  const nextId = waitingList[0];
-  await updateDoc(doc(db, "tournaments", tournamentId), { waitingList: arrayRemove(nextId) });
-  return nextId;
-}
-
-async function claimFreeNumberFromWaitlist(tournamentId) {
-  const nextId = await popWaitlist(tournamentId);
-  if (!nextId) return;
-
-  const tSnap = await getDoc(doc(db, "tournaments", tournamentId));
-  const totalTeams = tSnap.exists() ? (tSnap.data().totalTeams || 12) : 12;
-  const teams = await fetchTeams(tournamentId);
-  const claimed = await claimLowestFreeSlot(tournamentId, totalTeams, teams, { player1Id: nextId, player2Id: null });
-  if (!claimed) {
-    // nothing actually free (shouldn't normally happen) — put them back
-    await updateDoc(doc(db, "tournaments", tournamentId), { waitingList: arrayUnion(nextId) });
-  }
 }
 
 // Fills a team's open slot with partnerId. If partnerId already has their own
@@ -205,10 +309,20 @@ export async function addPartner(tournamentId, teamId, partnerId) {
       err.code = "ALREADY_PAIRED";
       throw err;
     }
-    await deleteDoc(doc(db, "tournaments", tournamentId, "teams", elsewhere.id));
   }
-  await updateDoc(doc(db, "tournaments", tournamentId), { participantIds: arrayUnion(partnerId) });
-  await updateDoc(doc(db, "tournaments", tournamentId, "teams", teamId), { player2Id: partnerId });
+  // One batch = all-or-nothing: free their old solo slot, mark them registered
+  // (and off the waiting list), and put them on this team.
+  const batch = writeBatch(db);
+  if (elsewhere) batch.delete(doc(db, "tournaments", tournamentId, "teams", elsewhere.id));
+  batch.update(doc(db, "tournaments", tournamentId), {
+    participantIds: arrayUnion(partnerId),
+    waitingList: arrayRemove(partnerId)
+  });
+  batch.update(doc(db, "tournaments", tournamentId, "teams", teamId), { player2Id: partnerId });
+  await batch.commit();
+  if (elsewhere) {
+    try { await promoteWaitlist(tournamentId); } catch (e) { console.error(e); } // their old number is free now
+  }
 }
 
 // Admin-only: place a specific player directly into team #teamNumber's given
@@ -216,7 +330,11 @@ export async function addPartner(tournamentId, teamId, partnerId) {
 // are first (if anywhere), and registering them if they weren't already.
 export async function assignToSlot(tournamentId, teamNumber, slot, playerId) {
   await removeFromSlot(tournamentId, playerId); // no-op if not on a team yet
-  await updateDoc(doc(db, "tournaments", tournamentId), { participantIds: arrayUnion(playerId) });
+  // placed on a team => no longer on the waiting list
+  await updateDoc(doc(db, "tournaments", tournamentId), {
+    participantIds: arrayUnion(playerId),
+    waitingList: arrayRemove(playerId)
+  });
 
   const teams = await fetchTeams(tournamentId);
   const existing = teams.find((t) => t.teamNumber === teamNumber);

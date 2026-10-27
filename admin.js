@@ -917,6 +917,37 @@ async function loadTeamGrid(tournamentId) {
       waitlistEl.classList.add("hidden");
     }
 
+    // Registered (counted in "Registered") but not on any team and not on the
+    // waiting list: they look registered to themselves yet are missing from the
+    // bracket — usually an interrupted registration. Show them so they can be fixed.
+    const ghostEl = $("tm-ghosts");
+    const ghostIds = (tSnap.data().participantIds || []).filter((id) => !assignedIds.has(id) && !waitingList.includes(id));
+    if (ghostIds.length > 0) {
+      ghostEl.innerHTML = `<div class="msg error show" style="margin-bottom:0;">
+        <strong>${ghostIds.length} registered player(s) are not on any team.</strong> They see themselves as registered but aren't in the bracket. Remove their registration so they can register again (or put them on a team below).
+        ${ghostIds.map((id) => `<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:8px;">
+          <span>${escapeHtml(nameById.get(id) || "Unknown player (" + id + ")")}</span>
+          <button class="btn btn-ghost btn-sm" data-fix-ghost="${id}" type="button">Remove registration</button></div>`).join("")}
+      </div>`;
+      ghostEl.classList.remove("hidden");
+      ghostEl.querySelectorAll("[data-fix-ghost]").forEach((b) => {
+        b.addEventListener("click", async () => {
+          b.disabled = true;
+          try {
+            await unregisterPlayer(tournamentId, b.dataset.fixGhost);
+            loadTeamGrid(tournamentId);
+          } catch (err) {
+            console.error(err);
+            showMsg(errEl, "Something went wrong removing that registration.");
+            b.disabled = false;
+          }
+        });
+      });
+    } else {
+      ghostEl.classList.add("hidden");
+      ghostEl.innerHTML = "";
+    }
+
     gridEl.innerHTML = html;
 
     gridEl.querySelectorAll("[data-assign-team]").forEach((sel) => {

@@ -1308,6 +1308,76 @@ async function renderTeamGrid(tournamentId, container) {
 }
 
 // ---------------- leaderboard tab ----------------
+// The rank filter (Bronze / Silver / ...) only exists while the admin shows
+// tiers to players, same as every other place a rank name appears. Inside a
+// rank the position numbers restart from 1 (#3 of 14 Silver players).
+let leaderboardFilter = "all"; // "all" or a rank family
+
+function lbFamilyOf(p) {
+  return isRanked(p) ? playerRankFamily(p) : null;
+}
+
+function buildLeaderboardFilterBar(data) {
+  const bar = $("lb-filter-bar");
+  if (!tiersEnabled) {
+    leaderboardFilter = "all";
+    bar.classList.add("hidden");
+    bar.innerHTML = "";
+    return;
+  }
+  const mineFam = lbFamilyOf(currentPlayer);
+  const families = RANK_FAMILIES.filter((f) => f === mineFam || data.some((p) => lbFamilyOf(p) === f));
+  if (families.length < 2) {
+    leaderboardFilter = "all";
+    bar.classList.add("hidden");
+    bar.innerHTML = "";
+    return;
+  }
+  if (leaderboardFilter !== "all" && !families.includes(leaderboardFilter)) leaderboardFilter = "all";
+  bar.classList.remove("hidden");
+  bar.innerHTML = ["all", ...families].map((k) =>
+    `<button class="mk-filter-chip${leaderboardFilter === k ? " active" : ""}" data-lb-filter="${k}" type="button">${k === "all" ? t("filter_all") : rankFamilyLabel(k)}</button>`
+  ).join("");
+  bar.querySelectorAll("[data-lb-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      leaderboardFilter = btn.dataset.lbFilter;
+      renderLeaderboard(data);
+    });
+  });
+}
+
+function renderLeaderboard(data) {
+  const listEl = $("lb-list");
+  buildLeaderboardFilterBar(data);
+
+  // inside a rank, positions restart from 1
+  const shown = leaderboardFilter === "all"
+    ? data
+    : data.filter((p) => lbFamilyOf(p) === leaderboardFilter).map((p, i) => ({ ...p, rank: i + 1 }));
+
+  listEl.innerHTML = "";
+  shown.forEach((p) => {
+    const isMe = p.id === currentPlayer.id;
+    const founding = isFoundingMember(p);
+    const li = document.createElement("li");
+    li.className = "lb-row" + (isMe ? " me" : "");
+    const rankClass = p.rank === 1 ? "top1" : p.rank === 2 ? "top2" : p.rank === 3 ? "top3" : "";
+    li.innerHTML = `
+      <span class="lb-rank ${rankClass}">${p.rank}</span>
+      <span class="lb-avatar${founding ? " founding-ring" : ""}">${avatarHtml(p)}</span>
+      <span class="lb-mid">
+        <div class="lb-name">${founding ? '<span class="founding-star" title="Founding Member">🌟</span> ' : ""}${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
+        <div class="lb-tier">${tierLabelFor(p)}</div>
+      </span>
+      <span class="lb-points">${Math.round(p.ratingPoints ?? 0)}</span>
+    `;
+    listEl.appendChild(li);
+  });
+
+  const mine = shown.find((p) => p.id === currentPlayer.id);
+  $("my-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${shown.length}` : "—";
+}
+
 async function loadLeaderboard() {
   const loadingEl = $("lb-loading");
   const listEl = $("lb-list");
@@ -1316,30 +1386,7 @@ async function loadLeaderboard() {
 
   try {
     const data = await ensureLeaderboardData();
-    listEl.innerHTML = "";
-
-    data.forEach((p) => {
-      const isMe = p.id === currentPlayer.id;
-      const meta = tierMeta(tierFromPoints(p.ratingPoints));
-      const founding = isFoundingMember(p);
-      const li = document.createElement("li");
-      li.className = "lb-row" + (isMe ? " me" : "");
-      const rankClass = p.rank === 1 ? "top1" : p.rank === 2 ? "top2" : p.rank === 3 ? "top3" : "";
-      li.innerHTML = `
-        <span class="lb-rank ${rankClass}">${p.rank}</span>
-        <span class="lb-avatar${founding ? " founding-ring" : ""}">${avatarHtml(p)}</span>
-        <span class="lb-mid">
-          <div class="lb-name">${founding ? '<span class="founding-star" title="Founding Member">🌟</span> ' : ""}${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
-          <div class="lb-tier">${tierLabelFor(p)}</div>
-        </span>
-        <span class="lb-points">${Math.round(p.ratingPoints ?? 0)}</span>
-      `;
-      listEl.appendChild(li);
-    });
-
-    const mine = data.find((p) => p.id === currentPlayer.id);
-    $("my-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : "—";
-
+    renderLeaderboard(data);
     loadingEl.classList.add("hidden");
     listEl.classList.remove("hidden");
   } catch (err) {
