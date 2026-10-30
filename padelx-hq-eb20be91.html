@@ -499,8 +499,43 @@
           <div class="hidden" id="coin-pl-summary" style="margin-top:16px;"></div>
         </div>
 
-        <!-- 4. Player coin log -->
-        <div class="panel" style="margin-top:16px; margin-bottom:16px;">
+        <!-- 4. Manual coins: add / deduct / transfer -->
+        <div class="panel" style="margin-top:16px;">
+          <h1>4. Add, deduct or transfer coins</h1>
+          <p class="sub">Add coins to a player, take coins away from a player, or move coins from one player to another — always with a reason. Everything is saved in the players' coin history (and the reason is shown to them) and appears in the report.</p>
+          <div class="msg error" id="coin-m-error"></div>
+          <div class="msg success" id="coin-m-success"></div>
+          <form id="coin-manual-form">
+            <div class="field">
+              <label for="coin-m-action">What do you want to do?</label>
+              <select id="coin-m-action">
+                <option value="add">Add coins to a player</option>
+                <option value="deduct">Deduct coins from a player</option>
+                <option value="transfer">Transfer coins from one player to another</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="coin-m-player" id="coin-m-player-label">Player</label>
+              <select id="coin-m-player" required><option value="">Select a player</option></select>
+            </div>
+            <div class="field hidden" id="coin-m-to-field">
+              <label for="coin-m-to">To player</label>
+              <select id="coin-m-to"><option value="">Select a player</option></select>
+            </div>
+            <div class="field">
+              <label for="coin-m-amount">Coins</label>
+              <input type="number" id="coin-m-amount" min="1" max="100000" step="1" required placeholder="e.g. 50">
+            </div>
+            <div class="field">
+              <label for="coin-m-reason">Reason (the player sees this)</label>
+              <input type="text" id="coin-m-reason" required maxlength="120" placeholder="e.g. Best player of the night">
+            </div>
+            <button type="submit" class="btn btn-primary" id="coin-m-btn">Add coins</button>
+          </form>
+        </div>
+
+        <!-- 5. Player coin log -->
+        <div class="panel" style="margin-top:16px;">
           <h1>Player coin log</h1>
           <p class="sub">Pick a player to see their full coin history and current balance — check this after every award to make sure everything landed correctly.</p>
           <div class="field">
@@ -513,6 +548,18 @@
             <div id="coin-log-list"></div>
             <div class="hint hidden" id="coin-log-empty">No coin transactions yet for this player.</div>
           </div>
+        </div>
+
+        <!-- 6. Coins report -->
+        <div class="panel" style="margin-top:16px; margin-bottom:16px;">
+          <h1>Coins report</h1>
+          <p class="sub">Every coin added to or spent by every player, from the very first transaction until now — with per-player totals and the overall totals at the end.</p>
+          <div class="msg error" id="coin-r-error"></div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-primary btn-sm" id="coin-r-btn" type="button">Generate report</button>
+            <button class="btn btn-ghost btn-sm hidden" id="coin-r-export" type="button">Export CSV</button>
+          </div>
+          <div class="hidden" id="coin-r-body" style="margin-top:16px;"></div>
         </div>
 
       </div>

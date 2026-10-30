@@ -1375,17 +1375,20 @@ $("coin-pl-btn").addEventListener("click", async () => {
 async function initCoinLogTab() {
   try {
     const snap = await getDocs(query(collection(db, "players"), orderBy("name")));
-    const select = $("coin-log-player");
-    const previousValue = select.value;
-    select.innerHTML = '<option value="">Select a player</option>';
-    snap.forEach((d) => {
-      const p = d.data();
-      const opt = document.createElement("option");
-      opt.value = d.id;
-      opt.textContent = `${p.name || "—"} (${p.playerCode || "—"})`;
-      select.appendChild(opt);
+    // the same player list feeds the coin log and the manual-coins form
+    ["coin-log-player", "coin-m-player", "coin-m-to"].forEach((selId) => {
+      const select = $(selId);
+      const previousValue = select.value;
+      select.innerHTML = '<option value="">Select a player</option>';
+      snap.forEach((d) => {
+        const p = d.data();
+        const opt = document.createElement("option");
+        opt.value = d.id;
+        opt.textContent = `${p.name || "—"} (${p.playerCode || "—"})`;
+        select.appendChild(opt);
+      });
+      if (previousValue && snap.docs.some((d) => d.id === previousValue)) select.value = previousValue;
     });
-    if (previousValue && snap.docs.some((d) => d.id === previousValue)) select.value = previousValue;
   } catch (err) {
     console.error(err);
   }
@@ -1438,7 +1441,7 @@ async function loadCoinLog(playerId) {
         return `
           <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); font-size:13px;">
             <div>
-              <div>${escapeHtml(tx.note || tx.type || "—")}</div>
+              <div>${escapeHtml(coinManualLabel(tx) || tx.note || tx.type || "—")}</div>
               <div style="font-size:11px; color:var(--text-soft); margin-top:2px;">${date}</div>
             </div>
             <span style="color:${color}; font-family:var(--font-mono); font-weight:700;">${sign}${tx.amount} → ${tx.balanceAfter ?? "—"}</span>
@@ -1454,6 +1457,283 @@ async function loadCoinLog(playerId) {
     loadingEl.textContent = "Couldn't load the coin log.";
   }
 }
+
+
+// ---------------- 4. Add / deduct / transfer coins ----------------
+// Readable one-line description of a manual / transfer transaction (admin side).
+function coinManualLabel(x) {
+  const reason = x.note ? `: ${x.note}` : "";
+  if (x.type === "transfer") return (x.amount < 0 ? `Transfer to ${x.counterpartyName || "—"}` : `Transfer from ${x.counterpartyName || "—"}`) + reason;
+  if (x.type === "manual") return (x.amount < 0 ? "Deducted by admin" : "Added by admin") + reason;
+  return null;
+}
+
+function syncManualCoinsForm() {
+  const action = $("coin-m-action").value;
+  $("coin-m-to-field").classList.toggle("hidden", action !== "transfer");
+  $("coin-m-to").required = action === "transfer";
+  $("coin-m-player-label").textContent = action === "transfer" ? "From player" : "Player";
+  $("coin-m-btn").textContent = action === "add" ? "Add coins" : action === "deduct" ? "Deduct coins" : "Transfer coins";
+}
+$("coin-m-action").addEventListener("change", syncManualCoinsForm);
+
+$("coin-manual-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errEl = $("coin-m-error");
+  const okEl = $("coin-m-success");
+  hideMsg(errEl);
+  hideMsg(okEl);
+
+  const action = $("coin-m-action").value;
+  const playerId = $("coin-m-player").value;
+  const toId = $("coin-m-to").value;
+  const amount = parseInt($("coin-m-amount").value, 10);
+  const reason = $("coin-m-reason").value.trim();
+  const playerLabel = $("coin-m-player").selectedOptions[0]?.textContent || "this player";
+  const toLabel = $("coin-m-to").selectedOptions[0]?.textContent || "that player";
+
+  if (!playerId) { showMsg(errEl, action === "transfer" ? "Pick the player the coins come from." : "Pick a player first."); return; }
+  if (action === "transfer") {
+    if (!toId) { showMsg(errEl, "Pick the player who receives the coins."); return; }
+    if (toId === playerId) { showMsg(errEl, "Pick two different players."); return; }
+  }
+  if (!Number.isInteger(amount) || amount < 1 || amount > 100000) { showMsg(errEl, "Enter a number of coins between 1 and 100000."); return; }
+  if (!reason) { showMsg(errEl, "Write the reason — the player will see it."); return; }
+
+  const summary = action === "add" ? `Add ${amount} coins to ${playerLabel}?`
+    : action === "deduct" ? `Deduct ${amount} coins from ${playerLabel}?`
+    : `Transfer ${amount} coins from ${playerLabel} to ${toLabel}?`;
+  if (!confirm(`${summary}\n\nReason: ${reason}\n\nThis can't be undone from here.`)) return;
+
+  const btn = $("coin-m-btn");
+  btn.disabled = true;
+  btn.textContent = "Saving...";
+  try {
+    let result = "";
+    await runTransaction(db, async (tx) => {
+      const pRef = doc(db, "players", playerId);
+      const pSnap = await tx.get(pRef);
+      if (!pSnap.exists()) throw new Error("PLAYER_GONE");
+      const p = pSnap.data();
+      const bal = p.coinsBalance ?? 0;
+
+      if (action === "add") {
+        const nb = bal + amount;
+        tx.update(pRef, { coinsBalance: nb });
+        tx.set(doc(collection(db, "coinTransactions")), { playerId, amount, type: "manual", note: reason, balanceAfter: nb, createdAt: serverTimestamp() });
+        result = `${amount} coins added to ${playerLabel}. Their balance is now ${nb}.`;
+        return;
+      }
+
+      if (bal < amount) { const err = new Error("INSUFFICIENT"); err.balance = bal; throw err; }
+
+      if (action === "deduct") {
+        const nb = bal - amount;
+        tx.update(pRef, { coinsBalance: nb });
+        tx.set(doc(collection(db, "coinTransactions")), { playerId, amount: -amount, type: "manual", note: reason, balanceAfter: nb, createdAt: serverTimestamp() });
+        result = `${amount} coins deducted from ${playerLabel}. Their balance is now ${nb}.`;
+        return;
+      }
+
+      // transfer: both players are read before anything is written
+      const tRef = doc(db, "players", toId);
+      const tSnap = await tx.get(tRef);
+      if (!tSnap.exists()) throw new Error("PLAYER_GONE");
+      const to = tSnap.data();
+      const fromNb = bal - amount;
+      const toNb = (to.coinsBalance ?? 0) + amount;
+      const transferId = `tr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+      tx.update(pRef, { coinsBalance: fromNb });
+      tx.update(tRef, { coinsBalance: toNb });
+      tx.set(doc(collection(db, "coinTransactions")), {
+        playerId, amount: -amount, type: "transfer", transferId, counterpartyId: toId, counterpartyName: to.name || "",
+        note: reason, balanceAfter: fromNb, createdAt: serverTimestamp()
+      });
+      tx.set(doc(collection(db, "coinTransactions")), {
+        playerId: toId, amount, type: "transfer", transferId, counterpartyId: playerId, counterpartyName: p.name || "",
+        note: reason, balanceAfter: toNb, createdAt: serverTimestamp()
+      });
+      result = `${amount} coins moved from ${playerLabel} (now ${fromNb}) to ${toLabel} (now ${toNb}).`;
+    });
+    showMsg(okEl, result);
+    $("coin-m-amount").value = "";
+    $("coin-m-reason").value = "";
+    const logged = $("coin-log-player").value;
+    if (logged === playerId || (action === "transfer" && logged === toId)) loadCoinLog(logged);
+  } catch (err) {
+    console.error(err);
+    if (err.message === "PLAYER_GONE") showMsg(errEl, "One of those players no longer exists.");
+    else if (err.message === "INSUFFICIENT") showMsg(errEl, `${playerLabel} only has ${err.balance} coins — can't take ${amount}. Nothing was changed.`);
+    else showMsg(errEl, "Something went wrong. Nothing was changed — try again.");
+  } finally {
+    btn.disabled = false;
+    syncManualCoinsForm();
+  }
+});
+
+// ---------------- 6. Coins report ----------------
+let coinReport = null; // last generated report (used by the CSV export)
+
+const COIN_TYPE_LABELS = { participation: "Participation", advancement: "Advancement", placement: "Placement", purchase: "Purchase", manual: "Manual", transfer: "Transfer" };
+
+function coinReportDetail(x, tournamentName) {
+  const inTournament = tournamentName ? ` — ${tournamentName}` : "";
+  if (x.type === "participation") return `Tournament participation${inTournament}`;
+  if (x.type === "advancement") return `Group-stage advancement${inTournament}`;
+  if (x.type === "placement") return `${x.note || "Placement"}${inTournament}`;
+  if (x.type === "purchase") return `Bought ${x.itemName || x.note || "an item"}${(x.quantity ?? 1) > 1 ? " ×" + x.quantity : ""}`;
+  return coinManualLabel(x) || x.note || x.type || "—";
+}
+
+function fmtReportDate(d) {
+  return d ? d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "—";
+}
+
+async function generateCoinReport() {
+  const errEl = $("coin-r-error");
+  hideMsg(errEl);
+  const btn = $("coin-r-btn");
+  btn.disabled = true;
+  btn.textContent = "Generating...";
+  try {
+    const [txSnap, playersSnap, trSnap] = await Promise.all([
+      getDocs(collection(db, "coinTransactions")),
+      getDocs(collection(db, "players")),
+      getDocs(collection(db, "tournaments"))
+    ]);
+    const players = new Map(playersSnap.docs.map((d) => [d.id, { id: d.id, ...d.data() }]));
+    const tournaments = new Map(trSnap.docs.map((d) => [d.id, d.data().name || ""]));
+
+    // oldest first: from the very first coin ever added until the latest
+    const rows = txSnap.docs.map((d) => {
+      const x = d.data();
+      const p = players.get(x.playerId);
+      const amount = Number(x.amount) || 0;
+      return {
+        date: x.createdAt?.toDate ? x.createdAt.toDate() : null,
+        playerId: x.playerId,
+        name: p ? (p.name || "—") : "Deleted player",
+        code: p ? (p.playerCode || "—") : "—",
+        rawType: x.type,
+        type: x.type === "manual" && amount < 0 ? "Deduction" : (COIN_TYPE_LABELS[x.type] || x.type || "—"),
+        detail: coinReportDetail({ ...x, amount }, tournaments.get(x.tournamentId)),
+        amount
+      };
+    }).sort((a, b) => (a.date ? a.date.getTime() : 0) - (b.date ? b.date.getTime() : 0));
+
+    // Transfers only move coins between players, so they are kept out of the
+    // added / spent totals and shown on their own.
+    const perPlayer = new Map();
+    rows.forEach((r) => {
+      if (!perPlayer.has(r.playerId)) {
+        const p = players.get(r.playerId);
+        perPlayer.set(r.playerId, { name: r.name, code: r.code, added: 0, spent: 0, transfers: 0, balance: p ? (p.coinsBalance ?? 0) : 0 });
+      }
+      const s = perPlayer.get(r.playerId);
+      if (r.rawType === "transfer") s.transfers += r.amount;
+      else if (r.amount >= 0) s.added += r.amount;
+      else s.spent += -r.amount;
+    });
+    const summary = [...perPlayer.values()].sort((a, b) => a.name.localeCompare(b.name));
+
+    const totalAdded = rows.reduce((sum, r) => sum + (r.rawType !== "transfer" && r.amount > 0 ? r.amount : 0), 0);
+    const totalSpent = rows.reduce((sum, r) => sum + (r.rawType === "purchase" && r.amount < 0 ? -r.amount : 0), 0);
+    const totalDeducted = rows.reduce((sum, r) => sum + (r.rawType !== "transfer" && r.rawType !== "purchase" && r.amount < 0 ? -r.amount : 0), 0);
+    const totalMoved = rows.reduce((sum, r) => sum + (r.rawType === "transfer" && r.amount > 0 ? r.amount : 0), 0);
+    const net = totalAdded - totalSpent - totalDeducted;
+    const currentTotal = [...players.values()].reduce((sum, p) => sum + (p.coinsBalance ?? 0), 0);
+
+    coinReport = { rows, summary, totalAdded, totalSpent, totalDeducted, totalMoved, net, currentTotal };
+    renderCoinReport();
+    $("coin-r-export").classList.remove("hidden");
+  } catch (err) {
+    console.error(err);
+    showMsg(errEl, "Something went wrong generating the report. Try again.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Generate report";
+  }
+}
+
+function renderCoinReport() {
+  const r = coinReport;
+  const body = $("coin-r-body");
+  if (!r || r.rows.length === 0) {
+    body.innerHTML = '<div class="hint">No coin transactions yet.</div>';
+    body.classList.remove("hidden");
+    return;
+  }
+  const amt = (n) => `<span style="color:${n >= 0 ? "var(--live)" : "var(--danger)"}; font-family:var(--font-mono); font-weight:700;">${n >= 0 ? "+" : ""}${n}</span>`;
+  const totalRow = (label, value, color) => `<div style="display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--border); font-size:13.5px;"><span>${label}</span><strong style="font-family:var(--font-mono); ${color ? "color:" + color + ";" : ""}">${value}</strong></div>`;
+  const mismatch = r.net !== r.currentTotal
+    ? `<div class="msg info show" style="margin-top:10px;">The totals differ by ${Math.abs(r.net - r.currentTotal)} coins: coins were changed outside the app, or a deleted player's coins are counted on one side only.</div>`
+    : "";
+
+  body.innerHTML = `
+    <h2 style="font-family:var(--font-display); font-weight:800; font-size:15px; margin:0 0 6px;">All transactions (${r.rows.length})</h2>
+    <div style="overflow-x:auto;">
+      <table class="players">
+        <thead><tr><th>Date</th><th>Player</th><th>Code</th><th>Type</th><th>Details</th><th>Coins</th></tr></thead>
+        <tbody>${r.rows.map((x) => `<tr>
+          <td style="white-space:nowrap;">${fmtReportDate(x.date)}</td>
+          <td>${escapeHtml(x.name)}</td>
+          <td class="code">${escapeHtml(x.code)}</td>
+          <td>${escapeHtml(x.type)}</td>
+          <td>${escapeHtml(x.detail)}</td>
+          <td>${amt(x.amount)}</td></tr>`).join("")}</tbody>
+      </table>
+    </div>
+
+    <h2 style="font-family:var(--font-display); font-weight:800; font-size:15px; margin:22px 0 6px;">Per player</h2>
+    <div style="overflow-x:auto;">
+      <table class="players">
+        <thead><tr><th>Player</th><th>Code</th><th>Added</th><th>Spent / deducted</th><th>Transfers (net)</th><th>Balance now</th></tr></thead>
+        <tbody>${r.summary.map((s) => `<tr>
+          <td>${escapeHtml(s.name)}</td><td class="code">${escapeHtml(s.code)}</td>
+          <td>${amt(s.added)}</td><td>${s.spent ? amt(-s.spent) : "0"}</td><td>${s.transfers ? amt(s.transfers) : "0"}</td><td>${s.balance}</td></tr>`).join("")}</tbody>
+      </table>
+    </div>
+
+    <h2 style="font-family:var(--font-display); font-weight:800; font-size:15px; margin:22px 0 4px;">Totals</h2>
+    ${totalRow("Total coins added", `+${r.totalAdded}`, "var(--live)")}
+    ${totalRow("Total coins spent (purchases)", `−${r.totalSpent}`, "var(--danger)")}
+    ${totalRow("Total coins deducted by admin", `−${r.totalDeducted}`, "var(--danger)")}
+    ${totalRow("Added − spent − deducted", r.net, "var(--ball)")}
+    ${totalRow("Current total (all players' balances)", r.currentTotal, "var(--ball)")}
+    ${totalRow("Moved between players (not counted above)", r.totalMoved)}
+    ${mismatch}
+  `;
+  body.classList.remove("hidden");
+}
+
+$("coin-r-btn").addEventListener("click", generateCoinReport);
+
+$("coin-r-export").addEventListener("click", () => {
+  if (!coinReport) return;
+  const r = coinReport;
+  const rows = [["Date", "Player", "Code", "Type", "Details", "Coins"]];
+  r.rows.forEach((x) => rows.push([x.date ? x.date.toISOString() : "", x.name, x.code, x.type, x.detail, x.amount]));
+  rows.push([]);
+  rows.push(["Per player"]);
+  rows.push(["Player", "Code", "Added", "Spent / deducted", "Transfers (net)", "Balance now"]);
+  r.summary.forEach((s) => rows.push([s.name, s.code, s.added, s.spent, s.transfers, s.balance]));
+  rows.push([]);
+  rows.push(["Total coins added", r.totalAdded]);
+  rows.push(["Total coins spent (purchases)", r.totalSpent]);
+  rows.push(["Total coins deducted by admin", r.totalDeducted]);
+  rows.push(["Added - spent - deducted", r.net]);
+  rows.push(["Current total (all players' balances)", r.currentTotal]);
+  rows.push(["Moved between players (not counted above)", r.totalMoved]);
+
+  const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `padel-x-coins-report-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+});
 
 // =========================================================================
 // ---------------- Join requests (from the login screen) ----------------
