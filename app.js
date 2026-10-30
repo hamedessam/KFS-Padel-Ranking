@@ -1,5 +1,5 @@
 import {
-  db, collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp, runTransaction,
+  db, enableNetwork, disableNetwork, collection, doc, getDoc, getDocs, addDoc, updateDoc, query, where, limit, orderBy, onSnapshot, serverTimestamp, runTransaction,
   auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential
 } from "./firebase-config.js";
 import { registerPlayer, unregisterPlayer, addPartner, fetchTeams, findTeamOf, requestToJoinTeam, cancelJoinRequest, acceptJoinRequest, declineJoinRequest, getOpenTeams, myPendingRequestTeams, myIncomingRequests } from "./teams.js";
@@ -7,6 +7,50 @@ import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFound
 import { t, getLang, setLang, applyStaticTranslations } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
+
+// ---------------- slow-connection safety net ----------------
+// A list must never spin forever. Every important load is given a time limit;
+// if it stalls, the connection to Firestore is reset once and the load is
+// retried automatically, and if that also fails a "Try again" button appears.
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout")), ms);
+    promise.then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); });
+  });
+}
+
+async function resetConnection() {
+  try {
+    await withTimeout(disableNetwork(db), 4000);
+    await withTimeout(enableNetwork(db), 4000);
+  } catch (e) { console.error(e); }
+}
+
+async function withRecovery(fn, ms = 12000) {
+  try {
+    return await withTimeout(fn(), ms);
+  } catch (err) {
+    if (!err || err.message !== "timeout") throw err;
+    await resetConnection();
+    return await withTimeout(fn(), ms);
+  }
+}
+
+function showRetry(el, retryFn) {
+  el.classList.remove("hidden");
+  el.innerHTML = `${t("load_slow_err")} <button class="link-btn" type="button">${t("try_again")}</button>`;
+  el.querySelector("button").addEventListener("click", retryFn);
+}
+
+// Fetches each tournament's teams at most once per screen load (the register
+// buttons and the Requests badge used to fetch the same teams separately).
+function makeTeamsMemo() {
+  const memo = new Map();
+  return (id) => {
+    if (!memo.has(id)) memo.set(id, fetchTeams(id).catch((e) => { memo.delete(id); throw e; }));
+    return memo.get(id);
+  };
+}
 
 const viewLogin = $("view-login");
 const viewApp = $("view-app");
@@ -175,8 +219,6 @@ function renderBadges(player) {
   if (matches >= 15) activityKey = "badge_veteran";
   else if (matches >= 3) activityKey = "badge_regular";
   el.innerHTML += `<span class="badge-pill activity">${t(activityKey)}</span>`;
-
-  el.innerHTML += `<span class="badge-pill gold">${Math.round(player.coinsBalance ?? 0)} ${t("coins_label")}${COIN_SVG}</span>`;
 }
 
 function showLogin() {
@@ -441,7 +483,7 @@ document.querySelectorAll("#history-inner-subtab-bar .subtab-btn").forEach((btn)
   });
 });
 
-async function loadRequestsSubtab() {
+async function loadRequestsSubtab(getTeams = fetchTeams) {
   const loadingEl = $("requests-loading");
   const listEl = $("requests-list");
   const emptyEl = $("requests-empty");
@@ -455,7 +497,7 @@ async function loadRequestsSubtab() {
 
     const incomingByTournament = await Promise.all(
       relevant.map(async (tr) => {
-        const teams = await fetchTeams(tr.id);
+        const teams = await getTeams(tr.id);
         return myIncomingRequests(teams, currentPlayer.id).map((team) => ({ tournamentId: tr.id, team }));
       })
     );
@@ -750,8 +792,9 @@ async function loadTournamentsTab(useCache = false) {
   listEl.classList.add("hidden");
   emptyEl.classList.add("hidden");
 
+  const getTeams = makeTeamsMemo();
   try {
-    const all = await ensureTournamentsData(!useCache);
+    const all = await withRecovery(() => ensureTournamentsData(!useCache));
     loadingEl.classList.add("hidden");
     if (all.length === 0) {
       emptyEl.classList.remove("hidden");
@@ -765,7 +808,7 @@ async function loadTournamentsTab(useCache = false) {
     if (data.length === 0) {
       listEl.innerHTML = `<div class="tourney-empty">${t(tournamentsFilter === "completed" ? "tr_filter_empty_completed" : "tr_filter_empty_current")}</div>`;
       listEl.classList.remove("hidden");
-      loadRequestsSubtab(); // keeps the "Requests" badge fresh
+      loadRequestsSubtab(getTeams); // keeps the "Requests" badge fresh
       return;
     }
     data.forEach((tr) => {
@@ -833,14 +876,14 @@ async function loadTournamentsTab(useCache = false) {
       const deadline = tr.registrationDeadline?.toDate ? tr.registrationDeadline.toDate() : null;
       const isPastDeadline = deadline ? deadline.getTime() < Date.now() : false;
       if (tr.status === "upcoming" && !isRegistered && !isPastDeadline) {
-        resolveRegisterActions(tr.id);
+        resolveRegisterActions(tr.id, getTeams);
       }
     });
 
-    loadRequestsSubtab(); // keeps the "Requests" badge fresh in the background
+    loadRequestsSubtab(getTeams); // keeps the "Requests" badge fresh in the background
   } catch (err) {
     console.error(err);
-    loadingEl.textContent = t("leaderboard_err");
+    showRetry(loadingEl, () => loadTournamentsTab(useCache));
   }
 }
 
@@ -850,15 +893,15 @@ $("tr-filter").addEventListener("change", (e) => {
 });
 
 // ---------------- register / join-a-team / pending-request states ----------------
-async function resolveRegisterActions(tournamentId) {
+async function resolveRegisterActions(tournamentId, getTeams = fetchTeams) {
   const el = $(`actions-${tournamentId}`);
   if (!el) return;
 
   try {
-    const [teams, tSnap] = await Promise.all([
-      fetchTeams(tournamentId),
+    const [teams, tSnap] = await withTimeout(Promise.all([
+      getTeams(tournamentId),
       getDoc(doc(db, "tournaments", tournamentId))
-    ]);
+    ]), 15000);
 
     const waitingList = tSnap.exists() ? (tSnap.data().waitingList || []) : [];
     const myWaitPos = waitingList.indexOf(currentPlayer.id);
@@ -914,6 +957,11 @@ async function resolveRegisterActions(tournamentId) {
     el.querySelector("[data-join]").addEventListener("click", () => toggleJoinTeamPicker(tournamentId, teams));
   } catch (err) {
     console.error(err);
+    el.innerHTML = `<button class="link-btn" type="button" data-retry-actions>${t("try_again")}</button>`;
+    el.querySelector("[data-retry-actions]").addEventListener("click", () => {
+      el.innerHTML = '<span class="spinner"></span>';
+      resolveRegisterActions(tournamentId);
+    });
   }
 }
 
@@ -1189,6 +1237,15 @@ function setupPartnerPickers(container, candidates) {
 
 async function renderTeamGrid(tournamentId, container) {
   container.innerHTML = `<span class="spinner"></span> ${t("loading")}`;
+  try {
+    await withRecovery(() => renderTeamGridInner(tournamentId, container), 15000);
+  } catch (err) {
+    console.error(err);
+    showRetry(container, () => renderTeamGrid(tournamentId, container));
+  }
+}
+
+async function renderTeamGridInner(tournamentId, container) {
 
   try {
     const tr = tournamentsCache?.find((x) => x.id === tournamentId);
@@ -1303,7 +1360,7 @@ async function renderTeamGrid(tournamentId, container) {
     });
   } catch (err) {
     console.error(err);
-    container.innerHTML = t("leaderboard_err");
+    throw err; // renderTeamGrid shows the "Try again" message
   }
 }
 
@@ -1766,7 +1823,15 @@ function coinTxLabel(tx) {
     const label = tx.itemName || tx.note || "—";
     return qty > 1 ? `${t("coin_type_purchase").replace("{item}", label)} ×${qty}` : t("coin_type_purchase").replace("{item}", label);
   }
-  return tx.note || tx.type || "—"; // fallback for any future/manual transaction type
+  if (tx.type === "manual") {
+    const base = tx.amount < 0 ? t("coin_type_manual_deduct") : t("coin_type_manual");
+    return tx.note ? `${base}: ${tx.note}` : base;
+  }
+  if (tx.type === "transfer") {
+    const base = (tx.amount < 0 ? t("coin_type_transfer_out") : t("coin_type_transfer_in")).replace("{name}", tx.counterpartyName || "—");
+    return tx.note ? `${base}: ${tx.note}` : base;
+  }
+  return tx.note || tx.type || "—"; // fallback for any future transaction type
 }
 
 async function loadCoinsHistoryTab() {

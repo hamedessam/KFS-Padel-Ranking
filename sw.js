@@ -1,5 +1,5 @@
 // Bump CACHE_NAME on every deploy to bust stale caches (lesson learned from previous PWAs)
-const CACHE_NAME = "padelx-v59";
+const CACHE_NAME = "padelx-v62";
 const ASSETS = [
   "./index.html",
   "./styles.css",
@@ -30,6 +30,11 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   // network-first for Firestore/API calls, cache-first for static shell
   if (event.request.method !== "GET") return;
+  // Only the app's own files go through this cache. Firestore, Firebase Auth,
+  // Google Fonts and the Firebase SDK files go straight to the network — the
+  // Firestore connection includes long-lived streaming GET requests that must
+  // never be intercepted/cloned here (that can stall loading).
+  if (new URL(event.request.url).origin !== self.location.origin) return;
   event.respondWith(
     fetch(event.request)
       .then((res) => {
