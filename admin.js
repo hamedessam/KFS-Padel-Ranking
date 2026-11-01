@@ -2610,7 +2610,7 @@ $("eif-btn").addEventListener("click", async () => {
 // (all-or-nothing), then double-checked. See bracket.js for the logic.
 // =========================================================================
 
-const rs = { tid: null, tournament: null, teams: [], fixtures: [], playersById: new Map(), bracket: null, calc: null, busy: false };
+const rs = { editingDraw: false, tid: null, tournament: null, teams: [], fixtures: [], playersById: new Map(), bracket: null, calc: null, busy: false };
 
 const rsOk = (msg) => showMsg($("rs-success"), msg);
 const rsErr = (msg) => showMsg($("rs-error"), msg);
@@ -2632,6 +2632,7 @@ $("rs-tournament").addEventListener("change", (e) => {
 
 async function loadResults(tid) {
   rs.tid = tid;
+  rs.editingDraw = false;
   rs.calc = null;
   rsClear();
   $("rs-loading").classList.remove("hidden");
@@ -2733,6 +2734,39 @@ function rsTeamsChanged() {
   }));
 }
 
+// Knockout draw card: shows the pairings (default 1st/2nd crossing, or the hand-made draw)
+// and lets the admin enter the draw made in another app. Only shown once all 3 groups are finished.
+function rsDrawHtml(br) {
+  if (!br.qualified || !br.koPlan) return "";
+  const pairLine = (f, i) => `<div style="margin-top:8px; font-size:13px;">${i + 1}. ${rsTeam(f.team1Players, f.team1Number)} <span style="color:var(--text-soft);">vs</span> ${rsTeam(f.team2Players, f.team2Number)}</div>`;
+
+  if (!rs.editingDraw) {
+    return `<div class="msg info show" style="margin-top:14px;">
+      <strong>Knockout draw</strong> <span style="color:var(--text-soft);">· ${br.customDraw ? "entered by hand" : "default (1st/2nd crossing)"}</span>
+      ${br.koPlan.map(pairLine).join("")}
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+        <button class="btn btn-ghost btn-sm" data-edit-draw type="button">Edit draw</button>
+        ${br.customDraw ? '<button class="btn btn-ghost btn-sm" data-reset-draw type="button">Back to default draw</button>' : ""}
+      </div></div>`;
+  }
+
+  const label = (r, g, pos) => `G${g} ${pos} · T${r.teamNumber} — ${r.players.map(rsPlayerName).join(" & ")}`;
+  const opts = [1, 2, 3].flatMap((g) => [
+    [br.standings[g].rows[0], g, "1st"], [br.standings[g].rows[1], g, "2nd"]
+  ]).map(([r, g, pos]) => ({ id: r.teamId, text: label(r, g, pos) }));
+  const select = (attr, i, selected) => `<select class="team-slot-add-select" ${attr}="${i}" style="width:100%; margin-top:6px;">
+    ${opts.map((o) => `<option value="${o.id}" ${o.id === selected ? "selected" : ""}>${escapeHtml(o.text)}</option>`).join("")}</select>`;
+  return `<div class="msg info show" style="margin-top:14px;">
+    <strong>Edit knockout draw</strong>
+    <div style="font-size:12.5px; color:var(--text-soft); margin-top:4px;">Pair the 6 qualified teams the way your draw came out — each team exactly once.${rs.fixtures.some((f) => f.stage !== "group") ? " The knockout matches already created (and their results) will be deleted so they can be generated again." : ""}</div>
+    ${br.koPlan.map((f, i) => `<div style="margin-top:12px;"><span style="font-size:12px; color:var(--text-soft);">Match ${i + 1}</span>
+      ${select("data-draw-a", i, f.team1Id)}${select("data-draw-b", i, f.team2Id)}</div>`).join("")}
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px;">
+      <button class="btn btn-primary btn-sm" data-save-draw type="button">Save draw</button>
+      <button class="btn btn-ghost btn-sm" data-cancel-draw type="button">Cancel</button>
+    </div></div>`;
+}
+
 function renderResults() {
   const t = rs.tournament;
   const applied = !!t.pointsApplied;
@@ -2769,6 +2803,7 @@ function renderResults() {
         <button class="btn btn-ghost btn-sm" id="rs-reset" type="button" style="color:var(--danger);">Reset all matches</button>
       </div>`;
       html += rsDecisionsHtml(br.needs);
+      html += rsDrawHtml(br);
     }
     [1, 2, 3].forEach((g) => {
       html += rsGroupBlock(g, br.standings[g], fixtures.filter((f) => f.stage === "group" && f.group === g), applied);
@@ -2806,6 +2841,10 @@ $("rs-body").addEventListener("click", (e) => {
   else if (t.closest("#rs-reset")) rsResetAll();
   else if ((el = t.closest("[data-save-group-ov]"))) rsSaveGroupOverride(el.dataset.saveGroupOv);
   else if (t.closest("[data-save-bye-ov]")) rsSaveByeOverride();
+  else if (t.closest("[data-edit-draw]")) { rs.editingDraw = true; renderResults(); }
+  else if (t.closest("[data-cancel-draw]")) { rs.editingDraw = false; renderResults(); }
+  else if (t.closest("[data-save-draw]")) rsSaveDraw();
+  else if (t.closest("[data-reset-draw]")) rsResetDraw();
   else if (t.closest("#rs-preview-btn")) rsPreview();
   else if (t.closest("#rs-apply-btn")) rsApply();
   else if (t.closest("#rs-verify-btn")) rsVerify();
@@ -2915,6 +2954,24 @@ async function rsSaveOverrides(overrides) {
       rsErr("Something went wrong saving that choice. Try again.");
     }
   });
+}
+
+async function rsSaveDraw() {
+  rsClear();
+  const picks = [0, 1, 2].map((i) => ({
+    a: document.querySelector(`[data-draw-a="${i}"]`).value,
+    b: document.querySelector(`[data-draw-b="${i}"]`).value
+  }));
+  const ids = picks.flatMap((p) => [p.a, p.b]);
+  if (ids.some((id) => !id) || new Set(ids).size !== 6) { rsErr("Pair all 6 qualified teams, each one exactly once."); return; }
+  await rsSaveOverrides({ ...(rs.tournament.bracketOverrides || {}), ko: picks });
+}
+
+async function rsResetDraw() {
+  rsClear();
+  const ov = { ...(rs.tournament.bracketOverrides || {}) };
+  delete ov.ko;
+  await rsSaveOverrides(ov);
 }
 
 async function rsSaveGroupOverride(g) {

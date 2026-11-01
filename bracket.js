@@ -147,10 +147,36 @@ export function computeStandings(fixtures, overrides = {}) {
 
 // -------------------------------------------------------------- knockout
 // 1st of G1 v 2nd of G3, 2nd of G1 v 1st of G2, 1st of G3 v 2nd of G2.
-export function deriveKnockout(standings) {
+// The 6 teams that qualify (top 2 of each group), or null until all 3 groups are done.
+export function qualifiedFromStandings(standings) {
   if (!GROUPS.every((g) => standings[g].complete && !standings[g].unresolved)) return null;
+  return GROUPS.flatMap((g) => [standings[g].rows[0], standings[g].rows[1]]);
+}
+
+// A hand-made draw (bracketOverrides.ko = [{a,b},{a,b},{a,b}] of team ids) is only
+// used when it pairs exactly the 6 qualified teams, each one once. Otherwise the
+// default pairings below are used. (Stored as a list of {a,b} maps because
+// Firestore doesn't allow arrays inside arrays.)
+export function validKoOverride(ov, standings) {
+  const q = qualifiedFromStandings(standings);
+  if (!q || !Array.isArray(ov) || ov.length !== 3) return false;
+  const ids = ov.flatMap((p) => [p && p.a, p && p.b]);
+  const allowed = new Set(q.map((r) => r.teamId));
+  return ids.every((id) => typeof id === "string" && allowed.has(id)) && new Set(ids).size === 6;
+}
+
+// Default draw: 1st of G1 v 2nd of G3, 2nd of G1 v 1st of G2, 1st of G3 v 2nd of G2
+// — unless the admin entered the draw by hand.
+export function deriveKnockout(standings, overrides = {}) {
+  const q6 = qualifiedFromStandings(standings);
+  if (!q6) return null;
   const q = (g, p) => standings[g].rows[p - 1];
-  const pairs = [[q(1, 1), q(3, 2)], [q(1, 2), q(2, 1)], [q(3, 1), q(2, 2)]];
+  let pairs = [[q(1, 1), q(3, 2)], [q(1, 2), q(2, 1)], [q(3, 1), q(2, 2)]];
+  const ov = overrides && overrides.ko;
+  if (validKoOverride(ov, standings)) {
+    const byId = new Map(q6.map((r) => [r.teamId, r]));
+    pairs = ov.map((p) => [byId.get(p.a), byId.get(p.b)]);
+  }
   return pairs.map(([a, b], i) => makeFixture({
     id: `ko-${i + 1}`, stage: "ko", order: 19 + i, label: `Knockout ${i + 1}`, a: teamFromRow(a), b: teamFromRow(b)
   }));
@@ -196,7 +222,7 @@ export function deriveBracket(fixtures, overrides = {}) {
   const existingKo = ["ko-1", "ko-2", "ko-3"].map((id) => byId.get(id)).filter(Boolean);
   const existingSemi = byId.get("semi") || null;
   const existingFinal = byId.get("final") || null;
-  const expectedKo = deriveKnockout(standings);
+  const expectedKo = deriveKnockout(standings, overrides);
   const koValid = !!expectedKo && existingKo.length === 3 && expectedKo.every((e, i) => samePair(e, existingKo[i]));
 
   const staleIds = [];
@@ -243,7 +269,13 @@ export function deriveBracket(fixtures, overrides = {}) {
       third: teamFromSide(existingSemi, sw === 1 ? 2 : 1)
     };
   }
-  return { standings, next, staleIds, needs, placement, bye: semiInfo && semiInfo.bye ? semiInfo.bye : null };
+  return {
+    standings, next, staleIds, needs, placement, bye: semiInfo && semiInfo.bye ? semiInfo.bye : null,
+    // for the "Knockout draw" card: the 6 qualified teams, the planned pairings, and whether a hand-made draw is in use
+    qualified: qualifiedFromStandings(standings),
+    koPlan: expectedKo,
+    customDraw: validKoOverride(overrides && overrides.ko, standings)
+  };
 }
 
 // ------------------------------------------------------- points (pure part)
