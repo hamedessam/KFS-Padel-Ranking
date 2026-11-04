@@ -1090,17 +1090,35 @@ $("coin-p-select-all-btn").addEventListener("click", () => {
   $("coin-p-list").querySelectorAll('input[type="checkbox"]:not([disabled])').forEach((cb) => { cb.checked = true; });
 });
 
-$("coin-p-btn").addEventListener("click", () => awardTournamentCoins({
+// the amount is typed by the admin now (default 10); the button text follows it
+function participationAmount() {
+  const n = parseInt($("coin-p-amount").value, 10);
+  return Number.isInteger(n) && n >= 1 && n <= 100000 ? n : null;
+}
+$("coin-p-amount").addEventListener("input", () => {
+  const n = participationAmount();
+  $("coin-p-btn").textContent = n ? `Award ${n} coins to selected players` : "Award coins to selected players";
+});
+
+$("coin-p-btn").addEventListener("click", () => {
+  const amount = participationAmount();
+  if (!amount) {
+    hideMsg($("coin-p-success"));
+    showMsg($("coin-p-error"), "Enter a number of coins per player between 1 and 100000.");
+    return;
+  }
+  awardTournamentCoins({
   tournamentId: $("coin-p-tournament").value,
   listElId: "coin-p-list",
   errorElId: "coin-p-error",
   successElId: "coin-p-success",
   summaryElId: "coin-p-summary",
   type: "participation",
-  amount: COIN_AMOUNTS.participation,
+  amount,
   note: "Tournament participation",
   reload: () => loadCoinParticipationList($("coin-p-tournament").value)
-}));
+  });
+});
 
 // ---------------- 2. Group-stage advancement (+20) ----------------
 
