@@ -46,15 +46,16 @@
       <p class="sub" data-i18n="login_sub">Use the code and password your admin gave you.</p>
 
       <div class="msg error" id="login-error"></div>
+      <div class="msg info" id="restore-msg"></div>
 
       <form id="login-form">
         <div class="field">
           <label for="login-code" data-i18n="login_code_label">Player code</label>
-          <input type="text" id="login-code" class="mono" placeholder="KFS-461" autocomplete="username" required>
+          <input type="text" id="login-code" name="username" class="mono" placeholder="KFS-461" autocomplete="username" autocapitalize="characters" autocorrect="off" spellcheck="false" required>
         </div>
         <div class="field">
           <label for="login-pass" data-i18n="login_pass_label">Password</label>
-          <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" required>
+          <input type="password" id="login-pass" name="password" placeholder="••••••••" autocomplete="current-password" required>
         </div>
         <button type="submit" class="btn btn-primary" id="login-btn" data-i18n="login_btn">Sign in</button>
       </form>
@@ -411,6 +412,7 @@
 
         <h1 style="font-size:16px;" data-i18n="settings_change_pass">Change password</h1>
         <form id="change-pass-form" style="margin-top:10px;">
+          <input type="text" id="cp-username" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute; opacity:0; width:1px; height:1px; pointer-events:none;">
           <div class="msg error" id="pass-error"></div>
           <div class="msg success" id="pass-success"></div>
           <div class="field">

@@ -188,6 +188,7 @@ function refreshProfileDisplay(player) {
   $("st-avatar").innerHTML = avatarHtml(player);
   $("st-name").textContent = player.name || "—";
   $("st-code").textContent = player.playerCode || "—";
+  $("cp-username").value = player.playerCode || ""; // lets the phone's password manager update the saved password after a change
 }
 
 // Login entry point: updates the display AND navigates into the app.
@@ -2053,6 +2054,12 @@ $("login-form").addEventListener("submit", async (e) => {
     }
 
     saveSession(player.id, player.passwordHash);
+    // Chrome/Android only: offer to save the sign-in so it can be auto-filled next time (optional nicety)
+    try {
+      if (window.PasswordCredential && navigator.credentials && navigator.credentials.store) {
+        navigator.credentials.store(new PasswordCredential({ id: codeRaw, password: pass, name: player.name || codeRaw })).catch(() => {});
+      }
+    } catch (e) { /* ignore */ }
     // Rendering happens automatically via the onAuthStateChanged watcher in
     // bootstrap once Firebase confirms the sign-in — calling renderProfile
     // here too would fetch and load everything twice on every login.
@@ -2135,6 +2142,11 @@ $("change-pass-form").addEventListener("submit", async (e) => {
     currentPlayer.passwordSalt = newSalt;
     currentPlayer.passwordHash = newHash;
     showMsg(okEl, t("pass_success"));
+    try {
+      if (window.PasswordCredential && navigator.credentials && navigator.credentials.store) {
+        navigator.credentials.store(new PasswordCredential({ id: currentPlayer.playerCode || "", password: next, name: currentPlayer.name || "" })).catch(() => {});
+      }
+    } catch (e) { /* ignore */ }
     $("cp-current").value = "";
     $("cp-new").value = "";
     $("cp-confirm").value = "";
@@ -2340,53 +2352,87 @@ async function findPlayerByAuthUidWithRetry(uid, attempts = 6, delayMs = 350) {
   return null;
 }
 
-loadAppSettings().then(() => {
-  onAuthStateChanged(auth, async (user) => {
-    if (user) {
-      // A real Firebase Auth session already exists — this player is
-      // fully migrated. Look them up by their stored authUid rather than
-      // decoding the fake email (Firebase always lowercases emails, which
-      // would corrupt a mixed-case Firestore document ID).
-      try {
-        const d = await findPlayerByAuthUidWithRetry(user.uid);
-        if (d) {
-          renderProfile({ id: d.id, ...d.data() });
-        }
-      } catch (err) {
-        console.error(err);
-      }
+// ---- restoring a remembered session ----
+// A remembered player (real Firebase session, or the older local session) is
+// signed back in automatically. If the connection is slow or down at that very
+// moment we must NOT quietly show the login form as if they had been signed
+// out: we say what is happening and retry (button, and automatically when the
+// connection comes back).
+let pendingRestore = null;
+
+function setRestoreMsg(text, withRetry) {
+  const el = $("restore-msg");
+  el.textContent = text;
+  el.classList.add("show");
+  if (withRetry) {
+    const b = document.createElement("button");
+    b.className = "link-btn";
+    b.type = "button";
+    b.textContent = ` ${t("try_again")}`;
+    b.addEventListener("click", () => { if (pendingRestore) pendingRestore(); });
+    el.appendChild(b);
+  }
+}
+
+async function restoreFirebaseSession(user) {
+  pendingRestore = () => restoreFirebaseSession(user);
+  setRestoreMsg(t("restore_session_msg"), false);
+  try {
+    // Look the player up by their stored authUid — never by decoding the fake email.
+    const d = await withRecovery(() => findPlayerByAuthUidWithRetry(user.uid), 15000);
+    pendingRestore = null;
+    hideMsg($("restore-msg"));
+    if (d) renderProfile({ id: d.id, ...d.data() });
+  } catch (err) {
+    console.error(err);
+    setRestoreMsg(t("restore_failed_msg"), true);
+  }
+}
+
+// For players who haven't logged in since the Firebase Auth update (not migrated yet).
+async function restoreLegacySession() {
+  const savedId = getSession();
+  if (!savedId) return;
+  pendingRestore = () => restoreLegacySession();
+  setRestoreMsg(t("restore_session_msg"), false);
+  try {
+    const player = await withRecovery(() => loadPlayerById(savedId), 15000);
+    pendingRestore = null;
+    hideMsg($("restore-msg"));
+    if (!player) {
+      clearSession();
       return;
     }
-
-    // No Firebase Auth session — fall back to the legacy localStorage
-    // session, for players who haven't logged in since this update and
-    // so haven't been migrated to Firebase Auth yet. They'll be fully
-    // migrated automatically the next time they use the login form.
-    const savedId = getSession();
-    if (!savedId) return;
-    try {
-      const player = await loadPlayerById(savedId);
-      if (!player) {
-        clearSession();
-        return;
-      }
-      const savedHash = getSessionPasswordHash();
-      if (!savedHash) {
-        // Session predates this security check — trust it now and start
-        // tracking from this point forward (avoids logging out everyone
-        // who was already signed in before this feature shipped).
-        saveSession(player.id, player.passwordHash);
-      } else if (player.passwordHash !== savedHash) {
-        // Password was changed (or reset by the admin) while this device
-        // was closed — refuse to silently re-authenticate.
-        clearSession();
-        showMsg($("login-error"), t("forced_logout_password_changed"));
-        return;
-      }
-      renderProfile(player);
-    } catch (err) {
-      console.error(err);
+    const savedHash = getSessionPasswordHash();
+    if (!savedHash) {
+      // Session predates this security check — trust it now and start
+      // tracking from this point forward.
+      saveSession(player.id, player.passwordHash);
+    } else if (player.passwordHash !== savedHash) {
+      // Password was changed (or reset by the admin) while this device
+      // was closed — refuse to silently re-authenticate.
+      clearSession();
+      showMsg($("login-error"), t("forced_logout_password_changed"));
+      return;
     }
+    renderProfile(player);
+  } catch (err) {
+    console.error(err);
+    setRestoreMsg(t("restore_failed_msg"), true);
+  }
+}
+
+window.addEventListener("online", () => { if (pendingRestore && !currentPlayer) pendingRestore(); });
+
+loadAppSettings().then(() => {
+  onAuthStateChanged(auth, async (user) => {
+    pendingRestore = null; // a newer sign-in state replaces any earlier pending restore
+    hideMsg($("restore-msg"));
+    if (user) {
+      await restoreFirebaseSession(user);
+      return;
+    }
+    await restoreLegacySession();
   });
 });
 
