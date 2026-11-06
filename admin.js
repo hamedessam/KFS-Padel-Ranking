@@ -893,10 +893,14 @@ async function loadTeamGrid(tournamentId) {
         ? `<select class="team-slot-group-select" data-set-group="${team.id}" data-tournament="${tournamentId}"><option value="">Group —</option>${groupOptions}</select>`
         : `<select class="team-slot-group-select" disabled><option>Group —</option></select>`;
 
+      const regAt = team?.registeredAt?.toDate ? team.registeredAt.toDate() : null;
+      const regAtHtml = regAt
+        ? `<span style="display:block; font-size:11px; color:var(--text-soft); margin-top:2px;">Registered ${escapeHtml(regAt.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }))}</span>`
+        : "";
       html += `
         <div class="team-slot-row">
           <div class="team-slot-row-head">
-            <span class="team-slot-number">Team ${n}</span>
+            <div><span class="team-slot-number">Team ${n}</span>${regAtHtml}</div>
             ${groupSelect}
           </div>
           <div class="team-slot-players">
@@ -2718,16 +2722,28 @@ function rsGroupBlock(g, s, groupFixtures, locked) {
   </div>`;
 }
 
-function rsDecisionsHtml(needs) {
+function rsDecisionsHtml(needs, eight) {
   return needs.map((n) => {
     if (n.type === "group") {
       const opts = n.rows.map((r) => `<option value="${r.teamId}">${escapeHtml(rsTeamPlain({ teamNumber: r.teamNumber, player1Id: r.players[0], player2Id: r.players[1] }))}</option>`).join("");
       return `<div class="msg info show" style="margin-top:14px;">
-        <strong>Group ${n.group}: tie for the qualifying spots.</strong> The teams are level on wins, game difference and games won. Pick who finishes 1st and 2nd.
+        <strong>Group ${n.group}: tie for the qualifying spots.</strong> The teams are level on wins, game difference and games won. Pick who finishes ${eight ? "1st, 2nd and 3rd" : "1st and 2nd"}.
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
           <select class="team-slot-add-select" data-ov-first="${n.group}"><option value="">1st place…</option>${opts}</select>
           <select class="team-slot-add-select" data-ov-second="${n.group}"><option value="">2nd place…</option>${opts}</select>
+          ${eight ? `<select class="team-slot-add-select" data-ov-third="${n.group}"><option value="">3rd place…</option>${opts}</select>` : ""}
           <button class="btn btn-primary btn-sm" data-save-group-ov="${n.group}" type="button">Save</button>
+        </div></div>`;
+    }
+    if (n.type === "cross") {
+      const labels = n.count === 3 ? ["Best", "Middle", "Weakest"] : ["Best", "2nd best"];
+      const catName = { firsts: "group winners (1st place)", seconds: "2nd-place teams", thirds: "3rd-place teams" }[n.cat];
+      const copts = n.rows.map((r) => `<option value="${r.teamId}">${escapeHtml(rsTeamPlain({ teamNumber: r.teamNumber, player1Id: r.players[0], player2Id: r.players[1] }))} · ${escapeHtml(rsTag(rs.bracket, r))}</option>`).join("");
+      return `<div class="msg info show" style="margin-top:14px;">
+        <strong>Tie between the ${catName}.</strong> They're level on wins, game difference and games won, so the order can't be decided automatically. Order them from best to weakest${n.cat === "thirds" ? " (only the best two advance)" : ""}.
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+          ${labels.map((lb, i) => `<select class="team-slot-add-select" data-cross-sel="${n.cat}" data-pos="${i}"><option value="">${lb}…</option>${copts}</select>`).join("")}
+          <button class="btn btn-primary btn-sm" data-save-cross="${n.cat}" type="button">Save</button>
         </div></div>`;
     }
     const opts = n.candidates.map((c) => `<option value="${c.id}">${escapeHtml(rsTeamPlain(c))}</option>`).join("");
@@ -2752,15 +2768,25 @@ function rsTeamsChanged() {
   }));
 }
 
-// Knockout draw card: shows the pairings (default 1st/2nd crossing, or the hand-made draw)
-// and lets the admin enter the draw made in another app. Only shown once all 3 groups are finished.
+// Knockout draw card: shows the pairings (default, or the hand-made draw) and lets the
+// admin enter the draw made in another app. Only shown once all 3 groups are finished.
+// Works for both 6 qualifiers (3 matches) and 8 qualifiers (4 quarter-finals).
+const rsPosLabel = (br, r) => {
+  const i = br.standings[r.group].rows.findIndex((x) => x.teamId === r.teamId);
+  return `G${r.group} ${["1st", "2nd", "3rd", "4th"][i] || ""}`;
+};
+const rsTag = (br, r) => `${rsPosLabel(br, r)} · ${r.wins}W ${r.diff > 0 ? "+" : ""}${r.diff}`;
+
 function rsDrawHtml(br) {
   if (!br.qualified || !br.koPlan) return "";
-  const pairLine = (f, i) => `<div style="margin-top:8px; font-size:13px;">${i + 1}. ${rsTeam(f.team1Players, f.team1Number)} <span style="color:var(--text-soft);">vs</span> ${rsTeam(f.team2Players, f.team2Number)}</div>`;
+  const eight = br.qualifiers === 8;
+  const rowOf = (id) => br.qualified.find((r) => r.teamId === id);
+  const tg = (id) => (eight && rowOf(id) ? ` <span style="font-size:11px; color:var(--text-soft);">(${escapeHtml(rsTag(br, rowOf(id)))})</span>` : "");
+  const pairLine = (f, i) => `<div style="margin-top:8px; font-size:13px;">${i + 1}. ${rsTeam(f.team1Players, f.team1Number)}${tg(f.team1Id)} <span style="color:var(--text-soft);">vs</span> ${rsTeam(f.team2Players, f.team2Number)}${tg(f.team2Id)}</div>`;
 
   if (!rs.editingDraw) {
     return `<div class="msg info show" style="margin-top:14px;">
-      <strong>Knockout draw</strong> <span style="color:var(--text-soft);">· ${br.customDraw ? "entered by hand" : "default (1st/2nd crossing)"}</span>
+      <strong>Knockout draw</strong> <span style="color:var(--text-soft);">· ${br.customDraw ? "entered by hand" : (eight ? "default (by group results)" : "default (1st/2nd crossing)")}</span>
       ${br.koPlan.map(pairLine).join("")}
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
         <button class="btn btn-ghost btn-sm" data-edit-draw type="button">Edit draw</button>
@@ -2768,21 +2794,31 @@ function rsDrawHtml(br) {
       </div></div>`;
   }
 
-  const label = (r, g, pos) => `G${g} ${pos} · T${r.teamNumber} — ${r.players.map(rsPlayerName).join(" & ")}`;
-  const opts = [1, 2, 3].flatMap((g) => [
-    [br.standings[g].rows[0], g, "1st"], [br.standings[g].rows[1], g, "2nd"]
-  ]).map(([r, g, pos]) => ({ id: r.teamId, text: label(r, g, pos) }));
+  const opts = [...br.qualified]
+    .sort((a, b) => a.group - b.group || br.standings[a.group].rows.findIndex((x) => x.teamId === a.teamId) - br.standings[b.group].rows.findIndex((x) => x.teamId === b.teamId))
+    .map((r) => ({ id: r.teamId, text: `${rsPosLabel(br, r)} · T${r.teamNumber} — ${r.players.map(rsPlayerName).join(" & ")}` }));
   const select = (attr, i, selected) => `<select class="team-slot-add-select" ${attr}="${i}" style="width:100%; margin-top:6px;">
     ${opts.map((o) => `<option value="${o.id}" ${o.id === selected ? "selected" : ""}>${escapeHtml(o.text)}</option>`).join("")}</select>`;
   return `<div class="msg info show" style="margin-top:14px;">
     <strong>Edit knockout draw</strong>
-    <div style="font-size:12.5px; color:var(--text-soft); margin-top:4px;">Pair the 6 qualified teams the way your draw came out — each team exactly once.${rs.fixtures.some((f) => f.stage !== "group") ? " The knockout matches already created (and their results) will be deleted so they can be generated again." : ""}</div>
+    <div style="font-size:12.5px; color:var(--text-soft); margin-top:4px;">Pair the ${br.qualified.length} qualified teams the way your draw came out — each team exactly once.${rs.fixtures.some((f) => f.stage !== "group") ? " The knockout matches already created (and their results) will be deleted so they can be generated again." : ""}</div>
     ${br.koPlan.map((f, i) => `<div style="margin-top:12px;"><span style="font-size:12px; color:var(--text-soft);">Match ${i + 1}</span>
       ${select("data-draw-a", i, f.team1Id)}${select("data-draw-b", i, f.team2Id)}</div>`).join("")}
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px;">
       <button class="btn btn-primary btn-sm" data-save-draw type="button">Save draw</button>
       <button class="btn btn-ghost btn-sm" data-cancel-draw type="button">Cancel</button>
     </div></div>`;
+}
+
+// "How many teams qualify?" — shown once the 3 groups are finished.
+function rsQualifiersHtml(br, needChoice) {
+  const eight = br.qualifiers === 8;
+  const six = !eight && !needChoice;
+  const btn = (n, on) => `<button class="btn btn-sm ${on ? "btn-primary" : "btn-ghost"}" data-set-qual="${n}" type="button">${n} teams</button>`;
+  return `<div class="msg info show" style="margin-top:14px;">
+    <strong>How many teams qualify for the knockout?</strong>${needChoice ? ' <span style="color:var(--ball);">Choose to continue.</span>' : ""}
+    <div style="font-size:12.5px; color:var(--text-soft); margin-top:4px;">6 teams = the top 2 of each group (3 knockout matches, then semi-final and final). 8 teams = the top 2 of each group + the best two 3rd-place teams (4 quarter-finals, 2 semi-finals, final). Changing it later deletes the knockout matches already created.</div>
+    <div style="display:flex; gap:8px; margin-top:10px;">${btn(6, six)}${btn(8, eight)}</div></div>`;
 }
 
 function renderResults() {
@@ -2815,12 +2851,15 @@ function renderResults() {
       html += '<div class="msg error show">The teams or groups were changed after these matches were generated. Use "Reset all matches" and generate them again so the matches match the teams.</div>';
     }
     if (!applied) {
-      const label = br.next ? { ko: "knockout matches (3)", semi: "semi-final", final: "final" }[br.next.stage] : null;
+      const groupsDone = [1, 2, 3].every((g) => br.standings[g].complete);
+      const needChoice = groupsDone && overrides.qualifiers === undefined && !fixtures.some((f) => f.stage !== "group");
+      const label = br.next ? { ko: "knockout matches (3)", semi: "semi-final", final: "final", qf: "quarter-finals (4)", sf: "semi-finals (2)" }[br.next.stage] : null;
+      if (groupsDone) html += rsQualifiersHtml(br, needChoice);
       html += `<div style="display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 4px;">
-        ${label ? `<button class="btn btn-primary btn-sm" id="rs-generate-next" type="button">Generate ${label}</button>` : ""}
+        ${label ? `<button class="btn btn-primary btn-sm" id="rs-generate-next" type="button" ${needChoice ? "disabled" : ""}>Generate ${label}</button>` : ""}
         <button class="btn btn-ghost btn-sm" id="rs-reset" type="button" style="color:var(--danger);">Reset all matches</button>
       </div>`;
-      html += rsDecisionsHtml(br.needs);
+      html += rsDecisionsHtml(br.needs, br.qualifiers === 8);
       html += rsDrawHtml(br);
     }
     [1, 2, 3].forEach((g) => {
@@ -2830,16 +2869,27 @@ function renderResults() {
     if (later.length) {
       html += `<div style="margin-top:22px;"><h2 style="font-family:var(--font-display); font-weight:800; font-size:16px; margin:0;">Knockout</h2>${later.map((f) => rsFixtureRow(f, applied)).join("")}</div>`;
     }
+    if (!applied && br.qualifiers === 8) {
+      if (br.thirdPlan) {
+        html += `<div style="margin-top:14px;"><button class="btn btn-ghost btn-sm" id="rs-add-third" type="button">Add 3rd place match (optional)</button>
+          <div class="hint" style="margin-top:6px;">Only the matches you add get points. If you don't play it, just leave it out.</div></div>`;
+      } else if (br.hasThird) {
+        html += `<div style="margin-top:14px;"><button class="btn btn-ghost btn-sm" id="rs-remove-third" type="button" style="color:var(--danger);">Remove 3rd place match</button>
+          <div class="hint" style="margin-top:6px;">Not played? Remove it — it won't count for points.</div></div>`;
+      }
+    }
     if (br.placement) {
       const p = br.placement;
-      html += `<div class="msg success show" style="margin-top:18px;"><strong>Final result</strong><br>
-        🥇 ${escapeHtml(rsTeamPlain(p.champion))}<br>🥈 ${escapeHtml(rsTeamPlain(p.runnerUp))}<br>🥉 ${escapeHtml(rsTeamPlain(p.third))}</div>`;
+      const line = (icon, team) => `<br>${icon} ${escapeHtml(rsTeamPlain(team))}`;
+      html += `<div class="msg success show" style="margin-top:18px;"><strong>Final result</strong>
+        ${line("🥇", p.champion)}${line("🥈", p.runnerUp)}${p.third ? line("🥉", p.third) : ""}${p.fourth ? line("4th", p.fourth) : ""}${p.jointThird ? p.jointThird.map((x) => line("🥉", x)).join("") + '<br><span style="font-size:12px; color:var(--text-soft);">(no 3rd place match — shared 3rd place)</span>' : ""}</div>`;
     }
     if (!applied) {
-      const allDone = fixtures.length === 23 && fixtures.every((f) => f.done);
+      const expectedTotal = br.qualifiers === 8 ? 25 + (br.hasThird ? 1 : 0) : 23;
+      const allDone = fixtures.length === expectedTotal && fixtures.every((f) => f.done);
       html += `<div style="margin-top:26px; padding-top:18px; border-top:1px solid var(--border);">
         <h2 style="font-family:var(--font-display); font-weight:800; font-size:16px; margin:0 0 4px;">Calculate points</h2>
-        <p class="sub" style="margin-bottom:12px;">You'll see a preview first. Nothing is saved to the players until you confirm.${allDone ? "" : " Available once all 23 matches have a result."}</p>
+        <p class="sub" style="margin-bottom:12px;">You'll see a preview first. Nothing is saved to the players until you confirm.${allDone ? "" : ` Available once all ${expectedTotal} matches have a result.${br.hasThird ? " (Not playing the 3rd place match? Remove it above.)" : ""}`}</p>
         <button class="btn btn-primary" id="rs-preview-btn" type="button" ${allDone ? "" : "disabled"}>Calculate points (preview)</button>
         <div id="rs-preview" style="margin-top:14px;"></div>
       </div>`;
@@ -2859,6 +2909,10 @@ $("rs-body").addEventListener("click", (e) => {
   else if (t.closest("#rs-reset")) rsResetAll();
   else if ((el = t.closest("[data-save-group-ov]"))) rsSaveGroupOverride(el.dataset.saveGroupOv);
   else if (t.closest("[data-save-bye-ov]")) rsSaveByeOverride();
+  else if ((el = t.closest("[data-save-cross]"))) rsSaveCross(el.dataset.saveCross);
+  else if ((el = t.closest("[data-set-qual]"))) rsSetQualifiers(Number(el.dataset.setQual));
+  else if (t.closest("#rs-add-third")) rsAddThird();
+  else if (t.closest("#rs-remove-third")) rsRemoveThird();
   else if (t.closest("[data-edit-draw]")) { rs.editingDraw = true; renderResults(); }
   else if (t.closest("[data-cancel-draw]")) { rs.editingDraw = false; renderResults(); }
   else if (t.closest("[data-save-draw]")) rsSaveDraw();
@@ -2976,12 +3030,13 @@ async function rsSaveOverrides(overrides) {
 
 async function rsSaveDraw() {
   rsClear();
-  const picks = [0, 1, 2].map((i) => ({
+  const n = rs.bracket.koPlan.length;
+  const picks = Array.from({ length: n }, (_, i) => ({
     a: document.querySelector(`[data-draw-a="${i}"]`).value,
     b: document.querySelector(`[data-draw-b="${i}"]`).value
   }));
   const ids = picks.flatMap((p) => [p.a, p.b]);
-  if (ids.some((id) => !id) || new Set(ids).size !== 6) { rsErr("Pair all 6 qualified teams, each one exactly once."); return; }
+  if (ids.some((id) => !id) || new Set(ids).size !== n * 2) { rsErr(`Pair all ${n * 2} qualified teams, each one exactly once.`); return; }
   await rsSaveOverrides({ ...(rs.tournament.bracketOverrides || {}), ko: picks });
 }
 
@@ -2996,9 +3051,11 @@ async function rsSaveGroupOverride(g) {
   rsClear();
   const first = document.querySelector(`[data-ov-first="${g}"]`).value;
   const second = document.querySelector(`[data-ov-second="${g}"]`).value;
-  if (!first || !second || first === second) { rsErr("Pick two different teams for 1st and 2nd."); return; }
+  const thirdEl = document.querySelector(`[data-ov-third="${g}"]`);
+  const picks = thirdEl ? [first, second, thirdEl.value] : [first, second];
+  if (picks.some((x) => !x) || new Set(picks).size !== picks.length) { rsErr(thirdEl ? "Pick three different teams for 1st, 2nd and 3rd." : "Pick two different teams for 1st and 2nd."); return; }
   const ov = { ...(rs.tournament.bracketOverrides || {}) };
-  ov.groups = { ...(ov.groups || {}), [g]: [first, second] };
+  ov.groups = { ...(ov.groups || {}), [g]: picks };
   await rsSaveOverrides(ov);
 }
 
@@ -3007,6 +3064,73 @@ async function rsSaveByeOverride() {
   const id = document.querySelector("[data-ov-bye]").value;
   if (!id) { rsErr("Pick a team."); return; }
   await rsSaveOverrides({ ...(rs.tournament.bracketOverrides || {}), bye: id });
+}
+
+async function rsSaveCross(cat) {
+  rsClear();
+  const ids = Array.from(document.querySelectorAll(`[data-cross-sel="${cat}"]`)).map((s) => s.value);
+  if (ids.some((x) => !x) || new Set(ids).size !== ids.length) { rsErr("Pick a different team for each position."); return; }
+  const ov = { ...(rs.tournament.bracketOverrides || {}) };
+  ov.cross = { ...(ov.cross || {}), [cat]: ids };
+  await rsSaveOverrides(ov);
+}
+
+// 6 or 8 qualifying teams. Switching deletes the knockout matches already created
+// (the group matches and their results are never touched).
+async function rsSetQualifiers(n) {
+  rsClear();
+  const ov0 = rs.tournament.bracketOverrides || {};
+  const cur = ov0.qualifiers === 8 ? 8 : 6;
+  const changed = n !== cur;
+  if (!changed && ov0.qualifiers !== undefined) return;
+  const later = rs.fixtures.filter((f) => f.stage !== "group");
+  if (changed && later.length && !confirm(`Switch to ${n} qualifying teams?\n\nThe knockout matches already created (and their results) will be deleted so they can be generated again:\n\n${later.map((f) => f.label).join(", ")}\n\nThe group matches are not touched.`)) return;
+  const ov = { ...ov0, qualifiers: n };
+  if (changed) { delete ov.ko; delete ov.bye; }
+  await rsRun(async () => {
+    try {
+      await saveOverrides(rs.tid, ov);
+      if (changed && later.length) await deleteFixtures(rs.tid, later.map((f) => f.id));
+      await loadResults(rs.tid);
+      rsOk(`${n} teams qualify.`);
+    } catch (err) {
+      console.error(err);
+      rsErr("Something went wrong saving that choice. Try again.");
+    }
+  });
+}
+
+async function rsAddThird() {
+  rsClear();
+  const br = rs.bracket;
+  if (!br || !br.thirdPlan) return;
+  await rsRun(async () => {
+    try {
+      await createFixtures(rs.tid, [br.thirdPlan]);
+      await loadResults(rs.tid);
+      rsOk("3rd place match added. Enter its result, or remove it if you don't play it.");
+    } catch (err) {
+      console.error(err);
+      rsErr("Something went wrong adding the match. Try again.");
+    }
+  });
+}
+
+async function rsRemoveThird() {
+  rsClear();
+  const f = rs.fixtures.find((x) => x.id === "third");
+  if (!f) return;
+  if (!confirm("Remove the 3rd place match?" + (f.done ? "\n\nIts result will be deleted too." : "") + "\n\nIt won't count for points.")) return;
+  await rsRun(async () => {
+    try {
+      await deleteFixtures(rs.tid, ["third"]);
+      await loadResults(rs.tid);
+      rsOk("3rd place match removed.");
+    } catch (err) {
+      console.error(err);
+      rsErr("Something went wrong removing the match. Try again.");
+    }
+  });
 }
 
 async function rsPreview() {

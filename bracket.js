@@ -18,6 +18,7 @@ import { computeMatchPointChanges, isRanked } from "./utils.js";
 
 const GROUPS = [1, 2, 3];
 const EXPECTED_FIXTURES = { group: 18, ko: 3, semi: 1, final: 1 };
+const EXPECTED_FIXTURES_8 = { group: 18, qf: 4, sf: 2, final: 1 }; // (+ an optional third-place match)
 
 // ---------------------------------------------------------------- helpers
 function makeFixture({ id, stage, group = null, round = null, order, label, a, b }) {
@@ -99,7 +100,7 @@ export function computeStandings(fixtures, overrides = {}) {
     const fx = fixtures.filter((f) => f.stage === "group" && f.group === g);
     const rows = new Map();
     const touch = (id, num, players) => {
-      if (!rows.has(id)) rows.set(id, { teamId: id, teamNumber: num, players, played: 0, wins: 0, losses: 0, gf: 0, ga: 0, diff: 0 });
+      if (!rows.has(id)) rows.set(id, { teamId: id, group: g, teamNumber: num, players, played: 0, wins: 0, losses: 0, gf: 0, ga: 0, diff: 0 });
     };
     fx.forEach((f) => { touch(f.team1Id, f.team1Number, f.team1Players); touch(f.team2Id, f.team2Number, f.team2Players); });
     fx.filter((f) => f.done).forEach((f) => {
@@ -135,11 +136,16 @@ export function computeStandings(fixtures, overrides = {}) {
     let ordered = list;
     let overridden = false;
     const ov = overrides && overrides.groups && overrides.groups[g];
-    if (complete && Array.isArray(ov) && ov.length === 2 && ov[0] !== ov[1] && rows.has(ov[0]) && rows.has(ov[1])) {
-      ordered = [rows.get(ov[0]), rows.get(ov[1]), ...list.filter((r) => r.teamId !== ov[0] && r.teamId !== ov[1])];
+    // 6 qualifiers need the top 2; with 8 qualifiers the 3rd place of each group matters too
+    const eight = !!(overrides && overrides.qualifiers === 8);
+    const validOv = complete && Array.isArray(ov) && (ov.length === 2 || ov.length === 3)
+      && new Set(ov).size === ov.length && ov.every((id) => rows.has(id));
+    if (validOv) {
+      ordered = [...ov.map((id) => rows.get(id)), ...list.filter((r) => !ov.includes(r.teamId))];
       overridden = true;
     }
-    const unresolved = complete && !overridden && (tieWithNext[0] || tieWithNext[1]);
+    let unresolved = complete && !overridden && (tieWithNext[0] || tieWithNext[1]);
+    if (eight && complete && tieWithNext[2] && !(validOv && ov.length === 3)) unresolved = true;
     res[g] = { rows: ordered, complete, unresolved, overridden };
   }
   return res;
@@ -148,7 +154,8 @@ export function computeStandings(fixtures, overrides = {}) {
 // -------------------------------------------------------------- knockout
 // 1st of G1 v 2nd of G3, 2nd of G1 v 1st of G2, 1st of G3 v 2nd of G2.
 // The 6 teams that qualify (top 2 of each group), or null until all 3 groups are done.
-export function qualifiedFromStandings(standings) {
+export function qualifiedFromStandings(standings, overrides = {}) {
+  if (overrides && overrides.qualifiers === 8) return rankQualified8(standings, overrides).qualified;
   if (!GROUPS.every((g) => standings[g].complete && !standings[g].unresolved)) return null;
   return GROUPS.flatMap((g) => [standings[g].rows[0], standings[g].rows[1]]);
 }
@@ -157,12 +164,12 @@ export function qualifiedFromStandings(standings) {
 // used when it pairs exactly the 6 qualified teams, each one once. Otherwise the
 // default pairings below are used. (Stored as a list of {a,b} maps because
 // Firestore doesn't allow arrays inside arrays.)
-export function validKoOverride(ov, standings) {
-  const q = qualifiedFromStandings(standings);
-  if (!q || !Array.isArray(ov) || ov.length !== 3) return false;
+export function validKoOverride(ov, standings, overrides = {}) {
+  const q = qualifiedFromStandings(standings, overrides);
+  if (!q || !Array.isArray(ov) || ov.length !== q.length / 2) return false;
   const ids = ov.flatMap((p) => [p && p.a, p && p.b]);
   const allowed = new Set(q.map((r) => r.teamId));
-  return ids.every((id) => typeof id === "string" && allowed.has(id)) && new Set(ids).size === 6;
+  return ids.every((id) => typeof id === "string" && allowed.has(id)) && new Set(ids).size === q.length;
 }
 
 // Default draw: 1st of G1 v 2nd of G3, 2nd of G1 v 1st of G2, 1st of G3 v 2nd of G2
@@ -173,7 +180,7 @@ export function deriveKnockout(standings, overrides = {}) {
   const q = (g, p) => standings[g].rows[p - 1];
   let pairs = [[q(1, 1), q(3, 2)], [q(1, 2), q(2, 1)], [q(3, 1), q(2, 2)]];
   const ov = overrides && overrides.ko;
-  if (validKoOverride(ov, standings)) {
+  if (validKoOverride(ov, standings, overrides)) {
     const byId = new Map(q6.map((r) => [r.teamId, r]));
     pairs = ov.map((p) => [byId.get(p.a), byId.get(p.b)]);
   }
@@ -213,11 +220,153 @@ export function deriveFinal(semiFixture, bye) {
   return makeFixture({ id: "final", stage: "final", order: 23, label: "Final", a: bye, b: winner });
 }
 
+// ---------------------------------------------------------- 8-team knockout
+// Option "8 teams qualify": the top 2 of every group (6 teams) + the best two
+// 3rd-place teams -> 4 quarter-finals -> 2 semi-finals -> final
+// (+ an OPTIONAL 3rd-place match between the two semi-final losers).
+// Teams from different groups are compared by wins, then game difference, then
+// games won. A tie that still can't be separated is left to the admin
+// (overrides.cross[cat] = ordered team ids).
+const crossCmp = (a, b) => b.wins - a.wins || b.diff - a.diff || b.gf - a.gf;
+const crossSame = (a, b) => a.wins === b.wins && a.diff === b.diff && a.gf === b.gf;
+const loserSide = (f) => (winnerSide(f) === 1 ? 2 : 1);
+
+function rankQualified8(standings, overrides = {}) {
+  const empty = { qualified: null, needs: [], firsts: null, seconds: null, thirds: null };
+  if (!GROUPS.every((g) => standings[g].complete && !standings[g].unresolved)) return empty;
+  const cats = {
+    firsts: GROUPS.map((g) => standings[g].rows[0]),
+    seconds: GROUPS.map((g) => standings[g].rows[1]),
+    thirds: GROUPS.map((g) => standings[g].rows[2])
+  };
+  const take = { firsts: 3, seconds: 3, thirds: 2 };
+  const out = { needs: [] };
+  for (const cat of ["firsts", "seconds", "thirds"]) {
+    const pool = cats[cat];
+    if (pool.some((r) => !r)) return empty;
+    const sorted = [...pool].sort((a, b) => crossCmp(a, b) || a.teamNumber - b.teamNumber);
+    let tie = false;
+    for (let i = 0; i + 1 < sorted.length; i++) if (crossSame(sorted[i], sorted[i + 1])) tie = true;
+    let ordered = sorted;
+    if (tie) {
+      const ov = overrides && overrides.cross && overrides.cross[cat];
+      const byId = new Map(pool.map((r) => [r.teamId, r]));
+      if (Array.isArray(ov) && ov.length === take[cat] && new Set(ov).size === ov.length && ov.every((id) => byId.has(id))) {
+        ordered = [...ov.map((id) => byId.get(id)), ...sorted.filter((r) => !ov.includes(r.teamId))];
+      } else {
+        out.needs.push({ type: "cross", cat, count: take[cat], rows: sorted });
+      }
+    }
+    out[cat] = ordered.slice(0, take[cat]);
+  }
+  out.qualified = out.needs.length ? null : [...out.firsts, ...out.seconds, ...out.thirds];
+  return out;
+}
+
+// QF1: weaker qualifying 3rd v best 1st      QF2: best 3rd v 2nd-best 1st
+// QF3: weakest 1st v weakest 2nd             QF4: middle 2nd v best 2nd
+function deriveQuarterFinals(standings, overrides = {}) {
+  const r = rankQualified8(standings, overrides);
+  if (!r.qualified) return null;
+  const F = r.firsts, S = r.seconds, T = r.thirds;
+  let pairs = [[T[1], F[0]], [T[0], F[1]], [F[2], S[2]], [S[1], S[0]]];
+  const ov = overrides && overrides.ko;
+  if (validKoOverride(ov, standings, overrides)) {
+    const byId = new Map(r.qualified.map((x) => [x.teamId, x]));
+    pairs = ov.map((p) => [byId.get(p.a), byId.get(p.b)]);
+  }
+  return pairs.map(([a, b], i) => makeFixture({
+    id: `qf-${i + 1}`, stage: "qf", order: 19 + i, label: `Quarter-final ${i + 1}`, a: teamFromRow(a), b: teamFromRow(b)
+  }));
+}
+
+// Semi-finals: winner QF1 v winner QF4, winner QF2 v winner QF3. Final: the two
+// semi winners. Third place (optional, order 26): the two semi losers.
+function deriveBracket8(fixtures, overrides, standings) {
+  const byId = new Map(fixtures.map((f) => [f.id, f]));
+  const existingQf = ["qf-1", "qf-2", "qf-3", "qf-4"].map((id) => byId.get(id)).filter(Boolean);
+  const exFinal = byId.get("final") || null;
+  const exThird = byId.get("third") || null;
+  const laterIds = ["sf-1", "sf-2", "final", "third"].filter((id) => byId.has(id));
+  const ranked = rankQualified8(standings, overrides);
+  const expectedQf = deriveQuarterFinals(standings, overrides);
+  const qfValid = !!expectedQf && existingQf.length === 4 && expectedQf.every((e, i) => samePair(e, existingQf[i]));
+
+  const staleIds = [];
+  ["ko-1", "ko-2", "ko-3", "semi"].forEach((id) => { if (byId.has(id)) staleIds.push(id); }); // left over from the 6-team flow
+
+  let expSf = null, expFinal = null, expThird = null;
+  let semisValid = false, finalValid = false, thirdValid = false, sfBad = false;
+  if (existingQf.length > 0 && !qfValid) {
+    existingQf.forEach((f) => staleIds.push(f.id));
+    laterIds.forEach((id) => staleIds.push(id));
+  } else if (qfValid) {
+    if (existingQf.every((f) => f.done)) {
+      const w = (i) => teamFromSide(existingQf[i], winnerSide(existingQf[i]));
+      expSf = [
+        makeFixture({ id: "sf-1", stage: "sf", order: 23, label: "Semi-final 1", a: w(0), b: w(3) }),
+        makeFixture({ id: "sf-2", stage: "sf", order: 24, label: "Semi-final 2", a: w(1), b: w(2) })
+      ];
+    }
+    const sfOk = ["sf-1", "sf-2"].map((id, i) => { const ex = byId.get(id); return !!expSf && !!ex && samePair(expSf[i], ex); });
+    ["sf-1", "sf-2"].forEach((id, i) => { if (byId.has(id) && !sfOk[i]) { staleIds.push(id); sfBad = true; } });
+    semisValid = sfOk[0] && sfOk[1];
+    if (!semisValid) {
+      if (exFinal) staleIds.push("final");
+      if (exThird) staleIds.push("third");
+    } else {
+      const s1 = byId.get("sf-1"), s2 = byId.get("sf-2");
+      if (s1.done && s2.done) {
+        expFinal = makeFixture({ id: "final", stage: "final", order: 25, label: "Final", a: teamFromSide(s1, winnerSide(s1)), b: teamFromSide(s2, winnerSide(s2)) });
+        expThird = makeFixture({ id: "third", stage: "third", order: 26, label: "Third place", a: teamFromSide(s1, loserSide(s1)), b: teamFromSide(s2, loserSide(s2)) });
+      }
+      finalValid = !!expFinal && !!exFinal && samePair(expFinal, exFinal);
+      thirdValid = !!expThird && !!exThird && samePair(expThird, exThird);
+      if (exFinal && !finalValid) staleIds.push("final");
+      if (exThird && !thirdValid) staleIds.push("third");
+    }
+  } else {
+    laterIds.forEach((id) => staleIds.push(id));
+  }
+
+  let next = null;
+  if (existingQf.length === 0 && expectedQf) next = { stage: "qf", fixtures: expectedQf };
+  else if (qfValid && expSf && !sfBad && expSf.some((e) => !byId.has(e.id))) next = { stage: "sf", fixtures: expSf.filter((e) => !byId.has(e.id)) };
+  else if (semisValid && expFinal && !exFinal) next = { stage: "final", fixtures: [expFinal] };
+
+  const needs = [];
+  GROUPS.forEach((g) => { if (standings[g].unresolved) needs.push({ type: "group", group: g, rows: standings[g].rows }); });
+  ranked.needs.forEach((n) => needs.push(n));
+
+  let placement = null;
+  if (finalValid && exFinal.done) {
+    const s1 = byId.get("sf-1"), s2 = byId.get("sf-2");
+    const w = winnerSide(exFinal);
+    placement = { champion: teamFromSide(exFinal, w), runnerUp: teamFromSide(exFinal, w === 1 ? 2 : 1) };
+    if (thirdValid && exThird.done) {
+      const tw = winnerSide(exThird);
+      placement.third = teamFromSide(exThird, tw);
+      placement.fourth = teamFromSide(exThird, tw === 1 ? 2 : 1);
+    } else if (!exThird) {
+      placement.jointThird = [teamFromSide(s1, loserSide(s1)), teamFromSide(s2, loserSide(s2))];
+    }
+  }
+  return {
+    standings, next, staleIds, needs, placement, bye: null, qualifiers: 8,
+    qualified: ranked.qualified,
+    koPlan: expectedQf,
+    customDraw: validKoOverride(overrides && overrides.ko, standings, overrides),
+    thirdPlan: (!exThird && semisValid && expThird) ? expThird : null,
+    hasThird: !!exThird
+  };
+}
+
 // One call that answers: what's the standing, what can be generated next,
 // which already-generated later matches are now stale (because an earlier
 // score changed who plays), and which decisions only the admin can make.
 export function deriveBracket(fixtures, overrides = {}) {
   const standings = computeStandings(fixtures, overrides);
+  if (overrides && overrides.qualifiers === 8) return deriveBracket8(fixtures, overrides, standings);
   const byId = new Map(fixtures.map((f) => [f.id, f]));
   const existingKo = ["ko-1", "ko-2", "ko-3"].map((id) => byId.get(id)).filter(Boolean);
   const existingSemi = byId.get("semi") || null;
@@ -250,6 +399,9 @@ export function deriveBracket(fixtures, overrides = {}) {
     if (existingFinal) staleIds.push("final");
   }
 
+  // left over from the 8-team flow (can't happen unless the option was changed without clearing)
+  ["qf-1", "qf-2", "qf-3", "qf-4", "sf-1", "sf-2", "third"].forEach((id) => { if (byId.has(id) && !staleIds.includes(id)) staleIds.push(id); });
+
   let next = null;
   if (existingKo.length === 0 && expectedKo) next = { stage: "ko", fixtures: expectedKo };
   else if (koValid && !existingSemi && expectedSemi) next = { stage: "semi", fixtures: [expectedSemi] };
@@ -270,11 +422,11 @@ export function deriveBracket(fixtures, overrides = {}) {
     };
   }
   return {
-    standings, next, staleIds, needs, placement, bye: semiInfo && semiInfo.bye ? semiInfo.bye : null,
+    standings, next, staleIds, needs, placement, bye: semiInfo && semiInfo.bye ? semiInfo.bye : null, qualifiers: 6,
     // for the "Knockout draw" card: the 6 qualified teams, the planned pairings, and whether a hand-made draw is in use
     qualified: qualifiedFromStandings(standings),
     koPlan: expectedKo,
-    customDraw: validKoOverride(overrides && overrides.ko, standings)
+    customDraw: validKoOverride(overrides && overrides.ko, standings, overrides)
   };
 }
 
@@ -284,11 +436,17 @@ export function deriveBracket(fixtures, overrides = {}) {
 export function computeTournamentPoints(fixtures, playersById) {
   const errors = [];
   const ordered = [...fixtures].sort((a, b) => a.order - b.order);
-  const counts = { group: 0, ko: 0, semi: 0, final: 0 };
+  const eight = ordered.some((f) => f.stage === "qf");
+  const expected = eight ? EXPECTED_FIXTURES_8 : EXPECTED_FIXTURES;
+  const counts = { group: 0, ko: 0, semi: 0, qf: 0, sf: 0, third: 0, final: 0 };
   ordered.forEach((f) => { if (counts[f.stage] !== undefined) counts[f.stage]++; });
-  Object.keys(EXPECTED_FIXTURES).forEach((s) => {
-    if (counts[s] !== EXPECTED_FIXTURES[s]) errors.push(`The bracket isn't complete yet (${s}: ${counts[s]} of ${EXPECTED_FIXTURES[s]} matches generated).`);
+  Object.keys(expected).forEach((s) => {
+    if (counts[s] !== expected[s]) errors.push(`The bracket isn't complete yet (${s}: ${counts[s]} of ${expected[s]} matches generated).`);
   });
+  Object.keys(counts).forEach((s) => {
+    if (!(s in expected) && s !== "third" && counts[s] > 0) errors.push(`Unexpected ${s} matches found — reset the knockout matches and generate them again.`);
+  });
+  if (counts.third > 1 || (counts.third > 0 && !eight)) errors.push("Unexpected third-place match.");
   ordered.forEach((f) => {
     const ok = f.done && Number.isInteger(f.score1) && Number.isInteger(f.score2) && f.score1 >= 0 && f.score2 >= 0 && f.score1 !== f.score2;
     if (!ok) errors.push(`${f.label} (#${f.order}) doesn't have a valid result yet.`);

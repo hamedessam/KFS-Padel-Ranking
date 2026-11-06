@@ -45,7 +45,7 @@ async function withRetry(fn, attempts = 4) {
 
 // Creates team #teamNumber only if nobody has taken it yet. Returns the new
 // team's doc id, or null if the number was already taken.
-async function tryCreateSlotTeam(tournamentId, teamNumber, players) {
+async function tryCreateSlotTeam(tournamentId, teamNumber, players, extra = {}) {
   const ref = doc(db, "tournaments", tournamentId, "teams", slotDocId(teamNumber));
   const tRef = doc(db, "tournaments", tournamentId);
   const joiner = players.player1Id || players.player2Id;
@@ -57,6 +57,8 @@ async function tryCreateSlotTeam(tournamentId, teamNumber, players) {
       player1Id: players.player1Id ?? null,
       player2Id: players.player2Id ?? null,
       group: null,
+      // time the player pressed "Register a team" (null for admin / waiting-list placements)
+      registeredAt: extra.registeredAt ?? null,
       createdAt: serverTimestamp()
     });
     // Same transaction: the team and the player's "registered" mark are saved
@@ -70,7 +72,7 @@ async function tryCreateSlotTeam(tournamentId, teamNumber, players) {
 // A team document that exists but has nobody in it (both slots empty) still
 // "holds" its number in the grid. Re-use it instead of treating the number as
 // taken. Done in a transaction that re-checks it is still empty.
-async function tryClaimEmptyTeam(tournamentId, teamDocId, players) {
+async function tryClaimEmptyTeam(tournamentId, teamDocId, players, extra = {}) {
   const ref = doc(db, "tournaments", tournamentId, "teams", teamDocId);
   const tRef = doc(db, "tournaments", tournamentId);
   const joiner = players.player1Id || players.player2Id;
@@ -82,6 +84,7 @@ async function tryClaimEmptyTeam(tournamentId, teamDocId, players) {
     tx.update(ref, {
       player1Id: players.player1Id ?? null,
       player2Id: players.player2Id ?? null,
+      registeredAt: extra.registeredAt ?? null,
       joinRequests: []
     });
     if (joiner) tx.update(tRef, { participantIds: arrayUnion(joiner), waitingList: arrayRemove(joiner) });
@@ -109,14 +112,14 @@ function freeNumbers(teams, totalTeams) {
 
 // Walks the free numbers from lowest to highest and claims the first one that
 // is genuinely still free (race-safe).
-async function claimLowestFreeSlot(tournamentId, totalTeams, teams, players) {
+async function claimLowestFreeSlot(tournamentId, totalTeams, teams, players, extra = {}) {
   for (const f of freeNumbers(teams, totalTeams)) {
     if (f.emptyTeam) {
-      const id = await tryClaimEmptyTeam(tournamentId, f.emptyTeam.id, players);
+      const id = await tryClaimEmptyTeam(tournamentId, f.emptyTeam.id, players, extra);
       if (id) return { id, teamNumber: f.number };
       continue;
     }
-    const id = await tryCreateSlotTeam(tournamentId, f.number, players);
+    const id = await tryCreateSlotTeam(tournamentId, f.number, players, extra);
     if (id) return { id, teamNumber: f.number };
   }
   return null;
@@ -204,7 +207,7 @@ export async function registerPlayer(tournamentId, playerId, totalTeams) {
 
   // Claiming the number also marks the player as registered, in the same
   // transaction (see tryCreateSlotTeam / tryClaimEmptyTeam).
-  const claimed = await claimLowestFreeSlot(tournamentId, totalTeams || 12, teams, { player1Id: playerId, player2Id: null });
+  const claimed = await claimLowestFreeSlot(tournamentId, totalTeams || 12, teams, { player1Id: playerId, player2Id: null }, { registeredAt: serverTimestamp() });
   if (!claimed) {
     // full: registered + waiting list in ONE write
     await withRetry(() => updateDoc(tRef, { participantIds: arrayUnion(playerId), waitingList: arrayUnion(playerId) }));
@@ -226,7 +229,8 @@ export async function removeFromSlot(tournamentId, playerId) {
     if (myTeam.player2Id) {
       await updateDoc(doc(db, "tournaments", tournamentId, "teams", myTeam.id), {
         player1Id: myTeam.player2Id,
-        player2Id: null
+        player2Id: null,
+        registeredAt: null // the new founder didn't press "Register a team"
       });
     } else {
       await deleteDoc(doc(db, "tournaments", tournamentId, "teams", myTeam.id));
@@ -271,7 +275,7 @@ async function unregisterCore(tournamentId, playerId, founderChoice) {
     if (founderChoice === "fill-from-waitlist") {
       const nextId = await popWaitlist(tournamentId);
       try {
-        await updateDoc(doc(db, "tournaments", tournamentId, "teams", myTeam.id), { player1Id: nextId || null });
+        await updateDoc(doc(db, "tournaments", tournamentId, "teams", myTeam.id), { player1Id: nextId || null, registeredAt: null });
       } catch (err) {
         if (nextId) { try { await putBackFirst(tournamentId, nextId); } catch (e) { console.error(e); } }
         throw err;
@@ -279,7 +283,8 @@ async function unregisterCore(tournamentId, playerId, founderChoice) {
     } else {
       await updateDoc(doc(db, "tournaments", tournamentId, "teams", myTeam.id), {
         player1Id: myTeam.player2Id,
-        player2Id: null
+        player2Id: null,
+        registeredAt: null
       });
     }
     return;
@@ -348,10 +353,10 @@ export async function assignToSlot(tournamentId, teamNumber, slot, playerId) {
     // that now exists instead, as long as that slot is still empty.
     const fresh = (await fetchTeams(tournamentId)).find((t) => t.teamNumber === teamNumber);
     if (!fresh || fresh[`${slot}Id`]) throw new Error("That spot was just taken — refresh and try again.");
-    await updateDoc(doc(db, "tournaments", tournamentId, "teams", fresh.id), { [`${slot}Id`]: playerId });
+    await updateDoc(doc(db, "tournaments", tournamentId, "teams", fresh.id), { [`${slot}Id`]: playerId, ...(slot === "player1" ? { registeredAt: null } : {}) });
     return;
   }
-  await updateDoc(doc(db, "tournaments", tournamentId, "teams", existing.id), { [`${slot}Id`]: playerId });
+  await updateDoc(doc(db, "tournaments", tournamentId, "teams", existing.id), { [`${slot}Id`]: playerId, ...(slot === "player1" ? { registeredAt: null } : {}) });
 }
 
 export async function setTeamGroup(tournamentId, teamId, group) {
