@@ -107,6 +107,60 @@ export function tierMeta(tierId) {
   };
 }
 
+// How far a player is through their current tier, and what the next one is.
+// Used by the rank card (progress bar). Reads TIER_THRESHOLDS so it can never
+// drift from the real boundaries. next = null at the top (Elite).
+export function tierProgress(points) {
+  const p = Math.max(0, Math.round(points ?? 0));
+  const asc = [...TIER_THRESHOLDS].reverse(); // lowest -> highest
+  const tier = tierFromPoints(p);
+  const i = Math.max(0, asc.findIndex((t) => t.tier === tier));
+  const from = Number.isFinite(asc[i].min) ? asc[i].min : 0;
+  const nextT = asc[i + 1] || null;
+  if (!nextT) return { tier, next: null, from, to: null, pct: 100, remaining: 0 };
+  const to = nextT.min;
+  const pct = Math.max(0, Math.min(100, ((p - from) / (to - from)) * 100));
+  return { tier, next: nextT.tier, from, to, pct, remaining: Math.max(0, to - p) };
+}
+
+// One hand-drawn emblem per rank family (flat layered shapes, no gradients, so it
+// renders the same wherever it sits). Bronze/Silver/Gold = shield (Gold has a small
+// crown), Diamond = faceted gem, Elite = purple shield with a crown.
+// `level` is the tier number shown inside (1-3); small sizes skip the details.
+const EMBLEM_COLORS = {
+  bronze: { main: "#b98a5a", dark: "#6f4d2c", light: "#e0b588" },
+  silver: { main: "#b9c2c8", dark: "#6f797f", light: "#eef2f4" },
+  gold: { main: "#e3b74e", dark: "#8f6a16", light: "#fae9a8" },
+  elite: { main: "#b98cff", dark: "#5f3aa6", light: "#efe3ff" }
+};
+export function rankEmblemSvg(family, level, size = 60) {
+  const w = Math.round(size * 0.9);
+  const small = size < 28;
+  const num = (y, fs, fill) => (small || !level || level === "E") ? "" :
+    `<text x="50" y="${y}" text-anchor="middle" font-size="${fs}" font-weight="700" fill="${fill}" font-family="'Space Mono', monospace">${level}</text>`;
+  let body;
+  if (family === "diamond") {
+    body = `<polygon points="26,14 74,14 98,42 50,106 2,42" fill="#7fd6f5"/>
+      <polygon points="26,14 38,42 2,42" fill="#b8ecfb"/><polygon points="74,14 62,42 98,42" fill="#5fb9d8"/>
+      <polygon points="26,14 74,14 62,42 38,42" fill="#d8f5fd"/><polygon points="2,42 38,42 50,106" fill="#6cc7e6"/>
+      <polygon points="98,42 62,42 50,106" fill="#4fa9c8"/><polygon points="38,42 62,42 50,106" fill="#8fdcf5"/>${num(37, 22, "#0b3140")}`;
+  } else {
+    const c = EMBLEM_COLORS[family] || EMBLEM_COLORS.bronze;
+    let detail = "";
+    if (!small) {
+      detail = `<polygon points="50,14 85,28 85,63 50,97 15,63 15,28" fill="${c.dark}"/>`;
+      if (family === "gold") detail += `<polygon points="32,46 36,30 44,38 50,28 56,38 64,30 68,46" fill="${c.light}"/>${num(82, 32, "#fff8e0")}`;
+      else if (family === "elite") detail += `<polygon points="28,44 38,66 50,36 62,66 72,44 70,76 30,76" fill="${c.light}"/>`;
+      else detail += num(68, 40, "#f5f3ea");
+    } else if (family === "elite") {
+      detail = `<polygon points="30,42 38,62 50,34 62,62 70,42 68,72 32,72" fill="${c.light}"/>`;
+    }
+    body = `<polygon points="50,2 96,20 96,66 50,110 4,66 4,20" fill="${c.main}"/>
+      <polygon points="50,2 4,20 4,66 50,110" fill="#fff" opacity=".18"/>${detail}`;
+  }
+  return `<svg width="${w}" height="${size}" viewBox="0 0 100 112" aria-hidden="true" focusable="false">${body}</svg>`;
+}
+
 // ---------------- tournament rank rules ----------------
 // A tournament can be limited to one rank (bronze / silver / gold / diamond /
 // elite). No rank on the tournament = open to everyone (how every older

@@ -3,7 +3,7 @@ import {
   auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential
 } from "./firebase-config.js";
 import { registerPlayer, unregisterPlayer, addPartner, fetchTeams, findTeamOf, requestToJoinTeam, cancelJoinRequest, acceptJoinRequest, declineJoinRequest, getOpenTeams, myPendingRequestTeams, myIncomingRequests } from "./teams.js";
-import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFoundingMember, isRanked, rankFamilyLabel, canFoundTeam, canBePartner, tournamentRanks, playerRankFamily, RANK_FAMILIES } from "./utils.js";
+import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFoundingMember, isRanked, rankFamilyLabel, canFoundTeam, canBePartner, tournamentRanks, playerRankFamily, RANK_FAMILIES, tierProgress, rankEmblemSvg } from "./utils.js";
 import { t, getLang, setLang, applyStaticTranslations } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
@@ -161,13 +161,8 @@ function refreshProfileDisplay(player) {
   $("pf-name").textContent = player.name || "—";
   $("pf-code").textContent = player.playerCode || "—";
 
-  const meta = tierMeta(tierFromPoints(player.ratingPoints));
-  $("pf-shield").textContent = meta.level || "-";
-  $("pf-shield").className = "tier-shield " + meta.cssClass;
-  const ranked = isRanked(player);
-  $("pf-shield").classList.toggle("hidden", !tiersEnabled || !ranked);
-  $("pf-tier-name").textContent = ranked ? tierLabelOrHidden(meta) : t("tier_hidden_label");
-  $("pf-points").textContent = `${Math.round(player.ratingPoints ?? 0)} ${t("pts")}`;
+  paintRankCard("pf", player);
+  applyRankTheme(player);
   $("pf-side-select").value = player.playingSide || "";
 
   $("pf-matches").textContent = player.matchesPlayed ?? 0;
@@ -224,6 +219,7 @@ function renderBadges(player) {
 
 function showLogin() {
   currentPlayer = null;
+  clearRankTheme();
   viewApp.classList.add("hidden");
   viewSettings.classList.add("hidden");
   tabbar.classList.add("hidden");
@@ -618,13 +614,7 @@ async function loadHome() {
   $("home-greeting").textContent = `${t("home_greeting_prefix")} ${(currentPlayer.name || "").split(" ")[0] || ""} 👋`;
   $("hm-code").textContent = currentPlayer.playerCode || "—";
 
-  const meta = tierMeta(tierFromPoints(currentPlayer.ratingPoints));
-  $("hm-shield").textContent = meta.level || "-";
-  $("hm-shield").className = "tier-shield " + meta.cssClass;
-  const homeRanked = isRanked(currentPlayer);
-  $("hm-shield").classList.toggle("hidden", !tiersEnabled || !homeRanked);
-  $("hm-tier-name").textContent = homeRanked ? tierLabelOrHidden(meta) : t("tier_hidden_label");
-  $("hm-points").textContent = `${Math.round(currentPlayer.ratingPoints ?? 0)} ${t("pts")}`;
+  paintRankCard("hm", currentPlayer);
 
   loadAnnouncement();
   loadHomeTournaments();
@@ -689,12 +679,13 @@ function renderTopPlayers(list) {
     const rankClass = p.rank === 1 ? "top1" : p.rank === 2 ? "top2" : p.rank === 3 ? "top3" : "";
     const row = document.createElement("div");
     row.className = "lb-row" + (isMe ? " me" : "");
+    if (lbRankFamily(p)) row.dataset.rank = lbRankFamily(p);
     row.innerHTML = `
       <span class="lb-rank ${rankClass}">${p.rank}</span>
-      <span class="lb-avatar${founding ? " founding-ring" : ""}">${avatarHtml(p)}</span>
+      <span class="lb-avatar${founding ? " founding-ring" : ""}"${lbRankAttr(p)}>${avatarHtml(p)}</span>
       <span class="lb-mid">
         <div class="lb-name">${founding ? '<span class="founding-star" title="Founding Member">🌟</span> ' : ""}${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
-        <div class="lb-tier">${tierLabelFor(p)}</div>
+        <div class="lb-tier">${lbTierHtml(p)}</div>
       </span>
       <span class="lb-points">${Math.round(p.ratingPoints ?? 0)}</span>
     `;
@@ -1419,13 +1410,14 @@ function renderLeaderboard(data) {
     const founding = isFoundingMember(p);
     const li = document.createElement("li");
     li.className = "lb-row" + (isMe ? " me" : "");
+    if (lbRankFamily(p)) li.dataset.rank = lbRankFamily(p);
     const rankClass = p.rank === 1 ? "top1" : p.rank === 2 ? "top2" : p.rank === 3 ? "top3" : "";
     li.innerHTML = `
       <span class="lb-rank ${rankClass}">${p.rank}</span>
-      <span class="lb-avatar${founding ? " founding-ring" : ""}">${avatarHtml(p)}</span>
+      <span class="lb-avatar${founding ? " founding-ring" : ""}"${lbRankAttr(p)}>${avatarHtml(p)}</span>
       <span class="lb-mid">
         <div class="lb-name">${founding ? '<span class="founding-star" title="Founding Member">🌟</span> ' : ""}${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
-        <div class="lb-tier">${tierLabelFor(p)}</div>
+        <div class="lb-tier">${lbTierHtml(p)}</div>
       </span>
       <span class="lb-points">${Math.round(p.ratingPoints ?? 0)}</span>
     `;
@@ -2328,6 +2320,65 @@ async function loadAppSettings() {
 
 function tierLabelFor(p) {
   return isRanked(p) ? tierLabelOrHidden(tierMeta(tierFromPoints(p.ratingPoints))) : t("tier_hidden_label");
+}
+
+// ---------------- rank look (emblem, colours, progress) ----------------
+// Paints one rank card (Home = "hm", Profile = "pf"). With tiers visible and a rank
+// set, the card gets its rank colour, emblem and progress bar; otherwise it keeps
+// the plain look (hidden shield, "Your rating").
+function paintRankCard(prefix, player) {
+  const shield = $(`${prefix}-shield`);
+  const card = shield.closest(".tier-badge");
+  const ranked = isRanked(player);
+  const meta = tierMeta(tierFromPoints(player.ratingPoints));
+  const themed = tiersEnabled && ranked;
+  if (themed) {
+    shield.className = "tier-emblem " + meta.cssClass;
+    shield.innerHTML = rankEmblemSvg(meta.family, meta.level, 64);
+    card.dataset.rank = meta.family;
+  } else {
+    shield.className = "tier-shield " + meta.cssClass + " hidden";
+    shield.textContent = meta.level || "-";
+    delete card.dataset.rank;
+  }
+  $(`${prefix}-tier-name`).textContent = ranked ? tierLabelOrHidden(meta) : t("tier_hidden_label");
+  $(`${prefix}-points`).textContent = `${Math.round(player.ratingPoints ?? 0)} ${t("pts")}`;
+
+  const prog = $(`${prefix}-progress`);
+  if (themed) {
+    const pr = tierProgress(player.ratingPoints);
+    $(`${prefix}-progress-fill`).style.width = `${pr.pct}%`;
+    $(`${prefix}-progress-text`).textContent = pr.next
+      ? t("rank_to_next").replace("{n}", pr.remaining).replace("{tier}", tierMeta(pr.next).displayName)
+      : t("rank_top");
+    prog.classList.remove("hidden");
+  } else {
+    prog.classList.add("hidden");
+  }
+}
+
+// The signed-in player's rank colours the whole app (top bar line, soft glow behind
+// every screen, avatar ring) while tiers are visible and they have a rank.
+function applyRankTheme(player) {
+  const frame = document.querySelector(".app-frame");
+  const fam = player && tiersEnabled && isRanked(player) ? playerRankFamily(player) : null;
+  if (fam) frame.dataset.rank = fam; else delete frame.dataset.rank;
+  const av = $("pf-avatar");
+  if (fam) av.dataset.rank = fam; else delete av.dataset.rank;
+}
+
+function clearRankTheme() {
+  delete document.querySelector(".app-frame").dataset.rank;
+  delete $("pf-avatar").dataset.rank;
+}
+
+// Leaderboard / top-players rows
+function lbRankFamily(p) { return tiersEnabled && isRanked(p) ? playerRankFamily(p) : null; }
+function lbRankAttr(p) { const f = lbRankFamily(p); return f ? ` data-rank="${f}"` : ""; }
+function lbTierHtml(p) {
+  const f = lbRankFamily(p);
+  if (!f) return tierLabelFor(p);
+  return `${rankEmblemSvg(f, tierMeta(tierFromPoints(p.ratingPoints)).level, 16)}<span>${tierLabelFor(p)}</span>`;
 }
 
 function tierLabelOrHidden(meta) {

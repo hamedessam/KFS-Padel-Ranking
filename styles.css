@@ -1341,3 +1341,84 @@ table.players tr:last-child td { border-bottom: none; }
 .pp-item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .pp-item .badge-pill { flex-shrink: 0; font-size: 9.5px; padding: 2px 8px; }
 .pp-empty { padding: 14px 8px; text-align: center; color: var(--text-soft); font-size: 12px; }
+
+
+/* ==========================================================================
+   Rank look — each rank has its own colour, emblem and glow. Only active while the
+   admin shows tiers to players AND the player has a rank (JS sets data-rank).
+   Unranked players / tiers hidden = none of this applies.
+   ========================================================================== */
+[data-rank="bronze"]  { --rank: #b98a5a; --rank-rgb: 185,138,90; }
+[data-rank="silver"]  { --rank: #b9c2c8; --rank-rgb: 185,194,200; }
+[data-rank="gold"]    { --rank: #e3b74e; --rank-rgb: 227,183,78; }
+[data-rank="diamond"] { --rank: #7fd6f5; --rank-rgb: 127,214,245; }
+[data-rank="elite"]   { --rank: #b98cff; --rank-rgb: 185,140,255; }
+
+/* app-wide: coloured line + soft glow under the top bar, soft tint behind every screen */
+.app-frame[data-rank] .topbar {
+  border-bottom-color: rgba(var(--rank-rgb), .75);
+  box-shadow: 0 1px 14px -4px rgba(var(--rank-rgb), .55);
+}
+.app-frame[data-rank] .content-scroll {
+  background-image: linear-gradient(180deg, rgba(var(--rank-rgb), .11) 0, rgba(var(--rank-rgb), 0) 280px);
+  background-repeat: no-repeat;
+}
+
+/* the rank card (Home + Profile) */
+.tier-badge { position: relative; overflow: hidden; }
+.tier-badge[data-rank] {
+  gap: 16px;
+  padding: 16px 18px;
+  background: rgba(var(--rank-rgb), .10);
+  border: 1px solid rgba(var(--rank-rgb), .5);
+  box-shadow: 0 0 26px -8px rgba(var(--rank-rgb), .5);
+}
+.tier-badge[data-rank] .tier-info { flex: 1; min-width: 0; }
+.tier-badge[data-rank] .tier-name { font-size: 24px; line-height: 1.15; color: var(--rank); }
+.tier-badge[data-rank] .tier-points { font-size: 13px; color: var(--text); }
+.tier-emblem {
+  flex-shrink: 0;
+  width: 60px; height: 68px;
+  display: flex; align-items: center; justify-content: center;
+  filter: drop-shadow(0 0 5px rgba(var(--rank-rgb), .35));
+}
+.tier-emblem svg { display: block; }
+
+.rank-progress { margin-top: 10px; }
+.rank-progress-bar { height: 5px; border-radius: 3px; background: rgba(245,243,234,.1); overflow: hidden; }
+.rank-progress-bar > span { display: block; height: 100%; border-radius: 3px; background: var(--rank); }
+.rank-progress-text { font-size: 11px; color: var(--text-soft); margin-top: 5px; }
+
+/* calm shimmer for the two top ranks */
+.tier-badge[data-rank="diamond"]::after,
+.tier-badge[data-rank="elite"]::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.14) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: rankShine 7s ease-in-out infinite;
+  pointer-events: none;
+}
+.tier-badge[data-rank="diamond"] .tier-emblem,
+.tier-badge[data-rank="elite"] .tier-emblem { animation: emblemGlow 3.6s ease-in-out infinite; }
+@keyframes rankShine { 0%, 65% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
+@keyframes emblemGlow {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(var(--rank-rgb), .35)); }
+  50% { filter: drop-shadow(0 0 11px rgba(var(--rank-rgb), .8)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tier-badge[data-rank]::after { display: none; animation: none; }
+  .tier-emblem { animation: none !important; }
+}
+
+/* leaderboard + top players */
+.lb-row[data-rank] { border-color: rgba(var(--rank-rgb), .30); }
+.lb-row[data-rank].me { border-color: var(--rank); background: rgba(var(--rank-rgb), .10); }
+.lb-row[data-rank] .lb-tier { color: var(--rank); display: flex; align-items: center; gap: 5px; }
+.lb-row[data-rank] .lb-tier svg { flex-shrink: 0; }
+
+/* avatar ring in the rank colour (founders keep their gold ring, rank colour outside it) */
+.avatar[data-rank], .lb-avatar[data-rank] { box-shadow: 0 0 0 2px rgba(var(--rank-rgb), .9); }
+.avatar[data-rank].founding-ring, .lb-avatar[data-rank].founding-ring {
+  box-shadow: 0 0 0 2px var(--gold), 0 0 0 4px rgba(var(--rank-rgb), .9);
+}
