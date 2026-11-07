@@ -1366,28 +1366,32 @@ table.players tr:last-child td { border-bottom: none; }
 
 /* the rank card (Home + Profile) */
 .tier-badge { position: relative; overflow: hidden; }
+/* slim card: emblem on the side; name + points on one row, progress under them */
 .tier-badge[data-rank] {
-  gap: 16px;
-  padding: 16px 18px;
-  background: rgba(var(--rank-rgb), .10);
-  border: 1px solid rgba(var(--rank-rgb), .5);
-  box-shadow: 0 0 26px -8px rgba(var(--rank-rgb), .5);
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(var(--rank-rgb), .07);
+  border: 1px solid rgba(var(--rank-rgb), .35);
+  box-shadow: 0 0 18px -8px rgba(var(--rank-rgb), .35);
 }
-.tier-badge[data-rank] .tier-info { flex: 1; min-width: 0; }
-.tier-badge[data-rank] .tier-name { font-size: 24px; line-height: 1.15; color: var(--rank); }
-.tier-badge[data-rank] .tier-points { font-size: 13px; color: var(--text); }
+.tier-badge[data-rank] .tier-info {
+  flex: 1; min-width: 0;
+  display: grid; grid-template-columns: 1fr auto; column-gap: 8px; align-items: baseline;
+}
+.tier-badge[data-rank] .tier-name { font-size: 18px; line-height: 1.2; color: var(--rank); }
+.tier-badge[data-rank] .tier-points { font-size: 12px; color: var(--text); margin-top: 0; }
 .tier-emblem {
   flex-shrink: 0;
-  width: 60px; height: 68px;
+  width: 40px; height: 45px;
   display: flex; align-items: center; justify-content: center;
   filter: drop-shadow(0 0 5px rgba(var(--rank-rgb), .35));
 }
 .tier-emblem svg { display: block; }
 
-.rank-progress { margin-top: 10px; }
-.rank-progress-bar { height: 5px; border-radius: 3px; background: rgba(245,243,234,.1); overflow: hidden; }
-.rank-progress-bar > span { display: block; height: 100%; border-radius: 3px; background: var(--rank); }
-.rank-progress-text { font-size: 11px; color: var(--text-soft); margin-top: 5px; }
+.rank-progress { grid-column: 1 / -1; margin-top: 7px; }
+.rank-progress-bar { height: 4px; border-radius: 2px; background: rgba(245,243,234,.1); overflow: hidden; }
+.rank-progress-bar > span { display: block; height: 100%; border-radius: 2px; background: var(--rank); }
+.rank-progress-text { font-size: 11px; color: var(--text-soft); margin-top: 4px; }
 
 /* calm shimmer for the two top ranks */
 .tier-badge[data-rank="diamond"]::after,

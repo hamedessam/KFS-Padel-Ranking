@@ -2334,7 +2334,7 @@ function paintRankCard(prefix, player) {
   const themed = tiersEnabled && ranked;
   if (themed) {
     shield.className = "tier-emblem " + meta.cssClass;
-    shield.innerHTML = rankEmblemSvg(meta.family, meta.level, 64);
+    shield.innerHTML = rankEmblemSvg(meta.family, meta.level, 44);
     card.dataset.rank = meta.family;
   } else {
     shield.className = "tier-shield " + meta.cssClass + " hidden";
