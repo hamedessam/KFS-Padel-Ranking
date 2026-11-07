@@ -1,514 +1,2883 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Padel X</title>
-<meta name="theme-color" content="#0a1615">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Padel Tournaments KFS</title>
 <link rel="manifest" href="manifest.json">
-<link rel="icon" type="image/png" href="icons/favicon-v2.png">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="styles.css">
+<meta name="theme-color" content="#0f4c4f" id="metaTheme">
+<script>
+(function(){
+  var t = null;
+  try{ t = localStorage.getItem('theme-pref'); }catch(e){}
+  if(t !== 'dark' && t !== 'light'){
+    t = (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', t);
+})();
+</script>
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --page-bg:#f4efe6; --text:#0a3436; --head:#0f4c4f; --card:#ffffff;
+    --bd1:#eae5d8; --bd2:#e0dacb; --bd3:#f1ede2;
+    --mut1:#a89e88; --mut2:#8a8168; --mut3:#6b6455; --mut4:#a08f77;
+    --hlbg:#fff7cf; --paidbg:#eef7ee; --dangerbg:#fdeceb;
+    --court:#0f4c4f;
+    --court-dark:#0a3436;
+    --line:#f4efe6;
+    --ball:#d7e858;
+    --cash:#3f8f5f;
+    --instapay:#4f7fd1;
+    --vodafone:#d1495f;
+    --zizo:#b5722e;
+    --makram:#6a4fa0;
+    --canteen:#c77f2e;
+    --unpaid:#c9c2b4;
+    --unpaid-bg:#f6f3ec;
+    --partial:#d1a53d;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Cairo',sans-serif;
+    background:var(--page-bg);
+    color:var(--text);
+    min-height:100vh;
+    padding-bottom:60px;
+  }
+  header{
+    background:var(--court);
+    color:var(--line);
+    padding:22px 18px 26px;
+    position:relative;
+    overflow:hidden;
+  }
+  header::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:
+      linear-gradient(90deg, transparent 49%, rgba(244,239,230,0.15) 49%, rgba(244,239,230,0.15) 51%, transparent 51%);
+    pointer-events:none;
+  }
+  header h1{
+    margin:0;
+    font-size:22px;
+    font-weight:900;
+    position:relative;
+  }
+  header p{
+    margin:6px 0 0;
+    font-size:13px;
+    opacity:0.85;
+    position:relative;
+  }
+  .save-badge{
+    position:absolute;
+    left:16px;
+    top:20px;
+    font-size:11.5px;
+    background:rgba(244,239,230,0.15);
+    padding:5px 10px;
+    border-radius:20px;
+    color:var(--line);
+  }
+  .wrap{
+    max-width:640px;
+    margin:0 auto;
+    padding:16px;
+  }
+  .card{
+    background:var(--card);
+    border-radius:14px;
+    padding:16px;
+    margin-bottom:14px;
+    box-shadow:0 1px 3px rgba(15,76,79,0.08);
+    border:1px solid var(--bd1);
+  }
+  .card h2{
+    font-size:15px;
+    margin:0 0 10px;
+    color:var(--head);
+    font-weight:700;
+  }
+  textarea{
+    width:100%;
+    min-height:120px;
+    border:1.5px solid var(--bd2);
+    border-radius:10px;
+    padding:10px 12px;
+    font-family:'Cairo',sans-serif;
+    font-size:14px;
+    resize:vertical;
+    direction:rtl;
+  }
+  textarea:focus{outline:2px solid var(--court); border-color:transparent;}
+  .row-inline{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    margin-top:10px;
+    flex-wrap:wrap;
+  }
+  .row-inline label{
+    font-size:13px;
+    color:var(--mut3);
+  }
+  input[type=number], input[type=text]{
+    padding:7px 10px;
+    border:1.5px solid var(--bd2);
+    border-radius:8px;
+    font-family:'Cairo',sans-serif;
+    font-size:14px;
+    text-align:center;
+  }
+  input[type=number]{width:80px;}
+  select{
+    padding:7px 8px;
+    border:1.5px solid var(--bd2);
+    border-radius:8px;
+    font-family:'Cairo',sans-serif;
+    font-size:13px;
+    background:var(--card);
+    color:var(--text);
+  }
+  button.primary, label.primary{
+    background:var(--court);
+    color:var(--line);
+    border:none;
+    padding:9px 20px;
+    border-radius:9px;
+    font-family:'Cairo',sans-serif;
+    font-weight:700;
+    font-size:14px;
+    cursor:pointer;
+    transition:background .15s;
+  }
+  button.primary:hover{background:var(--court-dark);}
+  button.ghost{
+    background:transparent;
+    color:var(--mut4);
+    border:1px solid var(--bd2);
+    padding:9px 16px;
+    border-radius:9px;
+    font-family:'Cairo',sans-serif;
+    font-size:13px;
+    cursor:pointer;
+  }
+  .empty-hint{
+    color:var(--mut1);
+    font-size:13.5px;
+    text-align:center;
+    padding:20px 0;
+  }
+
+  /* Tournament type selector */
+  .type-select{
+    display:flex;
+    gap:8px;
+  }
+  .type-btn{
+    flex:1;
+    padding:12px;
+    border-radius:10px;
+    border:2px solid var(--bd2);
+    background:var(--card);
+    font-family:'Cairo',sans-serif;
+    font-weight:700;
+    font-size:14px;
+    color:var(--mut4);
+    cursor:pointer;
+    text-align:center;
+  }
+  .type-btn.active-lowd{background:var(--vodafone); border-color:var(--vodafone); color:#fff;}
+  .type-btn.active-beginners{background:var(--instapay); border-color:var(--instapay); color:#fff;}
+  .type-btn.active-sunday{background:var(--zizo); border-color:var(--zizo); color:#fff;}
+  .type-btn.active-thursday{background:var(--makram); border-color:var(--makram); color:#fff;}
+  .type-note{
+    font-size:12.5px;
+    color:var(--mut2);
+    margin-top:8px;
+    text-align:center;
+  }
+
+  /* Players / payments */
+  .player-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:10px 12px;
+    border-radius:10px;
+    background:var(--unpaid-bg);
+    border:1.5px solid var(--bd1);
+    margin-bottom:8px;
+    transition:background .15s, border-color .15s;
+  }
+  .player-row.paid{background:var(--paidbg); border-color:var(--cash);}
+  .player-row .pname{font-weight:700; font-size:14.5px; min-width:90px;}
+  .methods{display:flex; gap:6px; flex-wrap:wrap;}
+  .methods button{
+    border:1.5px solid var(--bd2);
+    background:var(--card);
+    color:var(--mut2);
+    font-family:'Cairo',sans-serif;
+    font-size:12.5px;
+    font-weight:600;
+    padding:6px 10px;
+    border-radius:20px;
+    cursor:pointer;
+    transition:all .12s;
+  }
+  .methods button.sel-cash{background:var(--cash); border-color:var(--cash); color:#fff;}
+  .methods button.sel-instapay{background:var(--instapay); border-color:var(--instapay); color:#fff;}
+  .methods button.sel-vodafone{background:var(--vodafone); border-color:var(--vodafone); color:#fff;}
+  .methods button.sel-zizo{background:var(--zizo); border-color:var(--zizo); color:#fff;}
+  .methods button.sel-makram{background:var(--makram); border-color:var(--makram); color:#fff;}
+  .methods button.sel-cashback{background:#6b8f6f; border-color:#6b8f6f; color:#fff;}
+  .methods button:hover{border-color:var(--court);}
+
+  .totals{
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    gap:10px;
+  }
+  .tbox{
+    background:var(--unpaid-bg);
+    border-radius:10px;
+    padding:12px;
+    text-align:center;
+  }
+  .tbox .num{font-size:18px; font-weight:900; color:var(--head);}
+  .tbox .lbl{font-size:11.5px; color:var(--mut2); margin-top:2px;}
+  .tbox.cash .num{color:var(--cash);}
+  .tbox.instapay .num{color:var(--instapay);}
+  .tbox.vodafone .num{color:var(--vodafone);}
+  .tbox.zizo .num{color:var(--zizo);}
+  .tbox.makram .num{color:var(--makram);}
+  .grand{
+    margin-top:12px;
+    background:var(--court);
+    color:var(--line);
+    border-radius:10px;
+    padding:14px;
+    text-align:center;
+  }
+  .grand .num{font-size:26px; font-weight:900; color:var(--ball);}
+  .grand .lbl{font-size:12.5px; opacity:.85; margin-top:2px;}
+  .canteen-note{
+    text-align:center;
+    font-size:12.5px;
+    color:var(--canteen);
+    margin-top:8px;
+    font-weight:600;
+  }
+  .unpaid-list{font-size:13.5px; color:var(--vodafone); line-height:1.9;}
+
+  /* Groups/matches */
+  .group-block{
+    border:1.5px solid var(--bd1);
+    border-radius:12px;
+    padding:12px;
+    margin-bottom:14px;
+  }
+  .group-block h3{margin:0 0 10px; font-size:14.5px; color:var(--head); font-weight:700;}
+  .match-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 0;
+    border-bottom:1px solid var(--bd3);
+    flex-wrap:wrap;
+  }
+  .match-row:last-child{border-bottom:none;}
+  .team-btn{
+    background:var(--unpaid-bg);
+    border:1.5px solid var(--bd2);
+    border-radius:8px;
+    padding:6px 10px;
+    font-family:'Cairo',sans-serif;
+    font-size:13px;
+    font-weight:600;
+    color:var(--text);
+    cursor:pointer;
+    flex:1;
+    min-width:70px;
+    text-align:center;
+  }
+  .team-btn.winner{background:var(--cash); border-color:var(--cash); color:#fff;}
+  .score-inputs{display:flex; align-items:center; gap:4px;}
+  .score-inputs input{width:42px; padding:5px 4px; font-size:13px;}
+  .score-inputs span{color:var(--mut1); font-size:12px;}
+  .standings-table{width:100%; border-collapse:collapse; margin-top:8px; font-size:13.5px;}
+  .standings-table th{
+    text-align:right; color:var(--mut2); font-size:11.5px; font-weight:600;
+    padding:4px 6px; border-bottom:1.5px solid var(--bd1);
+  }
+  .standings-table td{padding:6px 6px; border-bottom:1px solid var(--bd3);}
+  .standings-table tr.rank1 td:first-child{color:var(--cash); font-weight:900;}
+  .standings-table tr.rank2 td:first-child{color:var(--instapay); font-weight:900;}
+  .standings-table tr.rank-out td{color:var(--mut1);}
+  .tie-row{display:flex; align-items:center; justify-content:center; gap:6px; padding:4px 0;}
+  .tie-row button{
+    background:none; border:1px solid var(--bd2); color:var(--mut4);
+    font-size:11.5px; padding:3px 8px; border-radius:14px; cursor:pointer; font-family:'Cairo',sans-serif;
+  }
+  .reset-order{text-align:center; margin-top:6px;}
+  .reset-order button{
+    background:none; border:none; color:var(--mut1); font-size:12px;
+    text-decoration:underline; cursor:pointer; font-family:'Cairo',sans-serif;
+  }
+
+  /* Archive */
+  .history-item{
+    border:1.5px solid var(--bd1);
+    border-radius:10px;
+    padding:10px 12px;
+    margin-bottom:8px;
+  }
+  .history-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    cursor:pointer;
+  }
+  .history-title{font-weight:700; font-size:14px;}
+  .history-tag{
+    font-size:11px;
+    padding:2px 8px;
+    border-radius:12px;
+    font-weight:700;
+    color:#fff;
+  }
+  .history-tag.lowd{background:var(--vodafone);}
+  .history-tag.beginners{background:var(--instapay);}
+  .history-tag.sunday{background:var(--zizo);}
+  .history-tag.thursday{background:var(--makram);}
+  .history-actions{display:flex; gap:6px; align-items:center;}
+  .history-actions button{
+    background:none; border:1px solid var(--bd2); color:var(--mut4);
+    font-size:12px; padding:4px 10px; border-radius:14px; cursor:pointer; font-family:'Cairo',sans-serif;
+  }
+  .history-detail{
+    margin-top:10px;
+    padding-top:10px;
+    border-top:1px dashed var(--bd2);
+    display:none;
+  }
+  .history-detail.open{display:block;}
+  .hd-summary{
+    display:flex;
+    gap:14px;
+    flex-wrap:wrap;
+    font-size:12.5px;
+    color:var(--mut3);
+    margin-bottom:10px;
+  }
+  .hd-summary b{color:var(--head);}
+
+  /* Drop tracker */
+  .drop-item{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:8px 10px;
+    border-radius:8px;
+    background:var(--unpaid-bg);
+    margin-bottom:6px;
+    font-size:13.5px;
+  }
+  .drop-item.danger{background:var(--dangerbg); border:1px solid var(--vodafone);}
+  .drop-count{
+    font-size:12px;
+    font-weight:700;
+    color:var(--mut2);
+  }
+  .drop-item.danger .drop-count{color:var(--vodafone);}
+
+  /* score dropdown */
+  .score-inputs select{width:54px; padding:6px 2px; font-size:16px; font-weight:700; text-align:center; text-align-last:center;}
+
+  /* highlight team */
+  .find-btn{display:inline-block; padding:2px 6px; margin-inline-start:4px; font-size:12px; border-radius:10px; opacity:.55;}
+  .find-btn.on{background:var(--ball); opacity:1;}
+  .match-row.hl{background:var(--hlbg); border-radius:8px; padding-left:6px; padding-right:6px;}
+  .match-row.dim{opacity:.28;}
+  .group-block.dim{opacity:.35;}
+  .group-block.has-team{border-color:var(--ball); box-shadow:0 0 0 2px var(--ball);}
+  .standings-table tr.hl-row td{background:var(--hlbg);}
+  #highlightBar{position:fixed; top:0; left:0; right:0; z-index:80; display:none; justify-content:space-between; align-items:center; background:var(--ball); color:var(--court-dark); font-weight:700; font-size:13.5px; padding:8px 14px; padding-top:calc(8px + env(safe-area-inset-top,0px)); box-shadow:0 2px 6px rgba(0,0,0,.2);}
+  #highlightBar button{background:var(--court); color:var(--line); border:none; border-radius:14px; padding:4px 12px; font-family:'Cairo',sans-serif; font-size:12px; cursor:pointer;}
+  /* floating player search */
+  #searchFab{position:fixed; bottom:16px; left:16px; z-index:60; display:none; background:var(--court); color:var(--line); border:none; border-radius:30px; padding:12px 18px; font-family:'Cairo',sans-serif; font-weight:700; font-size:14px; box-shadow:0 3px 10px rgba(0,0,0,.3); cursor:pointer;}
+  #searchPanel{position:fixed; left:0; right:0; bottom:0; z-index:70; display:none; background:var(--card); border-top:2px solid var(--court); box-shadow:0 -4px 14px rgba(0,0,0,.25); padding:10px 12px; max-height:65vh; overflow-y:auto;}
+  #searchPanel .sp-head{display:flex; gap:6px; align-items:center; margin-bottom:8px; position:sticky; top:-10px; background:var(--card); padding:2px 0 6px;}
+  #searchInput{flex:1; min-width:100px; text-align:right; font-size:16px; padding:9px 12px;}
+  input[type=number], input[type=text], textarea, select{font-size:16px;}
+  html, body{overflow-x:hidden;}
+  #searchPanel{max-width:100vw;}
+  button.ghost.on{background:var(--vodafone); color:#fff; border-color:var(--vodafone);}
+
+  /* dark mode */
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --page-bg:#121819; --text:#e8e4da; --head:#7fc4c7; --card:#1b2324;
+    --bd1:#2c3738; --bd2:#3a4647; --bd3:#263031;
+    --mut1:#7f8a8b; --mut2:#9aa5a6; --mut3:#b3bdbe; --mut4:#8fa0a1;
+    --hlbg:#4a4520; --paidbg:#1d3326; --dangerbg:#3a1f23;
+    --unpaid-bg:#222b2c; --court:#17686c; --court-dark:#0e4a4d;
+  }
+  input[type=number], input[type=text], textarea{background:var(--card); color:var(--text);}
+  #themeBtn{position:absolute; left:16px; top:52px; z-index:2; background:rgba(244,239,230,0.15); color:var(--line); border:none; border-radius:20px; padding:4px 12px; font-size:13px; font-family:'Cairo',sans-serif; cursor:pointer;}
+  .history-tag.groups{background:var(--instapay);}
+  .history-tag.roundrobin{background:var(--zizo);}
+  .wz-q{font-size:15px; font-weight:700; color:var(--head); margin-bottom:4px;}
+  .wz-step{font-size:11.5px; color:var(--mut1); margin-bottom:8px;}
+  .wz-choices{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;}
+  .wz-choices button{flex:1; min-width:130px;}
+</style>
 </head>
 <body>
 
-<div class="app-frame">
-  <div class="topbar">
-    <button class="back-btn hidden" id="settings-back-btn" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M15 18l-6-6 6-6"></path>
-      </svg>
-    </button>
-    <button class="icon-btn login-lang-btn" id="login-lang-btn" type="button" title="Language">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10"></circle>
-        <line x1="2" y1="12" x2="22" y2="12"></line>
-        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-      </svg>
-    </button>
-    <div class="topbar-center">
-    <span class="dot" id="topbar-dot"></span>
-    <span class="wordmark"><span class="wordmark-primary">PADEL</span><span class="wordmark-accent">X</span></span>
-    </div>
-    <button class="icon-btn hidden" id="settings-btn" type="button" title="Settings">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3"></circle>
-        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"></path>
-      </svg>
-    </button>
+<header>
+  <button id="themeBtn" onclick="toggleTheme()">🌙</button>
+  <div class="save-badge" id="saveBadge">جاري التحميل...</div>
+  <h1>🎾 Padel Tournaments KFS</h1>
+  <p>الصق ليستة التيمات، وسجّل مين حاسب ومين لأ</p>
+</header>
+
+<div class="wrap">
+
+  <div class="card" id="typeCard">
+    <h2>0. البروفايل</h2>
+    <div id="profileBox"></div>
   </div>
 
-  <div class="content-scroll">
-
-    <!-- ===================== LOGIN VIEW ===================== -->
-    <div class="panel login-fill" id="view-login">
-      <h1 data-i18n="login_title">Sign in to your profile</h1>
-      <p class="sub" data-i18n="login_sub">Use the code and password your admin gave you.</p>
-
-      <div class="msg error" id="login-error"></div>
-      <div class="msg info" id="restore-msg"></div>
-
-      <form id="login-form">
-        <div class="field">
-          <label for="login-code" data-i18n="login_code_label">Player code</label>
-          <input type="text" id="login-code" name="username" class="mono" placeholder="KFS-461" autocomplete="username" autocapitalize="characters" autocorrect="off" spellcheck="false" required>
-        </div>
-        <div class="field">
-          <label for="login-pass" data-i18n="login_pass_label">Password</label>
-          <input type="password" id="login-pass" name="password" placeholder="••••••••" autocomplete="current-password" required>
-        </div>
-        <button type="submit" class="btn btn-primary" id="login-btn" data-i18n="login_btn">Sign in</button>
-      </form>
-
-      <div class="foot-link">
-        <button class="link-btn" id="request-account-link" type="button" style="font-size:13px;" data-i18n="login_no_code">No code yet? Request an account.</button>
-      </div>
-
-      <div class="hidden" id="request-account-wrap" style="margin-top:16px;">
-        <div class="msg error" id="request-error"></div>
-        <div class="msg success" id="request-success"></div>
-        <form id="request-account-form">
-          <div class="field">
-            <label for="ra-name" data-i18n="request_name_label">Full name</label>
-            <input type="text" id="ra-name" required>
-          </div>
-          <div class="field">
-            <label for="ra-phone" data-i18n="request_phone_label">Phone number</label>
-            <input type="tel" id="ra-phone" required placeholder="01xxxxxxxxx">
-          </div>
-          <div class="field">
-            <label for="ra-side" data-i18n="request_side_label">Which side do you play?</label>
-            <select id="ra-side" required>
-              <option value="" data-i18n="side_choose">Choose</option>
-              <option value="right" data-i18n="side_right">Right</option>
-              <option value="left" data-i18n="side_left">Left</option>
-              <option value="both" data-i18n="side_both">Both</option>
-            </select>
-          </div>
-          <button type="submit" class="btn btn-primary" id="ra-btn" data-i18n="request_submit_btn">Send request</button>
-        </form>
-      </div>
-
-      <button id="about-app-link" type="button" style="width:100%; display:flex; align-items:center; justify-content:space-between; background:var(--panel); border:1.5px solid var(--border); border-radius:var(--radius-sm); padding:15px 16px; margin-top:20px; cursor:pointer;">
-        <span style="font-family:var(--font-display); font-weight:800; font-size:16px; color:var(--text);">🎾 <span data-i18n="about_app_link_prefix">What is</span> <span class="wordmark" style="font-size:16px;"><span class="wordmark-primary">PADEL</span><span class="wordmark-accent">X</span></span><span data-i18n="about_app_link_suffix">?</span></span>
-        <span style="color:var(--ball); font-size:20px; line-height:1;" id="about-app-chevron">›</span>
-      </button>
-
-      <div class="hidden" id="about-app-wrap" style="margin-top:20px;">
-        <p style="font-size:13.5px; line-height:1.8; color:var(--text-soft); margin-bottom:16px;" data-i18n="about_app_intro">Padel X is your own personal home in our padel community. Sign in with your code, track your stats and ranking, register for tournaments, and follow the coins you earn — ready to spend in the Store.</p>
-
-        <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:18px;">
-          <div style="display:flex; align-items:flex-start; gap:10px; font-size:13.5px;">
-            <span>🎾</span><span data-i18n="about_app_benefit_1">Your points update automatically after every match you play — real results, not opinions.</span>
-          </div>
-          <div style="display:flex; align-items:flex-start; gap:10px; font-size:13.5px;">
-            <span>📊</span><span data-i18n="about_app_benefit_2">See exactly where you stand on the leaderboard against everyone in the community.</span>
-          </div>
-          <div style="display:flex; align-items:flex-start; gap:10px; font-size:13.5px;">
-            <span>🥇</span><span data-i18n="about_app_benefit_3">Register for tournaments and build your team, all from your own profile.</span>
-          </div>
-          <div style="display:flex; align-items:flex-start; gap:10px; font-size:13.5px;">
-            <span>💰</span><span data-i18n="about_app_benefit_4">Every match and tournament earns you coins — spend them in the Store.</span>
-          </div>
-        </div>
-
-        <div style="background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-sm); padding:22px 16px; text-align:center; min-height:150px;">
-          <div class="coins-story-frame" data-frame="0">
-            <div style="font-size:38px; margin-bottom:10px;">🎾</div>
-            <div style="font-weight:700; font-size:14px;" data-i18n="story_frame_1">You join a tournament</div>
-          </div>
-          <div class="coins-story-frame hidden" data-frame="1">
-            <div style="font-size:38px; margin-bottom:10px;">💰</div>
-            <div style="font-weight:700; font-size:14px; color:var(--ball);" data-i18n="story_frame_2">You earn coins</div>
-          </div>
-          <div class="coins-story-frame hidden" data-frame="2">
-            <div style="font-size:38px; margin-bottom:10px;">🛍️</div>
-            <div style="font-weight:700; font-size:14px;" data-i18n="story_frame_3">You spend them in the Store</div>
-          </div>
-          <div style="display:flex; justify-content:center; gap:6px; margin-top:16px;" id="coins-story-dots"></div>
-        </div>
-      </div>
+  <div class="card" id="pasteCard">
+    <h2>1. ليستة التيمات</h2>
+    <textarea id="teamsInput" placeholder="1- تيم حامد ودرباله
+2- تيم عبدالله ورضا
+3- تيم جعفر وعمر"></textarea>
+    <div id="teamsHint" style="font-size:12.5px; margin-top:6px; color:var(--mut2);"></div>
+    <div class="row-inline">
+      <label>سعر الاشتراك للفرد</label>
+      <input type="number" id="priceInput" value="130">
+      <span style="font-size:13px;color:var(--mut2);">جنيه</span>
     </div>
-
-    <!-- ===================== APP TABS ===================== -->
-    <div class="hidden" id="view-app">
-
-      <!-- ---- tab: home ---- -->
-      <div class="panel" id="tab-home">
-        <div class="announcement-bar hidden" id="announcement-bar">
-          <span class="ann-ico">📣</span>
-          <span id="announcement-text"></span>
-        </div>
-
-        <h1 id="home-greeting">Hi 👋</h1>
-        <div class="profile-code" id="hm-code" style="margin-bottom:4px;">—</div>
-        <p class="sub" data-i18n="home_sub">A quick look at where you stand in Padel X.</p>
-
-        <div class="tier-badge">
-          <div class="tier-shield" id="hm-shield">—</div>
-          <div class="tier-info">
-            <div class="tier-name" id="hm-tier-name">—</div>
-            <div class="tier-points" id="hm-points">— pts</div>
-            <div class="rank-progress hidden" id="hm-progress"><div class="rank-progress-bar"><span id="hm-progress-fill"></span></div><div class="rank-progress-text" id="hm-progress-text"></div></div>
-          </div>
-        </div>
-
-        <div class="my-rank-strip" id="hm-rank-strip">
-          <span data-i18n="home_your_rank">Your leaderboard rank</span>
-          <span><strong id="hm-rank-value">—</strong><span class="rank-trend hidden" id="hm-rank-trend"></span></span>
-        </div>
-
-        <div class="section-head">
-          <h2 data-i18n="home_tournaments_title">Tournaments</h2>
-          <button class="view-all" data-goto="tournaments" type="button" data-i18n="view_all">View all</button>
-        </div>
-        <div id="hm-tourney-loading" style="font-size:12.5px; color:var(--text-soft);">
-          <span class="spinner"></span> <span data-i18n="loading">Loading...</span>
-        </div>
-        <div class="tourney-scroll hidden" id="hm-tourney-scroll"></div>
-        <div class="tourney-empty hidden" id="hm-tourney-empty" data-i18n="tournaments_empty">No tournaments yet — check back soon.</div>
-
-        <div class="section-head">
-          <h2 data-i18n="home_top_players_title">Top Players</h2>
-          <button class="view-all" data-goto="leaderboard" type="button" data-i18n="view_all">View all</button>
-        </div>
-        <div class="top-players" id="hm-top-players"></div>
-      </div>
-
-      <!-- ---- tab: tournaments ---- -->
-      <div class="panel hidden" id="tab-tournaments">
-        <h1 data-i18n="tournaments_title">Tournaments</h1>
-        <p class="sub" data-i18n="tournaments_sub">Browse past results and register for what's coming up.</p>
-
-        <div class="subtab-bar">
-          <button class="subtab-btn active" data-subtab="list" type="button">
-            <span data-i18n="subtab_tournaments">Tournaments</span>
-          </button>
-          <button class="subtab-btn" data-subtab="requests" type="button">
-            <span data-i18n="subtab_requests">Requests</span>
-            <span class="subtab-badge hidden" id="requests-badge">0</span>
-          </button>
-        </div>
-
-        <div id="tournaments-subtab-list">
-          <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
-            <select id="tr-filter" class="mk-sort-select" aria-label="Filter tournaments">
-              <option value="current" data-i18n="tr_filter_current">Current</option>
-              <option value="completed" data-i18n="tr_filter_completed">Completed</option>
-              <option value="all" data-i18n="tr_filter_all">All</option>
-            </select>
-          </div>
-          <div id="tr-loading" style="font-size:13px; color:var(--text-soft);">
-            <span class="spinner"></span> <span data-i18n="loading">Loading...</span>
-          </div>
-          <div class="tourney-list hidden" id="tr-list"></div>
-          <div class="tourney-empty hidden" id="tr-empty" data-i18n="tournaments_empty">No tournaments have been added yet.</div>
-        </div>
-
-        <div class="hidden" id="tournaments-subtab-requests">
-          <div id="requests-loading" style="font-size:13px; color:var(--text-soft);">
-            <span class="spinner"></span> <span data-i18n="loading">Loading...</span>
-          </div>
-          <div id="requests-list" class="hidden"></div>
-          <div class="tourney-empty hidden" id="requests-empty" data-i18n="requests_empty">No one has asked to join your team yet.</div>
-        </div>
-      </div>
-
-      <!-- ---- tab: marketplace ---- -->
-      <div class="panel hidden" id="tab-marketplace">
-        <div class="mk-header-row">
-          <h1 data-i18n="marketplace_title">Market</h1>
-          <div class="coin-pill-floating" id="mk-balance-strip">
-            <span class="market-item-row-price mk-balance-big" id="mk-balance-value">—</span>
-          </div>
-        </div>
-        <p class="sub" data-i18n="marketplace_sub">Spend the coins you've earned on real stuff.</p>
-
-        <div class="mk-filter-row hidden" id="mk-filter-bar"></div>
-
-        <div style="display:flex; justify-content:flex-end; margin-top:10px; margin-bottom:16px;">
-          <select id="mk-sort" class="mk-sort-select hidden" aria-label="Sort by">
-            <option value="price_asc" data-i18n="sort_price_asc">Price: Low to High</option>
-            <option value="price_desc" data-i18n="sort_price_desc">Price: High to Low</option>
-            <option value="newest" data-i18n="sort_newest">Newest</option>
-          </select>
-        </div>
-
-        <div id="mk-loading" style="font-size:13px; color:var(--text-soft); margin-top:16px;">
-          <span class="spinner"></span> <span data-i18n="loading">Loading...</span>
-        </div>
-        <div class="hidden market-list" id="mk-list"></div>
-        <div class="tourney-empty hidden" id="mk-empty" data-i18n="market_empty">No items in the store yet.</div>
-
-        <button id="market-faq-link" type="button" style="width:100%; display:flex; align-items:center; justify-content:space-between; background:var(--panel); border:1.5px solid var(--border); border-radius:var(--radius-sm); padding:15px 16px; margin-top:22px; cursor:pointer;">
-          <span style="font-family:var(--font-display); font-weight:800; font-size:14px; color:var(--text);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-2px; color:var(--ball);"><circle cx="12" cy="12" r="9"></circle><path d="M9 12h6M12 9v6"></path></svg> <span data-i18n="market_faq_link">How do I earn coins?</span></span>
-          <span style="color:var(--ball); font-size:20px; line-height:1;" id="market-faq-chevron">›</span>
-        </button>
-        <div class="hidden" id="market-faq-wrap" style="margin-top:12px;">
-          <div style="background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px 16px;">
-            <div style="font-size:13px; line-height:2.1; color:var(--text-soft);">
-              <div><span data-i18n="market_faq_participation">Join a tournament</span> — <strong style="color:var(--ball); font-family:var(--font-mono);">+10 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-2px; color:var(--ball);"><circle cx="12" cy="12" r="9"></circle><path d="M9 12h6M12 9v6"></path></svg></strong></div>
-              <div><span data-i18n="market_faq_advancement">Advance from the group stage</span> — <strong style="color:var(--ball); font-family:var(--font-mono);">+20 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-2px; color:var(--ball);"><circle cx="12" cy="12" r="9"></circle><path d="M9 12h6M12 9v6"></path></svg></strong></div>
-              <div><span data-i18n="market_faq_place3">3rd place</span> — <strong style="color:var(--ball); font-family:var(--font-mono);">+75 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-2px; color:var(--ball);"><circle cx="12" cy="12" r="9"></circle><path d="M9 12h6M12 9v6"></path></svg></strong></div>
-              <div><span data-i18n="market_faq_place2">2nd place</span> — <strong style="color:var(--ball); font-family:var(--font-mono);">+100 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-2px; color:var(--ball);"><circle cx="12" cy="12" r="9"></circle><path d="M9 12h6M12 9v6"></path></svg></strong></div>
-              <div><span data-i18n="market_faq_place1">1st place</span> — <strong style="color:var(--ball); font-family:var(--font-mono);">+150 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-2px; color:var(--ball);"><circle cx="12" cy="12" r="9"></circle><path d="M9 12h6M12 9v6"></path></svg></strong></div>
-            </div>
-            <div style="border-top:1px solid var(--border); margin-top:10px; padding-top:10px; font-size:12px; color:var(--text-soft); line-height:1.8;" data-i18n="market_faq_example">Example: if you and your partner advance and finish 1st, you each get 10 + 20 + 150 = 180 coins.</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ---- tab: leaderboard ---- -->
-      <div class="panel hidden" id="tab-leaderboard">
-        <h1 data-i18n="leaderboard_title">Leaderboard</h1>
-        <p class="sub" data-i18n="leaderboard_sub">Every KFS player, ranked by rating points.</p>
-
-        <div class="my-rank-strip" id="my-rank-strip">
-          <span data-i18n="your_rank">Your rank</span>
-          <strong id="my-rank-value">—</strong>
-        </div>
-
-        <div class="mk-filter-row hidden" id="lb-filter-bar"></div>
-
-        <div id="lb-loading" style="font-size:13px; color:var(--text-soft); margin-top:14px;">
-          <span class="spinner"></span> <span data-i18n="loading">Loading...</span>
-        </div>
-        <ol class="lb-list hidden" id="lb-list"></ol>
-      </div>
-
-      <!-- ---- tab: profile ---- -->
-      <div class="panel hidden" id="tab-profile">
-
-        <div class="subtab-bar" id="profile-main-subtab-bar">
-          <button class="subtab-btn active" data-profile-subtab="main" type="button" data-i18n="tab_profile">Profile</button>
-          <button class="subtab-btn" data-profile-subtab="history" type="button" data-i18n="profile_subtab_history">History</button>
-        </div>
-
-        <div id="profile-subtab-main">
-        <div class="profile-head">
-          <div class="avatar-wrap">
-            <div class="avatar" id="pf-avatar">?</div>
-            <button class="avatar-edit-btn" id="avatar-edit-btn" type="button" title="Change photo">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"></path>
-                <circle cx="12" cy="13" r="4"></circle>
-              </svg>
-            </button>
-            <input type="file" id="avatar-input" accept="image/*" class="hidden">
-          </div>
-          <div>
-            <div class="profile-name" id="pf-name">—</div>
-            <div class="profile-code" id="pf-code">—</div>
-            <button class="link-btn" id="change-photo-link" type="button" style="padding:2px 0; font-size:12.5px;">
-              <span data-i18n="profile_change_photo">Change photo</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="badge-row" id="pf-badges"></div>
-
-        <div class="tier-badge">
-          <div class="tier-shield" id="pf-shield">—</div>
-          <div class="tier-info">
-            <div class="tier-name" id="pf-tier-name">—</div>
-            <div class="tier-points" id="pf-points">— pts</div>
-            <div class="rank-progress hidden" id="pf-progress"><div class="rank-progress-bar"><span id="pf-progress-fill"></span></div><div class="rank-progress-text" id="pf-progress-text"></div></div>
-          </div>
-        </div>
-
-        <div class="stat-row stat-grid-4">
-          <div class="stat-box">
-            <div class="num" id="pf-matches">0</div>
-            <div class="lbl" data-i18n="profile_matches">Matches</div>
-          </div>
-          <div class="stat-box">
-            <div class="num" id="pf-wins">0</div>
-            <div class="lbl" data-i18n="profile_wins">Wins</div>
-          </div>
-          <div class="stat-box">
-            <div class="num" id="pf-losses">0</div>
-            <div class="lbl" data-i18n="profile_losses">Losses</div>
-          </div>
-          <div class="stat-box">
-            <div class="num" id="pf-winrate">0%</div>
-            <div class="lbl" data-i18n="profile_winrate">Win rate</div>
-          </div>
-        </div>
-
-        <div class="my-rank-strip" id="pf-member-since-strip">
-          <span data-i18n="profile_member_since">Member since</span>
-          <strong id="pf-member-since">—</strong>
-        </div>
-
-        <div class="field" style="margin-top:14px;">
-          <label for="pf-side-select" data-i18n="profile_side_label">Playing side</label>
-          <select id="pf-side-select">
-            <option value="" data-i18n="side_not_set">Not set</option>
-            <option value="right" data-i18n="side_right">Right</option>
-            <option value="left" data-i18n="side_left">Left</option>
-            <option value="both" data-i18n="side_both">Both</option>
-          </select>
-        </div>
-
-        <button class="btn btn-ghost share-card-btn" id="share-card-btn" type="button" data-i18n="profile_share_btn">Share profile card</button>
-        <canvas id="share-canvas" width="1080" height="1350" class="hidden"></canvas>
-        </div>
-
-        <div class="hidden" id="profile-subtab-history">
-          <div class="subtab-bar" id="history-inner-subtab-bar">
-            <button class="subtab-btn active" data-history-subtab="points" type="button" data-i18n="points_history_subtab">Points History</button>
-            <button class="subtab-btn" data-history-subtab="coins" type="button" data-i18n="coins_history_subtab">Coins History</button>
-          </div>
-
-          <div id="history-subtab-points">
-            <div id="ph-loading" style="font-size:13px; color:var(--text-soft); margin-top:10px;">
-              <span class="spinner"></span> <span data-i18n="loading">Loading...</span>
-            </div>
-            <div class="hidden" id="ph-list"></div>
-            <div class="tourney-empty hidden" id="ph-empty" data-i18n="points_history_empty">No matches played yet.</div>
-            <div class="my-rank-strip" id="ph-total-strip" style="margin-top:14px;">
-              <span data-i18n="current_points_strip">Your current points</span>
-              <strong id="ph-total">—</strong>
-            </div>
-          </div>
-
-          <div class="hidden" id="history-subtab-coins">
-            <div id="ch-loading" style="font-size:13px; color:var(--text-soft); margin-top:10px;">
-              <span class="spinner"></span> <span data-i18n="loading">Loading...</span>
-            </div>
-            <div class="hidden" id="ch-list"></div>
-            <div class="tourney-empty hidden" id="ch-empty" data-i18n="coins_history_empty">No coins yet.</div>
-            <div class="my-rank-strip" id="ch-total-strip" style="margin-top:14px;">
-              <span data-i18n="current_coins_strip">Your current coin balance</span>
-              <strong id="ch-total">—</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-
+    <div class="row-inline">
+      <button class="primary" onclick="parseTeams()">استخرج اللاعبين</button>
+      <button class="ghost" onclick="resetAll()">مسح الكل</button>
     </div>
-
-    <!-- ===================== SETTINGS VIEW ===================== -->
-    <div class="hidden" id="view-settings">
-      <div class="panel">
-        <h1 data-i18n="settings_title">Settings</h1>
-        <p class="sub" data-i18n="settings_sub">Your account and language.</p>
-
-        <div class="settings-mini-profile">
-          <div class="avatar" id="st-avatar" style="width:44px;height:44px;font-size:16px;">?</div>
-          <div>
-            <div class="profile-name" id="st-name" style="font-size:15px;">—</div>
-            <div class="profile-code" id="st-code">—</div>
-          </div>
-        </div>
-
-        <div class="field">
-          <label data-i18n="settings_language">Language</label>
-          <div class="lang-switch">
-            <button class="lang-option" id="lang-ar-btn" type="button" data-i18n="settings_lang_ar">العربية</button>
-            <button class="lang-option" id="lang-en-btn" type="button" data-i18n="settings_lang_en">English</button>
-          </div>
-        </div>
-
-        <div class="divider"></div>
-
-        <h1 style="font-size:16px;" data-i18n="settings_change_pass">Change password</h1>
-        <form id="change-pass-form" style="margin-top:10px;">
-          <input type="text" id="cp-username" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute; opacity:0; width:1px; height:1px; pointer-events:none;">
-          <div class="msg error" id="pass-error"></div>
-          <div class="msg success" id="pass-success"></div>
-          <div class="field">
-            <label for="cp-current" data-i18n="settings_current_pass">Current password</label>
-            <input type="password" id="cp-current" required autocomplete="current-password">
-          </div>
-          <div class="field">
-            <label for="cp-new" data-i18n="settings_new_pass">New password</label>
-            <input type="password" id="cp-new" required minlength="6" autocomplete="new-password">
-          </div>
-          <div class="field">
-            <label for="cp-confirm" data-i18n="settings_confirm_pass">Confirm new password</label>
-            <input type="password" id="cp-confirm" required minlength="6" autocomplete="new-password">
-          </div>
-          <button type="submit" class="btn btn-primary" id="cp-btn" data-i18n="settings_save_pass">Save new password</button>
-        </form>
-
-        <div class="foot-link" style="margin-top:22px;">
-          <button class="link-btn" id="logout-btn" type="button" style="color:var(--danger);" data-i18n="settings_logout">Log out</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ===================== PRODUCT VIEW ===================== -->
-    <div class="hidden" id="view-product">
-      <div class="panel">
-        <div class="product-imgwrap">
-          <img id="pd-img" src="" alt="">
-        </div>
-        <h1 id="pd-name">—</h1>
-        <p class="sub hidden" id="pd-desc"></p>
-
-        <div class="my-rank-strip" id="pd-delivery-strip">
-          <span data-i18n="delivery_label">Delivery</span>
-          <strong id="pd-delivery-value">—</strong>
-        </div>
-
-        <div class="field" style="margin-top:18px;">
-          <label for="pd-qty" data-i18n="quantity_label">Quantity</label>
-          <input type="number" id="pd-qty" min="1" value="1" step="1">
-        </div>
-
-        <div class="my-rank-strip" id="pd-total-strip">
-          <span data-i18n="total_price_label">Total</span>
-          <strong id="pd-total-value">—</strong>
-        </div>
-
-        <button class="btn btn-primary" id="pd-buy-btn" type="button" data-i18n="buy_btn" style="margin-top:16px;">Buy</button>
-      </div>
-    </div>
-
   </div>
 
-  <!-- ---- bottom tab bar ---- -->
-  <nav class="tabbar hidden" id="tabbar">
-    <button class="tab-btn active" data-tab="home" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 11.5L12 4l9 7.5"></path>
-        <path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"></path>
-      </svg>
-      <span data-i18n="tab_home">Home</span>
-    </button>
-    <button class="tab-btn" data-tab="tournaments" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="5" width="18" height="16" rx="2"></rect>
-        <path d="M8 3v4M16 3v4M3 10h18"></path>
-      </svg>
-      <span data-i18n="home_tournaments_title">Tournaments</span>
-    </button>
-    <button class="tab-btn" data-tab="marketplace" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M6 8h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8Z"></path>
-        <path d="M9 8V6a3 3 0 0 1 6 0v2"></path>
-      </svg>
-      <span data-i18n="tab_market">Market</span>
-    </button>
-    <button class="tab-btn" data-tab="leaderboard" type="button">
-      <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
-        <rect x="4" y="12" width="4" height="8" rx="1"></rect>
-        <rect x="10" y="7" width="4" height="13" rx="1"></rect>
-        <rect x="16" y="3" width="4" height="17" rx="1"></rect>
-      </svg>
-      <span data-i18n="tab_leaderboard">Leaderboard</span>
-    </button>
-    <button class="tab-btn" data-tab="profile" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="8" r="4"></circle>
-        <path d="M4 20c0-4 4-6 8-6s8 2 8 6"></path>
-      </svg>
-      <span data-i18n="tab_profile">Profile</span>
-    </button>
-  </nav>
+  <div class="card" id="playersCard" style="display:none;">
+    <h2>2. حالة الدفع</h2>
+    <div class="row-inline" style="margin-top:0; margin-bottom:10px;">
+      <button class="ghost" id="unpaidOnlyBtn" onclick="toggleUnpaidOnly()">❌ مين مدفعش بس</button>
+    </div>
+    <div id="playersList"></div>
+  </div>
+
+  <div class="card" id="totalsCard" style="display:none;">
+    <h2>3. الإجمالي</h2>
+    <div class="totals">
+      <div class="tbox cash"><div class="num" id="totCash">0</div><div class="lbl">كاش</div></div>
+      <div class="tbox instapay"><div class="num" id="totInstapay">0</div><div class="lbl">انستاباي</div></div>
+      <div class="tbox vodafone"><div class="num" id="totVodafone">0</div><div class="lbl">فودافون كاش</div></div>
+      <div class="tbox zizo"><div class="num" id="totZizo">0</div><div class="lbl">مع زيزو</div></div>
+      <div class="tbox makram"><div class="num" id="totMakram">0</div><div class="lbl">مع مكرم</div></div>
+      <div class="tbox"><div class="num" id="totUnpaidCount">0</div><div class="lbl">لسه ما حاسبوش</div></div>
+    </div>
+    <div class="grand">
+      <div class="num" id="totReceived">0</div>
+      <div class="lbl" id="totExpectedLbl">من 0 جنيه</div>
+    </div>
+    <div style="margin-top:12px;" id="unpaidWrap">
+      <h2 style="font-size:13.5px;color:var(--mut1);">مستنيين حساب من:</h2>
+      <div class="unpaid-list" id="unpaidList">الكل حاسب 🎉</div>
+    </div>
+    <div class="row-inline">
+      <button class="primary" onclick="copyPaymentReport()">📋 انسخ الحساب للواتساب</button>
+    </div>
+  </div>
+
+  <div class="card" id="groupsCard">
+    <h2>4. <span id="matchesCardTitle">المجموعات والمباريات</span></h2>
+
+    <div id="tiersSection" style="display:none;">
+      <div class="row-inline" style="margin-top:0;">
+        <button class="ghost" onclick="loadTeamsForTiers()">تحميل الفرق من بوكس اللاعبين</button>
+      </div>
+      <div id="tiersOutput" style="margin-top:10px;"></div>
+    </div>
+
+    <div id="groupsSection">
+      <div id="groupsManualInput">
+      <div class="row-inline" style="margin-top:0;">
+        <label for="groupImageInput" class="primary" style="display:inline-block; cursor:pointer;">📷 ارفع صور المجموعات</label>
+        <input type="file" id="groupImageInput" accept="image/*" multiple style="display:none;" onchange="handleGroupImages(this.files)">
+      </div>
+      <div id="ocrStatus" style="font-size:12px; color:var(--mut2); margin-top:6px;"></div>
+      <textarea id="groupsInput" style="margin-top:10px;" placeholder="مجموعة 1
+تيم حامد ودرباله
+تيم عبدالله ورضا
+تيم جعفر وعمر
+تيم كريم وسيف
+
+مجموعة 2
+تيم ..."></textarea>
+      <div class="row-inline">
+        <button class="primary" onclick="parseGroups()">استخرج المجموعات والماتشات</button>
+        <button class="ghost" onclick="resetGroups()">مسح المجموعات</button>
+      </div>
+      </div>
+      <div id="groupsOutput" style="margin-top:14px;"></div>
+    </div>
+
+    <div id="roundRobinSection" style="display:none;">
+      <textarea id="roundRobinInput" placeholder="1- تيم حامد ودرباله
+2- تيم صبري ونسيم
+3- تيم عبدالله وحسن الشيتاني
+4- تيم عمار واحمد الشربيني
+5- تيم مروان وموري"></textarea>
+      <div class="row-inline">
+        <button class="primary" onclick="parseRoundRobin()">استخرج الماتشات</button>
+        <button class="ghost" onclick="resetRoundRobin()">مسح</button>
+      </div>
+      <div id="roundRobinOutput" style="margin-top:14px;"></div>
+    </div>
+  </div>
+
+  <div class="card" id="knockoutCard">
+    <h2>5. قرعة الدور الوسيط (الأول ضد التاني)</h2>
+    <div class="row-inline">
+      <button class="primary" onclick="generateKnockout()">🎲 اعمل القرعة</button>
+      <button class="ghost" onclick="renderKnockout()">🔄 حدّث الأسامي</button>
+      <button class="ghost" onclick="clearKnockout()">مسح القرعة</button>
+    </div>
+    <div id="knockoutOutput" style="margin-top:14px;"></div>
+  </div>
+
+  <div class="card" id="semifinalCard">
+    <h2>6. الدور قبل النهائي والنهائي</h2>
+    <div class="row-inline">
+      <button class="primary" onclick="generateSemiFinal()">تحديد الصاعد مباشرة للنهائي</button>
+      <button class="ghost" onclick="clearSemiFinal()">مسح</button>
+    </div>
+    <div id="semifinalOutput" style="margin-top:14px;"></div>
+  </div>
+
+  <div class="card" id="archiveCard">
+    <h2>7. أرشيف البطولات</h2>
+    <div class="row-inline">
+      <button class="primary" onclick="saveTournament()">💾 حفظ البطولة الحالية</button>
+      <button class="ghost" onclick="startNewTournament()">بطولة جديدة</button>
+    </div>
+    <div class="row-inline">
+      <button class="ghost" onclick="exportBackup()">⬇️ تصدير نسخة احتياطية</button>
+      <label for="importBackupInput" class="ghost" style="display:inline-block; cursor:pointer;">⬆️ استرجاع نسخة احتياطية</label>
+      <input type="file" id="importBackupInput" accept="application/json" style="display:none;" onchange="importBackup(this.files[0])">
+    </div>
+    <div style="font-size:11.5px;color:var(--mut1);margin-top:6px;">صدّر نسخة احتياطية بعد كل بطولة أو كل شوية وسيبها في جوجل درايف أو ابعتها لنفسك على الواتساب - عشان لو حصل أي مسح للموقع بالغلط تقدر ترجع بيها.</div>
+    <div id="historyList" style="margin-top:14px;"></div>
+  </div>
+
 </div>
 
-<script type="module" src="app.js"></script>
+<div id="highlightBar"><span id="hlName"></span><button onclick="clearHighlight()">✕ إلغاء</button></div>
+
+<button id="searchFab" onclick="toggleSearchPanel()">🔍 دوّر على لاعب</button>
+<div id="searchPanel">
+  <div class="sp-head">
+    <input type="text" id="searchInput" placeholder="اكتب اسم اللاعب..." oninput="renderPlayerSearch()" autocomplete="off">
+    <button class="ghost" id="spUnpaidBtn" onclick="toggleSpUnpaid()">❌ مين مدفعش بس</button>
+    <button class="ghost" onclick="toggleSearchPanel()">✕</button>
+  </div>
+  <div id="searchResults"></div>
+</div>
+
+<script>
+
+let profile = null; // {name, teams, format:'groups'|'roundrobin', groupsBy:'manual'|'auto'|null, price, qualifiers}
+let wizard = null; // profile questions in progress (not saved)
+let thursdayTeams = [];
+let thursdayTierAssignments = {}; // teamName -> 'A1'|'A2'|...
+let players = []; // {name, status: null|'cash'|'instapay'|'vodafone'|'zizo'|'makram'}
+let groups = []; // {name, teams:[...], matches:[{a,b,scoreA,scoreB,manualWinner}], override:null|[...]}
+let knockout = null; // {pairs:[{aGroupIdx,bGroupIdx,confirmedA,confirmedB,scoreA,scoreB,manualWinner}]}
+let roundRobin = null; // {teams:[...], matches:[{round,court,a,b,scoreA,scoreB,manualWinner}], override:null}
+let editingPairingGroupIndex = null;
+let editingPairingSelected = [];
+let editingLateGroupIndex = null;
+let semifinal = null; // {tiedPending:{tiedTeams,otherTeams}} | {byeTeam, decider:{a,b,scoreA,scoreB,manualWinner}, final:{a,b,scoreA,scoreB,manualWinner}}
+let history = []; // saved tournaments
+let highlightTeam = null;
+let unpaidOnly = false;
+let spUnpaid = false;
+let searchOpen = false;
+const STORAGE_KEY = 'tournament-current-v2';
+const METHOD_LABELS = {cash:'كاش', instapay:'انستاباي', vodafone:'فودافون كاش', zizo:'مع زيزو', makram:'مع مكرم'};
+
+
+/* ---------- highlight a team's matches ---------- */
+function escJs(x){ return String(x).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+function findBtn(name){
+  if(!name) return '';
+  return `<span class="find-btn ${highlightTeam===name?'on':''}" onclick="event.stopPropagation(); toggleHighlight('${escJs(name)}')">🔍</span>`;
+}
+function hlClass(a, b){
+  if(!highlightTeam) return '';
+  return (a===highlightTeam || b===highlightTeam) ? 'hl' : 'dim';
+}
+function groupHlClass(g){
+  if(!highlightTeam) return '';
+  return g.teams.includes(highlightTeam) ? 'has-team' : 'dim';
+}
+function updateHighlightBar(){
+  const bar = document.getElementById('highlightBar');
+  if(!bar) return;
+  if(highlightTeam){
+    document.getElementById('hlName').textContent = '🔍 ماتشات: ' + highlightTeam;
+    bar.style.display = 'flex';
+  } else {
+    bar.style.display = 'none';
+  }
+}
+function clearHighlight(){
+  if(highlightTeam) toggleHighlight(highlightTeam);
+}
+function toggleHighlight(name){
+  highlightTeam = (highlightTeam===name) ? null : name;
+  updateHighlightBar();
+  renderGroups();
+  renderKnockout();
+  renderSemiFinal();
+  renderRoundRobin();
+}
+
+function toNum(v){
+  if(v===''||v==null) return null;
+  const n = parseFloat(v);
+  return isNaN(n) ? null : n;
+}
+
+function scoreSelect(value, handler){
+  const v = (value===''||value==null) ? '' : String(value);
+  const nums = [0,1,2,3,4,5,6,7];
+  let opts = `<option value="" ${v===''?'selected':''}>-</option>`;
+  if(v!=='' && !nums.includes(Number(v))) opts += `<option value="${v}" selected>${v}</option>`;
+  nums.forEach(n=>{ opts += `<option value="${n}" ${v===String(n)?'selected':''}>${n}</option>`; });
+  return `<select onchange="${handler}">${opts}</select>`;
+}
+
+// tapping a team name: winner gets 6, opponent gets 0 (both editable from the dropdowns)
+// returns false when the match has a real typed result (locked)
+function tapWinner(m, a, b, side){
+  const team = side==='a' ? a : b;
+  const sa = toNum(m.scoreA), sb = toNum(m.scoreB);
+  const decisive = sa!=null && sb!=null && sa!==sb;
+  if(decisive){
+    if(!m.auto) return false;
+    const curSide = sa>sb ? 'a' : 'b';
+    if(curSide===side){
+      m.scoreA=''; m.scoreB=''; m.manualWinner=null; m.auto=false;
+    } else {
+      m.scoreA = side==='a' ? '6' : '0';
+      m.scoreB = side==='a' ? '0' : '6';
+      m.manualWinner = team;
+    }
+    return true;
+  }
+  if(m.manualWinner===team){
+    m.manualWinner = null;
+    if(side==='a' && m.scoreA==='6' && sb==null) m.scoreA='';
+    if(side==='b' && m.scoreB==='6' && sa==null) m.scoreB='';
+    m.auto = false;
+    return true;
+  }
+  m.manualWinner = team;
+  if(sa==null && sb==null){
+    m.scoreA = side==='a' ? '6' : '0';
+    m.scoreB = side==='a' ? '0' : '6';
+    m.auto = true;
+  } else {
+    if(side==='a'){ if(sa==null) m.scoreA='6'; if(sb==null) m.scoreB='0'; }
+    else { if(sb==null) m.scoreB='6'; if(sa==null) m.scoreA='0'; }
+  }
+  return true;
+}
+
+
+function setBadge(text){
+  document.getElementById('saveBadge').textContent = text;
+}
+
+function saveState(){
+  try{
+    const data = {
+      profile: profile,
+      thursdayTeams: thursdayTeams,
+      thursdayTierAssignments: thursdayTierAssignments,
+      teamsInput: document.getElementById('teamsInput').value,
+      price: document.getElementById('priceInput').value,
+      players: players,
+      groupsInput: document.getElementById('groupsInput').value,
+      groups: groups,
+      knockout: knockout,
+      semifinal: semifinal,
+      roundRobinInput: document.getElementById('roundRobinInput').value,
+      roundRobin: roundRobin,
+      history: history
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    setBadge('اتحفظ ✓');
+  }catch(e){
+    console.error('Save error:', e);
+    setBadge('فشل الحفظ');
+  }
+}
+
+function migratePlayer(p, price){
+  // backward compatibility: normalize any older data shape to the simple {name, status} model
+  if('status' in p) return p;
+  if(p.payments && p.payments.length > 0){
+    // came from the brief split-payment version; keep the first method as a simple status
+    return {name:p.name, status:p.payments[0].method};
+  }
+  return {name:p.name, status:null};
+}
+
+function loadState(){
+  try{
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw){
+      // fall back to the older single-tournament storage key so nothing already saved is lost
+      const legacy = localStorage.getItem('tournament-current');
+      if(legacy){
+        const legacyData = JSON.parse(legacy);
+        raw = JSON.stringify({
+          currentType: null,
+          teamsInput: legacyData.teamsInput || '',
+          price: legacyData.price || 130,
+          players: legacyData.players || [],
+          groupsInput: legacyData.groupsInput || '',
+          groups: legacyData.groups || [],
+          history: []
+        });
+      }
+    }
+    if(raw){
+      const data = JSON.parse(raw);
+      profile = data.profile || migrateOldType(data.currentType, data.thursdayMode, data.price);
+      thursdayTeams = data.thursdayTeams || [];
+      thursdayTierAssignments = data.thursdayTierAssignments || {};
+      document.getElementById('teamsInput').value = data.teamsInput || '';
+      document.getElementById('priceInput').value = data.price || 130;
+      const price = parseFloat(data.price) || 130;
+      players = (data.players || []).map(p=>migratePlayer(p, price));
+      document.getElementById('groupsInput').value = data.groupsInput || '';
+      groups = data.groups || [];
+      knockout = data.knockout || null;
+      semifinal = data.semifinal || null;
+      document.getElementById('roundRobinInput').value = data.roundRobinInput || '';
+      roundRobin = data.roundRobin || null;
+      history = data.history || [];
+
+      updateTypeUI();
+      renderProfileBox();
+      renderTiersUI();
+      if(players.length > 0){
+        document.getElementById('playersCard').style.display = 'block';
+        document.getElementById('totalsCard').style.display = 'block';
+        renderPlayers();
+        updateTotals();
+      }
+      if(groups.length > 0){
+        renderGroups();
+      }
+      renderKnockout();
+      renderSemiFinal();
+      renderRoundRobin();
+      renderHistory();
+      setBadge('اتحفظ ✓');
+    } else {
+      setBadge('بطولة جديدة');
+      renderHistory();
+      updateTypeUI();
+      renderProfileBox();
+    }
+  }catch(e){
+    console.error('Load error:', e);
+    setBadge('بطولة جديدة');
+  }
+}
+
+window.addEventListener('DOMContentLoaded', loadState);
+
+/* ---------- theme (dark / light) ---------- */
+function applyThemeUI(){
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const b = document.getElementById('themeBtn');
+  if(b) b.textContent = dark ? '☀️ فاتح' : '🌙 داكن';
+  const m = document.getElementById('metaTheme');
+  if(m) m.setAttribute('content', dark ? '#0e3f42' : '#0f4c4f');
+}
+function toggleTheme(){
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const next = dark ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  try{ localStorage.setItem('theme-pref', next); }catch(e){}
+  applyThemeUI();
+}
+if(window.matchMedia){
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e=>{
+    let saved = null;
+    try{ saved = localStorage.getItem('theme-pref'); }catch(err){}
+    if(saved) return;
+    document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+    applyThemeUI();
+  });
+}
+window.addEventListener('DOMContentLoaded', applyThemeUI);
+
+
+/* ---------- Tournament type ---------- */
+function migrateOldType(t, tm, price){
+  const pr = parseFloat(price) || 130;
+  if(t==='lowd') return {name:'Low D', teams:12, format:'groups', groupsBy:'manual', price:pr, qualifiers:6};
+  if(t==='beginners') return {name:'Beginners', teams:12, format:'groups', groupsBy:'manual', price:pr, qualifiers:6};
+  if(t==='sunday') return {name:'دورة الأحد', teams:5, format:'roundrobin', groupsBy:null, price:pr, qualifiers:0};
+  if(t==='thursday') return {name:'بطولة الخميس', teams:8, format:'groups', groupsBy:(tm==='tiers'?'auto':'manual'), price:pr, qualifiers:4};
+  return null;
+}
+
+function makeProfileName(){
+  const days = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  const now = new Date();
+  const base = `${days[now.getDay()]} ${now.getDate()}/${now.getMonth()+1}`;
+  const used = history.map(h=>h.label);
+  if(!used.includes(base)) return base;
+  let n = 2;
+  while(used.includes(`${base} (${n})`)) n++;
+  return `${base} (${n})`;
+}
+
+function updateTeamsHint(){
+  const el = document.getElementById('teamsHint');
+  if(!el) return;
+  if(!profile){ el.textContent = ''; return; }
+  const lines = document.getElementById('teamsInput').value.split('\n').map(l=>l.trim()).filter(Boolean);
+  const cnt = lines.map(extractTeamName).filter(Boolean).length;
+  el.textContent = `المطلوب ${profile.teams} فريق • مكتوب ${cnt}`;
+  el.style.color = (cnt === profile.teams) ? 'var(--cash)' : 'var(--mut2)';
+}
+
+function wizardSteps(d){
+  const st = ['teams','format'];
+  if(d.format==='groups') st.push('groupsBy');
+  st.push('price');
+  if(d.format==='groups') st.push('qualifiers');
+  return st;
+}
+
+function startWizard(editing){
+  const d = (editing && profile) ? {teams:profile.teams, format:profile.format, groupsBy:profile.groupsBy, price:profile.price, qualifiers:profile.qualifiers} : {teams:12, format:null, groupsBy:null, price:parseFloat(document.getElementById('priceInput').value)||130, qualifiers:null};
+  wizard = {step:0, editing:!!(editing && profile), data:d};
+  renderProfileBox();
+}
+
+function wizardHtml(){
+  const d = wizard.data;
+  const steps = wizardSteps(d);
+  const id = steps[wizard.step];
+  let q = '', body = '';
+  if(id==='teams'){
+    q = 'البطولة كام فريق؟';
+    body = `<div class="row-inline"><input type="number" id="wzInput" value="${d.teams||12}" min="2"><span style="font-size:13px;color:var(--mut2);">فريق</span></div>
+      <div class="row-inline">${[5,8,12,16].map(v=>`<button class="ghost" onclick="document.getElementById('wzInput').value=${v}">${v}</button>`).join('')}</div>`;
+  } else if(id==='format'){
+    q = 'نظام اللعب إيه؟';
+    body = `<div class="wz-choices">
+      <button class="primary" onclick="wizardPick('format','groups')">مجموعات</button>
+      <button class="primary" onclick="wizardPick('format','roundrobin')">كل فريق يلعب مع الكل</button></div>`;
+  } else if(id==='groupsBy'){
+    q = 'مين اللي بيعمل المجموعات؟';
+    body = `<div class="wz-choices">
+      <button class="primary" onclick="wizardPick('groupsBy','manual')">أنا بحطها</button>
+      <button class="primary" onclick="wizardPick('groupsBy','auto')">التطبيق يعملها بالتصنيفات</button></div>`;
+  } else if(id==='price'){
+    q = 'سعر الاشتراك للفرد كام؟';
+    body = `<div class="row-inline"><input type="number" id="wzInput" value="${d.price}" min="0"><span style="font-size:13px;color:var(--mut2);">جنيه</span></div>`;
+  } else if(id==='qualifiers'){
+    q = 'كام فريق بيصعد؟';
+    const def = d.qualifiers || Math.floor(d.teams/2);
+    body = `<div class="row-inline"><input type="number" id="wzInput" value="${def}" min="1"><span style="font-size:13px;color:var(--mut2);">فريق</span></div>`;
+  }
+  const isChoice = (id==='format' || id==='groupsBy');
+  const isLast = wizard.step === steps.length-1;
+  return `
+    <div class="wz-step">سؤال ${wizard.step+1}${isChoice?'':' من '+steps.length}</div>
+    <div class="wz-q">${q}</div>
+    ${body}
+    <div class="row-inline">
+      ${isChoice ? '' : `<button class="primary" onclick="wizardNext()">${isLast?'تم ✓':'التالي'}</button>`}
+      <button class="ghost" onclick="wizardBack()">${wizard.step===0?'إلغاء':'رجوع'}</button>
+    </div>`;
+}
+
+function wizardNext(){
+  const d = wizard.data;
+  const id = wizardSteps(d)[wizard.step];
+  const inp = document.getElementById('wzInput');
+  if(id==='teams'){
+    const v = parseInt(inp.value);
+    if(!v || v<2){ alert('اكتب عدد فرق صحيح (2 على الأقل)'); return; }
+    d.teams = v;
+  } else if(id==='price'){
+    const v = parseFloat(inp.value);
+    if(isNaN(v) || v<0){ alert('اكتب سعر صحيح'); return; }
+    d.price = v;
+  } else if(id==='qualifiers'){
+    const v = parseInt(inp.value);
+    if(!v || v<1 || v>d.teams){ alert('عدد الصاعدين لازم يكون من 1 لـ ' + d.teams); return; }
+    d.qualifiers = v;
+  }
+  advanceWizard();
+}
+
+function wizardPick(key, value){
+  wizard.data[key] = value;
+  if(key==='groupsBy' && value==='auto' && wizard.data.teams % 4 !== 0){
+    alert('عمل المجموعات بالتصنيفات محتاج عدد فرق يقبل القسمة على 4 (زي 8 أو 12 أو 16). ارجع غير عدد الفرق، أو اختار "أنا بحطها".');
+    wizard.data.groupsBy = null;
+    return;
+  }
+  advanceWizard();
+}
+
+function advanceWizard(){
+  const steps = wizardSteps(wizard.data);
+  if(wizard.step < steps.length-1){
+    wizard.step++;
+    renderProfileBox();
+  } else {
+    finishWizard();
+  }
+}
+
+function wizardBack(){
+  if(wizard.step === 0){ wizard = null; }
+  else { wizard.step--; }
+  renderProfileBox();
+}
+
+function finishWizard(){
+  const d = wizard.data;
+  const isGroups = d.format === 'groups';
+  profile = {
+    name: (wizard.editing && profile) ? profile.name : makeProfileName(),
+    teams: d.teams,
+    format: d.format,
+    groupsBy: isGroups ? d.groupsBy : null,
+    price: d.price,
+    qualifiers: isGroups ? (d.qualifiers || Math.floor(d.teams/2)) : 0
+  };
+  wizard = null;
+  document.getElementById('priceInput').value = profile.price;
+  renderProfileBox();
+  updateTypeUI();
+  updateTeamsHint();
+  updateTotals();
+  saveState();
+}
+
+function renderProfileBox(){
+  const box = document.getElementById('profileBox');
+  if(!box) return;
+  if(wizard){ box.innerHTML = wizardHtml(); return; }
+  if(!profile){
+    box.innerHTML = `<div class="empty-hint" style="padding:4px 0 12px;">مفيش بروفايل لسه - اعمل واحد جديد وجاوب على كام سؤال</div>
+      <button class="primary" onclick="startWizard(false)">＋ بروفايل جديد</button>`;
+    return;
+  }
+  const parts = [`${profile.teams} فريق`, profile.format==='groups' ? 'مجموعات' : 'كل فريق يلعب مع الكل'];
+  if(profile.format==='groups'){
+    parts.push(profile.groupsBy==='auto' ? 'المجموعات بالتصنيفات' : 'المجموعات يدوي');
+    parts.push(`يصعد ${profile.qualifiers}`);
+  }
+  parts.push(`${profile.price} جنيه`);
+  box.innerHTML = `
+    <div style="font-weight:900; font-size:17px; color:var(--head);">${profile.name}</div>
+    <div class="type-note" style="text-align:right;">${parts.join(' • ')}</div>
+    <div class="row-inline">
+      <button class="ghost" onclick="startWizard(true)">✏️ تعديل الأسئلة</button>
+      <button class="ghost" onclick="newProfileFlow()">＋ بروفايل جديد</button>
+    </div>`;
+}
+
+function newProfileFlow(){
+  if(startNewTournament()) startWizard(false);
+}
+
+function updateTypeUI(){
+  const isRR = !!profile && profile.format === 'roundrobin';
+  const auto = !!profile && profile.format === 'groups' && profile.groupsBy === 'auto';
+  document.getElementById('roundRobinSection').style.display = isRR ? 'block' : 'none';
+  document.getElementById('tiersSection').style.display = auto ? 'block' : 'none';
+  document.getElementById('groupsSection').style.display = isRR ? 'none' : 'block';
+  document.getElementById('groupsManualInput').style.display = auto ? 'none' : 'block';
+  document.getElementById('matchesCardTitle').textContent = isRR ? 'الدورة - المباريات' : 'المجموعات والمباريات';
+  document.getElementById('knockoutCard').style.display = isRR ? 'none' : 'block';
+  document.getElementById('semifinalCard').style.display = isRR ? 'none' : 'block';
+}
+
+
+function extractTeamName(line){
+  let stripped = line.trim().replace(/^\s*\d+\s*[-.)،]?\s*/,'').trim();
+  if(!stripped) return null;
+  let clean = stripped.replace(/تيم\s*/,'').trim();
+  if(!clean) return null;
+  const idx = clean.indexOf(' و');
+  let p1, p2;
+  if(idx !== -1){
+    p1 = clean.slice(0, idx).trim();
+    p2 = clean.slice(idx+2).trim();
+  } else {
+    p1 = clean; p2 = '';
+  }
+  return p2 ? `${p1} و${p2}` : p1;
+}
+
+function loadTeamsForTiers(){
+  const raw = document.getElementById('teamsInput').value;
+  const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  const teamNames = lines.map(extractTeamName).filter(Boolean);
+  const need = profile ? profile.teams : 8;
+  if(teamNames.length !== need){
+    alert(`لازم يكون فيه ${need} فريق بالظبط في بوكس "ليستة التيمات" فوق (لقيت ${teamNames.length}). حط الفرق هناك الأول.`);
+    return;
+  }
+  thursdayTeams = teamNames;
+  thursdayTierAssignments = {};
+  renderTiersUI();
+  saveState();
+}
+
+function tierSlotsFor(n){
+  const G = Math.floor(n/4);
+  const slots = [];
+  ['A','B','C','D'].forEach(t=>{ for(let k=1;k<=G;k++) slots.push(t+k); });
+  return slots;
+}
+
+
+function renderTiersUI(){
+  const out = document.getElementById('tiersOutput');
+  if(thursdayTeams.length === 0){
+    out.innerHTML = '';
+    return;
+  }
+  const tierSlots = tierSlotsFor(thursdayTeams.length);
+  const usedSlots = Object.values(thursdayTierAssignments);
+  const rows = thursdayTeams.map(team=>{
+    const current = thursdayTierAssignments[team] || '';
+    const options = tierSlots.map(slot=>{
+      const takenByOther = usedSlots.includes(slot) && current!==slot;
+      return `<option value="${slot}" ${slot===current?'selected':''} ${takenByOther?'disabled':''}>${slot}${takenByOther?' (متاخد)':''}</option>`;
+    }).join('');
+    return `
+      <div class="row-inline" style="justify-content:space-between; margin-top:6px;">
+        <span style="font-size:13px;">${team}</span>
+        <select onchange="setTierAssignment('${team.replace(/'/g,"\\'")}', this.value)">
+          <option value="">اختار تصنيف</option>
+          ${options}
+        </select>
+      </div>
+    `;
+  }).join('');
+  out.innerHTML = rows + `
+    <div class="row-inline">
+      <button class="primary" onclick="generateThursdayGroups()">كوّن المجموعتين</button>
+      <button class="ghost" onclick="resetThursdayTiers()">مسح</button>
+    </div>
+  `;
+}
+
+function setTierAssignment(team, slot){
+  Object.keys(thursdayTierAssignments).forEach(t=>{
+    if(thursdayTierAssignments[t] === slot) delete thursdayTierAssignments[t];
+  });
+  if(slot === ''){
+    delete thursdayTierAssignments[team];
+  } else {
+    thursdayTierAssignments[team] = slot;
+  }
+  renderTiersUI();
+  saveState();
+}
+
+function resetThursdayTiers(){
+  if(!confirm('هيمسح كل التصنيفات، متأكد؟')) return;
+  thursdayTeams = [];
+  thursdayTierAssignments = {};
+  renderTiersUI();
+  saveState();
+}
+
+function generateThursdayGroups(){
+  const n = thursdayTeams.length;
+  const slots = tierSlotsFor(n);
+  const assigned = Object.values(thursdayTierAssignments);
+  if(n < 4 || n % 4 !== 0 || assigned.length !== n || new Set(assigned).size !== n){
+    alert(`لازم كل التصنيفات (${slots.join(', ')}) تتحدد لفرق مختلفة الأول`);
+    return;
+  }
+  if(groups.length > 0 && !confirm('هيعمل مجموعات جديدة ويمسح المجموعات والنتايج الحالية، متأكد؟')) return;
+  const G = n/4;
+  const slotToTeam = {};
+  Object.keys(thursdayTierAssignments).forEach(team=>{
+    slotToTeam[thursdayTierAssignments[team]] = team;
+  });
+
+  const groupTeams = Array.from({length:G}, ()=>[]);
+  ['A','B','C','D'].forEach(t=>{
+    const tierTeams = shuffleArray(Array.from({length:G}, (_,k)=>slotToTeam[t+(k+1)]));
+    tierTeams.forEach((team, gi)=> groupTeams[gi].push(team));
+  });
+
+  const newGroups = groupTeams.map((ts, gi)=>({name:`مجموعة ${gi+1}`, teams: shuffleArray(ts)}));
+  newGroups.forEach(g=>{
+    g.matches = [];
+    const order = shuffleArray([0,1,2,3]);
+    const t = order.map(idx=>g.teams[idx]);
+    g.matches.push({role:'seed', a:t[0], b:t[1], scoreA:'', scoreB:'', manualWinner:null});
+    g.matches.push({role:'seed', a:t[2], b:t[3], scoreA:'', scoreB:'', manualWinner:null});
+    g.matches.push({role:'cross', ref:[0,1], mode:'ww', scoreA:'', scoreB:'', manualWinner:null});
+    g.matches.push({role:'cross', ref:[0,1], mode:'ll', scoreA:'', scoreB:'', manualWinner:null});
+    g.matches.push({role:'cross', ref:[0,1], mode:'lw', scoreA:'', scoreB:'', manualWinner:null});
+    g.matches.push({role:'cross', ref:[0,1], mode:'wl', scoreA:'', scoreB:'', manualWinner:null});
+    g.override = null;
+    g.lateTeams = {};
+  });
+
+  groups = newGroups;
+  knockout = null;
+  semifinal = null;
+  document.getElementById('groupsInput').value = newGroups.map(g=>`${g.name}\n${g.teams.map(t=>'تيم '+t).join('\n')}`).join('\n\n');
+  renderGroups();
+  renderKnockout();
+  renderSemiFinal();
+  saveState();
+  alert('اتكونت المجموعات ✓ انزل تحت شوية تلاقي المجموعات والماتشات جاهزة');
+}
+
+
+/* ---------- Teams / players ---------- */
+function parseTeams(){
+  const raw = document.getElementById('teamsInput').value;
+  const lines = raw.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
+  const newPlayers = [];
+
+  lines.forEach(line=>{
+    let clean = line
+      .replace(/^\s*\d+\s*[-.)،]?\s*/,'')
+      .replace(/تيم\s*/,'')
+      .trim();
+
+    if(!clean) return;
+
+    const idx = clean.indexOf(' و');
+    let p1, p2;
+    if(idx !== -1){
+      p1 = clean.slice(0, idx).trim();
+      p2 = clean.slice(idx+2).trim();
+    } else {
+      p1 = clean;
+      p2 = null;
+    }
+    if(p1) newPlayers.push({name:p1, status:null});
+    if(p2) newPlayers.push({name:p2, status:null});
+  });
+
+  if(newPlayers.length === 0){
+    alert('مش قادر أستخرج أسامي من الليستة، تأكد من الفورمات');
+    return;
+  }
+
+  players = newPlayers;
+  document.getElementById('playersCard').style.display = 'block';
+  document.getElementById('totalsCard').style.display = 'block';
+  renderPlayers();
+  updateTotals();
+  saveState();
+}
+
+const PAY_BUTTONS = [['cash','كاش'],['instapay','انستاباي'],['vodafone','فودافون كاش'],['zizo','مع زيزو'],['makram','مع مكرم'],['cashback','كاش باك (مركز أول)']];
+function methodButtonsHtml(i, p){
+  return PAY_BUTTONS.map(([k,l])=>`<button class="${p.status===k?'sel-'+k:''}" onclick="setStatus(${i},'${k}')">${l}</button>`).join('');
+}
+
+function toggleUnpaidOnly(){
+  unpaidOnly = !unpaidOnly;
+  renderPlayers();
+}
+function toggleSpUnpaid(){
+  spUnpaid = !spUnpaid;
+  renderPlayerSearch();
+}
+function updateUnpaidBtns(){
+  const a = document.getElementById('unpaidOnlyBtn');
+  if(a){ a.classList.toggle('on', unpaidOnly); a.textContent = unpaidOnly ? '✅ اعرض الكل' : '❌ مين مدفعش بس'; }
+  const b = document.getElementById('spUnpaidBtn');
+  if(b){ b.classList.toggle('on', spUnpaid); b.textContent = spUnpaid ? '✅ الكل' : '❌ مين مدفعش بس'; }
+}
+
+function renderPlayers(){
+  const list = document.getElementById('playersList');
+  updateUnpaidBtns();
+  if(players.length === 0){
+    list.innerHTML = '<div class="empty-hint">مفيش لاعبين لسه</div>';
+    updateSearchFab();
+    return;
+  }
+  const shown = players.map((p,i)=>({p,i})).filter(x=>!unpaidOnly || !x.p.status);
+  if(shown.length === 0){
+    list.innerHTML = '<div class="empty-hint">الكل حاسب 🎉</div>';
+  } else {
+    list.innerHTML = shown.map(({p, i})=>{
+      const paidClass = p.status ? 'paid' : '';
+      return `
+        <div class="player-row ${paidClass}">
+          <div class="pname">${p.name} <button class="ghost" style="font-size:10px;padding:2px 7px;" onclick="editPlayerName(${i})">✏️</button></div>
+          <div class="methods">${methodButtonsHtml(i, p)}</div>
+        </div>
+      `;
+    }).join('');
+  }
+  updateSearchFab();
+  renderPlayerSearch();
+}
+
+/* ---------- floating player search ---------- */
+function normAr(x){
+  return String(x||'').replace(/[\u064B-\u0652\u0640]/g,'').replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/\s+/g,' ').trim().toLowerCase();
+}
+
+function findPlayerPlaces(name){
+  const n = normAr(name);
+  const out = [];
+  const check = (team, label)=>{
+    const t = String(team);
+    const idx = t.indexOf(' و');
+    const parts = idx!==-1 ? [t.slice(0,idx), t.slice(idx+2)] : [t];
+    const np = parts.map(normAr);
+    if(np.includes(n) || normAr(t).split(' ').includes(n)){
+      if(!out.some(o=>o.label===label && o.team===t)) out.push({label, team:t});
+    }
+  };
+  groups.forEach((g,gi)=>{
+    g.teams.forEach(t=>check(t, `${g.name} (${groupLabel(gi)})`));
+  });
+  if(roundRobin && roundRobin.teams){
+    roundRobin.teams.forEach(t=>check(t, 'دورة الأحد'));
+  }
+  return out;
+}
+
+function updateSearchFab(){
+  const fab = document.getElementById('searchFab');
+  if(!fab) return;
+  const has = players.length > 0;
+  if(!has && searchOpen){
+    searchOpen = false;
+    document.getElementById('searchPanel').style.display = 'none';
+  }
+  fab.style.display = (has && !searchOpen) ? 'block' : 'none';
+}
+
+function toggleSearchPanel(){
+  searchOpen = !searchOpen;
+  if(!searchOpen){
+    document.getElementById('searchInput').value = '';
+    spUnpaid = false;
+  }
+  document.getElementById('searchPanel').style.display = searchOpen ? 'block' : 'none';
+  updateSearchFab();
+  if(searchOpen){
+    renderPlayerSearch();
+    document.getElementById('searchInput').focus();
+  }
+}
+
+function renderPlayerSearch(){
+  const box = document.getElementById('searchResults');
+  if(!box) return;
+  updateUnpaidBtns();
+  if(!searchOpen) return;
+  const q = normAr(document.getElementById('searchInput').value);
+  let items = players.map((p,i)=>({p,i}));
+  if(spUnpaid) items = items.filter(x=>!x.p.status);
+  if(q) items = items.filter(x=>normAr(x.p.name).includes(q));
+  else if(!spUnpaid){
+    box.innerHTML = '<div class="empty-hint">اكتب أول حرف أو حرفين من الاسم</div>';
+    return;
+  }
+  if(items.length === 0){
+    box.innerHTML = '<div class="empty-hint">' + ((spUnpaid && !q) ? 'الكل حاسب 🎉' : 'مفيش حد بالاسم ده') + '</div>';
+    return;
+  }
+  const hasPlaces = groups.length > 0 || (roundRobin && roundRobin.teams);
+  box.innerHTML = items.slice(0,40).map(({p, i})=>{
+    const places = findPlayerPlaces(p.name);
+    const placeTxt = places.length
+      ? places.map(x=>`${x.label} — ${x.team}`).join(' / ')
+      : (hasPlaces ? 'مش لاقيه في أي مجموعة' : 'لسه مفيش مجموعات');
+    return `
+      <div class="player-row ${p.status?'paid':''}" style="flex-direction:column; align-items:stretch;">
+        <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+          <div class="pname">${p.name}</div>
+          <div style="font-size:12px; color:var(--mut3);">👥 ${placeTxt}</div>
+        </div>
+        <div class="methods">${methodButtonsHtml(i, p)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+
+function editPlayerName(i){
+  const newName = prompt('اسم اللاعب الجديد:', players[i].name);
+  if(!newName || !newName.trim() || newName.trim()===players[i].name) return;
+  players[i].name = newName.trim();
+  renderPlayers();
+  saveState();
+}
+
+function setStatus(i, method){
+  players[i].status = (players[i].status === method) ? null : method;
+  renderPlayers();
+  updateTotals();
+  saveState();
+}
+
+function updateTotals(){
+  const price = parseFloat(document.getElementById('priceInput').value) || 0;
+  const cashCount = players.filter(p=>p.status==='cash').length;
+  const instapayCount = players.filter(p=>p.status==='instapay').length;
+  const vodafoneCount = players.filter(p=>p.status==='vodafone').length;
+  const zizoCount = players.filter(p=>p.status==='zizo').length;
+  const makramCount = players.filter(p=>p.status==='makram').length;
+  const cashbackCount = players.filter(p=>p.status==='cashback').length;
+  const unpaid = players.filter(p=>!p.status);
+
+  document.getElementById('totCash').textContent = (cashCount*price).toLocaleString();
+  document.getElementById('totInstapay').textContent = (instapayCount*price).toLocaleString();
+  document.getElementById('totVodafone').textContent = (vodafoneCount*price).toLocaleString();
+  document.getElementById('totZizo').textContent = (zizoCount*price).toLocaleString();
+  document.getElementById('totMakram').textContent = (makramCount*price).toLocaleString();
+  document.getElementById('totUnpaidCount').textContent = unpaid.length;
+
+  const received = (cashCount+instapayCount+vodafoneCount+zizoCount+makramCount)*price;
+  const expected = (players.length - cashbackCount)*price;
+  document.getElementById('totReceived').textContent = received.toLocaleString() + ' جنيه';
+  document.getElementById('totExpectedLbl').textContent = `من ${expected.toLocaleString()} جنيه (${players.length - cashbackCount} لاعب × ${price}${cashbackCount ? ` - ${cashbackCount} كاش باك` : ''})`;
+
+  const unpaidList = document.getElementById('unpaidList');
+  if(unpaid.length === 0){
+    unpaidList.textContent = 'الكل حاسب 🎉';
+  } else {
+    unpaidList.innerHTML = unpaid.map(p=>p.name).join(' • ');
+  }
+}
+
+function joinArabicNames(names){
+  if(names.length===0) return '';
+  if(names.length===1) return names[0];
+  if(names.length===2) return `${names[0]} و${names[1]}`;
+  return `${names.slice(0,-1).join('، ')} و${names[names.length-1]}`;
+}
+
+function generatePaymentReport(){
+  const price = parseFloat(document.getElementById('priceInput').value) || 0;
+  const methodTotals = {cash:0, instapay:0, vodafone:0, zizo:0, makram:0};
+  const methodNames = {zizo:[], makram:[]};
+  players.forEach(p=>{
+    if(p.status && p.status!=='cashback' && methodTotals.hasOwnProperty(p.status)){
+      methodTotals[p.status] += price;
+      if(p.status==='zizo' || p.status==='makram') methodNames[p.status].push(p.name);
+    }
+  });
+  const labels = {cash:'كاش', instapay:'انستاباي', vodafone:'فودافون كاش', zizo:'مع زيزو', makram:'مع مكرم'};
+  const order = ['cash','instapay','vodafone','zizo','makram'];
+  const lines = [];
+  let total = 0;
+  order.forEach(method=>{
+    const amt = methodTotals[method];
+    if(amt > 0){
+      total += amt;
+      let line = `${amt} ${labels[method]}`;
+      if((method==='zizo'||method==='makram') && methodNames[method].length){
+        line += ` (${joinArabicNames(methodNames[method])})`;
+      }
+      lines.push(line);
+    }
+  });
+  lines.push('');
+  lines.push(`الاجمالي ${total}`);
+  return lines.join('\n');
+}
+
+function copyPaymentReport(){
+  const text = generatePaymentReport();
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>{
+      alert('اتنسخ الحساب ✓ الصقه في الواتساب');
+    }).catch(()=>{
+      prompt('انسخ النص ده يدوي:', text);
+    });
+  } else {
+    prompt('انسخ النص ده يدوي:', text);
+  }
+}
+
+document.getElementById('priceInput').addEventListener('input', ()=>{
+  updateTotals();
+  saveState();
+});
+
+document.getElementById('teamsInput').addEventListener('input', saveState);
+document.getElementById('teamsInput').addEventListener('input', updateTeamsHint);
+
+function resetAll(){
+  if(!confirm('هيمسح كل بيانات اللاعبين والدفع الحالية، متأكد؟')) return;
+  players = [];
+  document.getElementById('teamsInput').value = '';
+  document.getElementById('playersCard').style.display = 'none';
+  document.getElementById('totalsCard').style.display = 'none';
+  updateSearchFab();
+  saveState();
+}
+
+/* ---------- Groups / matches ---------- */
+/* ---------- OCR: read group screenshots ---------- */
+function setOcrStatus(text){
+  document.getElementById('ocrStatus').textContent = text;
+}
+
+let tesseractLoadPromise = null;
+function ensureTesseractLoaded(){
+  if(window.Tesseract) return Promise.resolve();
+  if(tesseractLoadPromise) return tesseractLoadPromise;
+  tesseractLoadPromise = new Promise((resolve, reject)=>{
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    s.onload = resolve;
+    s.onerror = ()=>reject(new Error('تعذر تحميل أداة القراءة - تأكد إنك متصل بالنت وجرب تاني'));
+    document.head.appendChild(s);
+  });
+  return tesseractLoadPromise;
+}
+
+function countExistingGroups(){
+  const text = document.getElementById('groupsInput').value;
+  const matches = text.match(/^\s*مجموعة/gm);
+  return matches ? matches.length : 0;
+}
+
+async function handleGroupImages(fileList){
+  if(!fileList || fileList.length === 0) return;
+  try{
+    setOcrStatus('جاري تحميل أداة القراءة...');
+    await ensureTesseractLoaded();
+
+    const newBlocks = [];
+    let groupCounter = countExistingGroups();
+
+    for(let i=0; i<fileList.length; i++){
+      setOcrStatus(`جاري قراءة الصورة ${i+1} من ${fileList.length}...`);
+      const result = await Tesseract.recognize(fileList[i], 'ara');
+      const text = result.data.text || '';
+      const teamLines = text.split('\n')
+        .map(l=>l.trim())
+        .filter(l=>l.includes('تيم'));
+
+      if(teamLines.length > 0){
+        groupCounter++;
+        newBlocks.push(`مجموعة ${groupCounter}`);
+        newBlocks.push(...teamLines);
+        newBlocks.push('');
+      }
+    }
+
+    if(newBlocks.length === 0){
+      setOcrStatus('❌ مقدرتش ألاقي أسامي تيمات في الصور دي - جرب صورة أوضح أو اكتب يدوي');
+      return;
+    }
+
+    const ta = document.getElementById('groupsInput');
+    ta.value = (ta.value.trim() ? ta.value.trim() + '\n\n' : '') + newBlocks.join('\n');
+    saveState();
+    setOcrStatus('✓ تمت القراءة - راجع الأسامي كويس قبل ما تدوس "استخرج المجموعات والماتشات" (ممكن يكون فيه أخطاء بسيطة في القراءة)');
+  }catch(e){
+    console.error('OCR error:', e);
+    setOcrStatus('❌ حصل خطأ: ' + e.message);
+  }
+}
+
+function parseGroups(){
+  const raw = document.getElementById('groupsInput').value;
+  const lines = raw.split('\n').map(l=>l.trim());
+  const newGroups = [];
+  let current = null;
+
+  lines.forEach(line=>{
+    if(!line){ return; }
+    let stripped = line.replace(/^\s*\d+\s*[-.)،]?\s*/,'').trim();
+    if(stripped.includes('تيم')){
+      let clean = stripped.replace(/تيم\s*/,'').trim();
+      const idx = clean.indexOf(' و');
+      let p1, p2;
+      if(idx !== -1){
+        p1 = clean.slice(0, idx).trim();
+        p2 = clean.slice(idx+2).trim();
+      } else {
+        p1 = clean; p2 = '';
+      }
+      const teamName = p2 ? `${p1} و${p2}` : p1;
+      if(!current){
+        current = {name: 'مجموعة 1', teams: []};
+        newGroups.push(current);
+      }
+      if(teamName) current.teams.push(teamName);
+    } else {
+      current = {name: line, teams: []};
+      newGroups.push(current);
+    }
+  });
+
+  newGroups.forEach(g=>{
+    g.matches = [];
+    if(g.teams.length === 4){
+      // random pairing: M1 is a random pair of the 4 teams, M2 is whoever's left; M3..M6 are revealed as M1/M2 results come in
+      const order = shuffleArray([0,1,2,3]);
+      const t = order.map(idx=>g.teams[idx]);
+      g.matches.push({role:'seed', a:t[0], b:t[1], scoreA:'', scoreB:'', manualWinner:null}); // M1
+      g.matches.push({role:'seed', a:t[2], b:t[3], scoreA:'', scoreB:'', manualWinner:null}); // M2
+      g.matches.push({role:'cross', ref:[0,1], mode:'ww', scoreA:'', scoreB:'', manualWinner:null}); // M3: winner1 v winner2
+      g.matches.push({role:'cross', ref:[0,1], mode:'ll', scoreA:'', scoreB:'', manualWinner:null}); // M4: loser1 v loser2
+      g.matches.push({role:'cross', ref:[0,1], mode:'lw', scoreA:'', scoreB:'', manualWinner:null}); // M5: loser1 v winner2
+      g.matches.push({role:'cross', ref:[0,1], mode:'wl', scoreA:'', scoreB:'', manualWinner:null}); // M6: winner1 v loser2
+    } else {
+      // fallback for group sizes other than 4: plain full round-robin, all matches shown from the start
+      for(let i=0;i<g.teams.length;i++){
+        for(let j=i+1;j<g.teams.length;j++){
+          g.matches.push({role:'seed', a:g.teams[i], b:g.teams[j], scoreA:'', scoreB:'', manualWinner:null});
+        }
+      }
+    }
+    g.override = null;
+    g.lateTeams = {};
+  });
+
+  if(newGroups.length === 0 || newGroups.every(g=>g.teams.length===0)){
+    alert('مش قادر أستخرج مجموعات، تأكد من الفورمات');
+    return;
+  }
+
+  groups = newGroups;
+  renderGroups();
+  saveState();
+}
+
+function getMatchWinner(m){
+  const sa = (m.scoreA===''||m.scoreA==null) ? null : parseFloat(m.scoreA);
+  const sb = (m.scoreB===''||m.scoreB==null) ? null : parseFloat(m.scoreB);
+  if(sa!=null && sb!=null && !isNaN(sa) && !isNaN(sb) && sa!==sb){
+    return sa > sb ? m.a : m.b;
+  }
+  if(m.manualWinner) return m.manualWinner;
+  return null;
+}
+
+function resolveMatchTeams(g, mi){
+  const m = g.matches[mi];
+  if(m.role === 'seed') return {a:m.a, b:m.b};
+  const seedA = g.matches[m.ref[0]];
+  const seedB = g.matches[m.ref[1]];
+  const wA = getMatchWinner(seedA);
+  const wB = getMatchWinner(seedB);
+  if(!wA || !wB) return null;
+  const lA = (wA === seedA.a) ? seedA.b : seedA.a;
+  const lB = (wB === seedB.a) ? seedB.b : seedB.a;
+  if(m.mode === 'ww') return {a:wA, b:wB};
+  if(m.mode === 'll') return {a:lA, b:lB};
+  if(m.mode === 'lw') return {a:lA, b:wB};
+  if(m.mode === 'wl') return {a:wA, b:lB};
+  return null;
+}
+
+function getResolvedWinner(g, mi){
+  const r = resolveMatchTeams(g, mi);
+  if(!r) return null;
+  const m = g.matches[mi];
+  const sa = (m.scoreA===''||m.scoreA==null) ? null : parseFloat(m.scoreA);
+  const sb = (m.scoreB===''||m.scoreB==null) ? null : parseFloat(m.scoreB);
+  if(sa!=null && sb!=null && !isNaN(sa) && !isNaN(sb) && sa!==sb){
+    return sa > sb ? r.a : r.b;
+  }
+  if(m.manualWinner === r.a || m.manualWinner === r.b) return m.manualWinner;
+  return null;
+}
+
+function findResolvedMatch(g, teamX, teamY){
+  for(let mi=0; mi<g.matches.length; mi++){
+    const r = resolveMatchTeams(g, mi);
+    if(!r) continue;
+    if((r.a===teamX && r.b===teamY) || (r.a===teamY && r.b===teamX)) return mi;
+  }
+  return null;
+}
+
+function computeStandings(g){
+  const stats = {};
+  g.teams.forEach(t=> stats[t] = {team:t, wins:0, diff:0});
+  g.matches.forEach((m, mi)=>{
+    const r = resolveMatchTeams(g, mi);
+    if(!r) return;
+    const winner = getResolvedWinner(g, mi);
+    if(winner) stats[winner].wins++;
+    const sa = (m.scoreA===''||m.scoreA==null) ? null : parseFloat(m.scoreA);
+    const sb = (m.scoreB===''||m.scoreB==null) ? null : parseFloat(m.scoreB);
+    if(sa!=null && sb!=null && !isNaN(sa) && !isNaN(sb)){
+      stats[r.a].diff += (sa-sb);
+      stats[r.b].diff += (sb-sa);
+    }
+  });
+
+  let arr = Object.values(stats);
+
+  if(g.override && g.override.length===arr.length && g.override.every(t=>stats[t])){
+    arr = g.override.map(name=>stats[name]);
+  } else {
+    arr.sort((x,y)=>{
+      if(y.wins !== x.wins) return y.wins - x.wins;
+      if(y.diff !== x.diff) return y.diff - x.diff;
+      const mi = findResolvedMatch(g, x.team, y.team);
+      if(mi != null){
+        const w = getResolvedWinner(g, mi);
+        if(w === x.team) return -1;
+        if(w === y.team) return 1;
+      }
+      return 0;
+    });
+  }
+  return arr;
+}
+
+function isTiedUnresolved(g, x, y){
+  if(x.wins !== y.wins) return false;
+  if(x.diff !== y.diff) return false;
+  const mi = findResolvedMatch(g, x.team, y.team);
+  if(mi != null){
+    const w = getResolvedWinner(g, mi);
+    if(w) return false;
+  }
+  return true;
+}
+
+function renderGroups(){
+  const out = document.getElementById('groupsOutput');
+  out.innerHTML = groups.map((g, gi)=>{
+    const lateTeams = g.lateTeams || {};
+    const lateBadge = (teamName)=>{
+      const status = lateTeams[teamName];
+      if(status === 'minor') return ' <span style="font-size:10px;color:var(--partial);">⏰ -3 أشواط</span>';
+      if(status === 'major') return ' <span style="font-size:10px;color:var(--vodafone);">⏰ خسر الماتش</span>';
+      return '';
+    };
+
+    const matchesHtml = g.matches.map((m, mi)=>{
+      const r = resolveMatchTeams(g, mi);
+      if(!r){
+        return `
+          <div class="match-row" style="opacity:0.55;">
+            <div style="width:100%; text-align:center; font-size:12.5px; color:var(--mut1);">🔒 هيتحدد بعد نتيجة الماتش 1 والماتش 2</div>
+          </div>
+        `;
+      }
+      const winner = getResolvedWinner(g, mi);
+      return `
+        <div class="match-row ${hlClass(r.a, r.b)}">
+          <button class="team-btn ${winner===r.a?'winner':''}" onclick="setManualWinner(${gi},${mi},'a')">${r.a}${lateBadge(r.a)}</button>
+          <div class="score-inputs">
+            ${scoreSelect(m.scoreA, `setScore(${gi},${mi},'a',this.value)`)}
+            <span>:</span>
+            ${scoreSelect(m.scoreB, `setScore(${gi},${mi},'b',this.value)`)}
+          </div>
+          <button class="team-btn ${winner===r.b?'winner':''}" onclick="setManualWinner(${gi},${mi},'b')">${r.b}${lateBadge(r.b)}</button>
+        </div>
+      `;
+    }).join('');
+
+    const standings = computeStandings(g);
+    const rowsHtml = standings.map((s, si)=>{
+      let tieHtml = '';
+      if(si < standings.length-1 && isTiedUnresolved(g, s, standings[si+1])){
+        tieHtml = `<div class="tie-row">🟡 متعادلين <button onclick="swapStanding(${gi},${si})">بدّل الترتيب</button></div>`;
+      }
+      const outClass = si >= standings.length-2 ? 'rank-out' : '';
+      const rankClass = si===0 ? 'rank1' : (si===1 ? 'rank2' : outClass);
+      return `
+        <tr class="${rankClass} ${highlightTeam&&s.team===highlightTeam?'hl-row':''}">
+          <td>${si+1}</td>
+          <td>${s.team}${findBtn(s.team)} <button class="ghost" style="font-size:10px;padding:2px 6px;" onclick="editTeamName(${gi},'${s.team.replace(/'/g,"\\'")}')">✏️</button></td>
+          <td>${s.wins}</td>
+          <td>${s.diff>0?'+':''}${s.diff}</td>
+        </tr>
+        ${tieHtml ? `<tr><td colspan="4">${tieHtml}</td></tr>` : ''}
+      `;
+    }).join('');
+
+    const canEditPairing = g.teams.length === 4 && g.matches[0] && g.matches[0].role === 'seed' && !g.flat;
+    const canOpenAll = g.teams.length === 4 && !g.flat && g.matches.some(m=>m.role==='cross');
+    const editingThis = editingPairingGroupIndex === gi;
+    let pairingPanelHtml = '';
+    if(editingThis){
+      const chips = g.teams.map(t=>{
+        const sel = editingPairingSelected.includes(t);
+        return `<button class="ghost" style="font-size:12px;padding:5px 10px;margin:3px;${sel?'background:var(--court);color:#fff;border-color:var(--court);':''}" onclick="toggleTeamSelection(${gi},'${t.replace(/'/g,"\\'")}')">${t}</button>`;
+      }).join('');
+      pairingPanelHtml = `
+        <div style="background:var(--unpaid-bg);border-radius:10px;padding:10px;margin-bottom:10px;">
+          <div style="font-size:12.5px;color:var(--mut2);margin-bottom:6px;">اختار التيمين اللي فعلاً لعبوا الماتش الأول مع بعض:</div>
+          <div style="display:flex;flex-wrap:wrap;">${chips}</div>
+          <div class="row-inline">
+            <button class="primary" onclick="confirmEditPairing(${gi})">تأكيد</button>
+            <button class="ghost" onclick="toggleEditPairing(${gi})">إلغاء</button>
+          </div>
+        </div>
+      `;
+    }
+
+    const lateEditingThis = editingLateGroupIndex === gi;
+    let latePanelHtml = '';
+    if(lateEditingThis){
+      const rows = g.teams.map(t=>{
+        const status = lateTeams[t] || null;
+        return `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--bd3);">
+            <span style="font-size:12.5px;">${t}</span>
+            <div style="display:flex;gap:4px;">
+              <button class="ghost" style="font-size:11px;padding:3px 8px;${!status?'background:var(--court);color:#fff;':''}" onclick="setLateStatus(${gi},'${t.replace(/'/g,"\\'")}',null)">وصل</button>
+              <button class="ghost" style="font-size:11px;padding:3px 8px;${status==='minor'?'background:var(--partial);color:#fff;border-color:var(--partial);':''}" onclick="setLateStatus(${gi},'${t.replace(/'/g,"\\'")}','minor')">10 دقايق (-3)</button>
+              <button class="ghost" style="font-size:11px;padding:3px 8px;${status==='major'?'background:var(--vodafone);color:#fff;border-color:var(--vodafone);':''}" onclick="setLateStatus(${gi},'${t.replace(/'/g,"\\'")}','major')">نص ساعة (خسارة)</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+      latePanelHtml = `
+        <div style="background:var(--unpaid-bg);border-radius:10px;padding:10px;margin-bottom:10px;">
+          <div style="font-size:12.5px;color:var(--mut2);margin-bottom:6px;">حدد حالة كل فريق:</div>
+          ${rows}
+          <div class="row-inline">
+            <button class="ghost" onclick="toggleLatePanel(${gi})">قفل</button>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="group-block ${groupHlClass(g)}">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+          <h3 style="margin:0;">${g.name}</h3>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="ghost" style="font-size:11px;padding:4px 10px;" onclick="toggleLatePanel(${gi})">⏰ متأخرين؟</button>
+            ${canOpenAll ? `<button class="ghost" style="font-size:11px;padding:4px 10px;" onclick="openAllMatches(${gi})">🔓 افتح كل الماتشات</button>` : ''}
+            ${canEditPairing ? `<button class="ghost" style="font-size:11px;padding:4px 10px;" onclick="toggleEditPairing(${gi})">🔄 مين لعب مع مين فعلاً؟</button>` : ''}
+          </div>
+        </div>
+        ${latePanelHtml}
+        ${pairingPanelHtml}
+        ${matchesHtml}
+        <table class="standings-table">
+          <thead><tr><th>#</th><th>الفريق</th><th>فوز</th><th>فرق الأشواط</th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+        ${g.override ? `<div class="reset-order"><button onclick="resetOrder(${gi})">إعادة الترتيب التلقائي</button></div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+// turns a seeded group into a flat list of all 6 pairings, keeping every result already entered
+function openAllMatches(gi){
+  const g = groups[gi];
+  if(!g || g.flat || !g.matches.some(m=>m.role==='cross')) return;
+  if(!confirm('المجموعة دي هتتحول لقايمة فيها الـ6 ماتشات كلهم مفتوحين، وكل النتايج اللي سجلتها هتفضل زي ما هي. مش هترجع للوضع المترتب تاني في المجموعة دي. متأكد؟')) return;
+  const key = (a,b)=>[a,b].sort().join('|');
+  const seen = new Set();
+  const flat = [];
+  g.matches.forEach((m, mi)=>{
+    const r = resolveMatchTeams(g, mi);
+    if(!r) return;
+    const nm = {role:'seed', a:r.a, b:r.b, scoreA:m.scoreA, scoreB:m.scoreB, manualWinner:m.manualWinner};
+    if(m.auto) nm.auto = true;
+    flat.push(nm);
+    seen.add(key(r.a, r.b));
+  });
+  for(let i=0;i<g.teams.length;i++){
+    for(let j=i+1;j<g.teams.length;j++){
+      if(!seen.has(key(g.teams[i], g.teams[j]))){
+        flat.push({role:'seed', a:g.teams[i], b:g.teams[j], scoreA:'', scoreB:'', manualWinner:null});
+      }
+    }
+  }
+  g.matches = flat;
+  g.flat = true;
+  if(editingPairingGroupIndex === gi){ editingPairingGroupIndex = null; editingPairingSelected = []; }
+  renderGroups();
+  renderKnockout();
+  saveState();
+}
+
+function toggleLatePanel(gi){
+  editingLateGroupIndex = (editingLateGroupIndex === gi) ? null : gi;
+  renderGroups();
+}
+
+function setLateStatus(gi, teamName, status){
+  const g = groups[gi];
+  if(!g.lateTeams) g.lateTeams = {};
+  if(status){
+    g.lateTeams[teamName] = status;
+  } else {
+    delete g.lateTeams[teamName];
+  }
+
+  if(status === 'major'){
+    // auto-forfeit their first (seed) match if it hasn't already got a real result
+    const seedIndex = g.matches.findIndex(m => m.role==='seed' && (m.a===teamName || m.b===teamName));
+    if(seedIndex !== -1){
+      const m = g.matches[seedIndex];
+      if(getMatchWinner(m) === null){
+        if(m.a === teamName){ m.scoreA='0'; m.scoreB='6'; m.manualWinner=m.b; }
+        else { m.scoreA='6'; m.scoreB='0'; m.manualWinner=m.a; }
+      }
+    }
+  }
+
+  renderGroups();
+  renderKnockout();
+  saveState();
+}
+
+function renameTeamEverywhere(oldName, newName){
+  if(highlightTeam===oldName){ highlightTeam = newName; updateHighlightBar(); }
+  groups.forEach(g=>{
+    g.teams = g.teams.map(t=> t===oldName ? newName : t);
+    g.matches.forEach(m=>{
+      if(m.role==='seed'){
+        if(m.a===oldName) m.a=newName;
+        if(m.b===oldName) m.b=newName;
+      }
+      if(m.manualWinner===oldName) m.manualWinner=newName;
+    });
+    if(g.override) g.override = g.override.map(t=> t===oldName ? newName : t);
+    if(g.lateTeams && g.lateTeams[oldName]!==undefined){
+      g.lateTeams[newName] = g.lateTeams[oldName];
+      delete g.lateTeams[oldName];
+    }
+  });
+  if(knockout && knockout.pairs){
+    knockout.pairs.forEach(m=>{
+      if(m.confirmedA===oldName) m.confirmedA=newName;
+      if(m.confirmedB===oldName) m.confirmedB=newName;
+      if(m.manualWinner===oldName) m.manualWinner=newName;
+    });
+  }
+  if(semifinal){
+    if(semifinal.byeTeam===oldName) semifinal.byeTeam=newName;
+    ['decider','final'].forEach(key=>{
+      const m = semifinal[key];
+      if(m){
+        if(m.a===oldName) m.a=newName;
+        if(m.b===oldName) m.b=newName;
+        if(m.manualWinner===oldName) m.manualWinner=newName;
+      }
+    });
+    if(semifinal.tiedPending){
+      semifinal.tiedPending.tiedTeams = semifinal.tiedPending.tiedTeams.map(t=>t===oldName?newName:t);
+      semifinal.tiedPending.otherTeams = semifinal.tiedPending.otherTeams.map(t=>t===oldName?newName:t);
+    }
+  }
+  if(roundRobin){
+    roundRobin.teams = roundRobin.teams.map(t=>t===oldName?newName:t);
+    roundRobin.matches.forEach(m=>{
+      if(m.a===oldName) m.a=newName;
+      if(m.b===oldName) m.b=newName;
+      if(m.manualWinner===oldName) m.manualWinner=newName;
+    });
+    if(roundRobin.override) roundRobin.override = roundRobin.override.map(t=>t===oldName?newName:t);
+  }
+}
+
+function editTeamName(gi, oldName){
+  const newName = prompt('اسم التيم الجديد:', oldName);
+  if(!newName || !newName.trim() || newName.trim()===oldName) return;
+  renameTeamEverywhere(oldName, newName.trim());
+  renderGroups();
+  renderKnockout();
+  renderSemiFinal();
+  renderRoundRobin();
+  saveState();
+}
+
+function editRRTeamName(oldName){
+  const newName = prompt('اسم التيم الجديد:', oldName);
+  if(!newName || !newName.trim() || newName.trim()===oldName) return;
+  renameTeamEverywhere(oldName, newName.trim());
+  renderRoundRobin();
+  saveState();
+}
+
+function toggleEditPairing(gi){
+  if(editingPairingGroupIndex === gi){
+    editingPairingGroupIndex = null;
+  } else {
+    editingPairingGroupIndex = gi;
+    editingPairingSelected = [];
+  }
+  renderGroups();
+}
+
+function toggleTeamSelection(gi, teamName){
+  if(editingPairingGroupIndex !== gi) return;
+  const idx = editingPairingSelected.indexOf(teamName);
+  if(idx !== -1){
+    editingPairingSelected.splice(idx,1);
+  } else {
+    if(editingPairingSelected.length >= 2){
+      alert('اختار تيمين بس للماتش الأول');
+      return;
+    }
+    editingPairingSelected.push(teamName);
+  }
+  renderGroups();
+}
+
+function confirmEditPairing(gi){
+  if(editingPairingSelected.length !== 2){
+    alert('لازم تختار تيمين بالظبط');
+    return;
+  }
+  if(!confirm('هيتصفر أي نتايج متسجلة في المجموعة دي عشان الأزواج بتتغير، متأكد؟')) return;
+  const g = groups[gi];
+  const [a,b] = editingPairingSelected;
+  const others = g.teams.filter(t=>t!==a && t!==b);
+  g.matches = [];
+  g.matches.push({role:'seed', a:a, b:b, scoreA:'', scoreB:'', manualWinner:null});
+  g.matches.push({role:'seed', a:others[0], b:others[1], scoreA:'', scoreB:'', manualWinner:null});
+  g.matches.push({role:'cross', ref:[0,1], mode:'ww', scoreA:'', scoreB:'', manualWinner:null});
+  g.matches.push({role:'cross', ref:[0,1], mode:'ll', scoreA:'', scoreB:'', manualWinner:null});
+  g.matches.push({role:'cross', ref:[0,1], mode:'lw', scoreA:'', scoreB:'', manualWinner:null});
+  g.matches.push({role:'cross', ref:[0,1], mode:'wl', scoreA:'', scoreB:'', manualWinner:null});
+  g.override = null;
+  editingPairingGroupIndex = null;
+  editingPairingSelected = [];
+  renderGroups();
+  renderKnockout();
+  saveState();
+}
+
+function setScore(gi, mi, side, value){
+  const m = groups[gi].matches[mi];
+  if(side==='a') m.scoreA = value; else m.scoreB = value;
+  m.auto = false;
+  renderGroups();
+  renderKnockout();
+  saveState();
+}
+
+function setManualWinner(gi, mi, side){
+  const g = groups[gi];
+  const r = resolveMatchTeams(g, mi);
+  if(!r) return;
+  if(!tapWinner(g.matches[mi], r.a, r.b, side)) return;
+  renderGroups();
+  renderKnockout();
+  saveState();
+}
+
+
+function swapStanding(gi, i){
+  const g = groups[gi];
+  const standings = computeStandings(g);
+  const order = standings.map(s=>s.team);
+  const tmp = order[i]; order[i] = order[i+1]; order[i+1] = tmp;
+  g.override = order;
+  renderGroups();
+  renderKnockout();
+  saveState();
+}
+
+function resetOrder(gi){
+  groups[gi].override = null;
+  renderGroups();
+  renderKnockout();
+  saveState();
+}
+
+document.getElementById('groupsInput').addEventListener('input', saveState);
+
+function resetGroups(){
+  if(!confirm('هيمسح المجموعات والماتشات كلها، متأكد؟')) return;
+  groups = [];
+  knockout = null;
+  semifinal = null;
+  document.getElementById('groupsInput').value = '';
+  document.getElementById('groupsOutput').innerHTML = '';
+  document.getElementById('semifinalOutput').innerHTML = '';
+  renderKnockout();
+  saveState();
+}
+
+/* ---------- Sunday round-robin (all teams play each other, no groups) ---------- */
+function circleMethodSchedule(teamsInput){
+  let teams = [...teamsInput];
+  if(teams.length % 2 !== 0) teams.push(null); // bye
+  const n = teams.length;
+  const half = n/2;
+  let arr = [...teams];
+  const rounds = [];
+  for(let r=0; r<n-1; r++){
+    const roundPairs = [];
+    for(let i=0;i<half;i++){
+      const a = arr[i];
+      const b = arr[n-1-i];
+      if(a!=null && b!=null) roundPairs.push([a,b]);
+    }
+    rounds.push(roundPairs);
+    const fixed = arr[0];
+    const rest = arr.slice(1);
+    rest.unshift(rest.pop());
+    arr = [fixed, ...rest];
+  }
+  return rounds;
+}
+
+function parseRoundRobin(){
+  const raw = document.getElementById('roundRobinInput').value;
+  const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  const teams = [];
+  lines.forEach(line=>{
+    const teamName = extractTeamName(line);
+    if(teamName) teams.push(teamName);
+  });
+
+  if(teams.length < 2){
+    alert('محتاج تيمين على الأقل، تأكد من الفورمات');
+    return;
+  }
+
+  const rounds = circleMethodSchedule(teams);
+  const matches = [];
+  rounds.forEach((roundPairs, ri)=>{
+    roundPairs.forEach((pair, pi)=>{
+      matches.push({round:ri+1, court:pi+1, a:pair[0], b:pair[1], scoreA:'', scoreB:'', manualWinner:null});
+    });
+  });
+
+  roundRobin = {teams, matches, override:null};
+  renderRoundRobin();
+  saveState();
+}
+
+function computeRRStandings(rr){
+  const stats = {};
+  rr.teams.forEach(t=> stats[t] = {team:t, wins:0, diff:0});
+  rr.matches.forEach(m=>{
+    const winner = getMatchWinner(m);
+    if(winner) stats[winner].wins++;
+    const sa = (m.scoreA===''||m.scoreA==null) ? null : parseFloat(m.scoreA);
+    const sb = (m.scoreB===''||m.scoreB==null) ? null : parseFloat(m.scoreB);
+    if(sa!=null && sb!=null && !isNaN(sa) && !isNaN(sb)){
+      stats[m.a].diff += (sa-sb);
+      stats[m.b].diff += (sb-sa);
+    }
+  });
+
+  let arr = Object.values(stats);
+  if(rr.override && rr.override.length===arr.length && rr.override.every(t=>stats[t])){
+    arr = rr.override.map(name=>stats[name]);
+  } else {
+    arr.sort((x,y)=>{
+      if(y.wins !== x.wins) return y.wins - x.wins;
+      if(y.diff !== x.diff) return y.diff - x.diff;
+      const match = rr.matches.find(m => (m.a===x.team && m.b===y.team) || (m.a===y.team && m.b===x.team));
+      if(match){
+        const w = getMatchWinner(match);
+        if(w === x.team) return -1;
+        if(w === y.team) return 1;
+      }
+      return 0;
+    });
+  }
+  return arr;
+}
+
+function isTiedUnresolvedRR(rr, x, y){
+  if(x.wins !== y.wins) return false;
+  if(x.diff !== y.diff) return false;
+  const match = rr.matches.find(m => (m.a===x.team && m.b===y.team) || (m.a===y.team && m.b===x.team));
+  if(match){
+    const w = getMatchWinner(match);
+    if(w) return false;
+  }
+  return true;
+}
+
+function setRRScore(mi, side, value){
+  const m = roundRobin.matches[mi];
+  if(side==='a') m.scoreA = value; else m.scoreB = value;
+  m.auto = false;
+  renderRoundRobin();
+  saveState();
+}
+
+function setRRWinner(mi, side){
+  const m = roundRobin.matches[mi];
+  if(!tapWinner(m, m.a, m.b, side)) return;
+  renderRoundRobin();
+  saveState();
+}
+
+
+function swapRRStanding(i){
+  const standings = computeRRStandings(roundRobin);
+  const order = standings.map(s=>s.team);
+  const tmp = order[i]; order[i] = order[i+1]; order[i+1] = tmp;
+  roundRobin.override = order;
+  renderRoundRobin();
+  saveState();
+}
+
+function resetRROrder(){
+  roundRobin.override = null;
+  renderRoundRobin();
+  saveState();
+}
+
+function resetRoundRobin(){
+  if(!confirm('هيمسح كل ماتشات الدورة، متأكد؟')) return;
+  roundRobin = null;
+  document.getElementById('roundRobinInput').value = '';
+  document.getElementById('roundRobinOutput').innerHTML = '';
+  saveState();
+}
+
+function renderRRRoundsHtml(rr, interactive){
+  const byRound = {};
+  rr.matches.forEach((m, mi)=>{
+    if(!byRound[m.round]) byRound[m.round] = [];
+    byRound[m.round].push({m, mi});
+  });
+  const roundNumbers = Object.keys(byRound).map(Number).sort((a,b)=>a-b);
+  return roundNumbers.map(rn=>{
+    const entries = byRound[rn];
+    const playing = new Set();
+    entries.forEach(({m})=>{ playing.add(m.a); playing.add(m.b); });
+    const resting = rr.teams.filter(t=>!playing.has(t));
+    const matchesHtml = entries.map(({m, mi})=>{
+      const winner = getMatchWinner(m);
+      if(interactive){
+        return `
+          <div class="match-row ${hlClass(m.a, m.b)}">
+            <div style="font-size:10px;color:var(--mut1);min-width:44px;">ملعب ${m.court}</div>
+            <button class="team-btn ${winner===m.a?'winner':''}" onclick="setRRWinner(${mi},'a')">${m.a}</button>
+            <div class="score-inputs">
+              ${scoreSelect(m.scoreA, `setRRScore(${mi},'a',this.value)`)}
+              <span>:</span>
+              ${scoreSelect(m.scoreB, `setRRScore(${mi},'b',this.value)`)}
+            </div>
+            <button class="team-btn ${winner===m.b?'winner':''}" onclick="setRRWinner(${mi},'b')">${m.b}</button>
+          </div>
+        `;
+      }
+      return `<div style="font-size:12.5px;padding:3px 0;">ملعب ${m.court}: ${m.a} <b>${m.scoreA||'?'}</b> - <b>${m.scoreB||'?'}</b> ${m.b} ${winner?`(فاز: ${winner})`:''}</div>`;
+    }).join('');
+    return `
+      <div style="margin-bottom:12px;">
+        <div style="font-size:12.5px;font-weight:700;color:var(--head);margin-bottom:4px;">الجولة ${rn}${resting.length ? ` <span style="font-weight:400;color:var(--mut1);">(مستريح: ${resting.join('، ')})</span>` : ''}</div>
+        ${matchesHtml}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderRoundRobin(){
+  const out = document.getElementById('roundRobinOutput');
+  if(!roundRobin || !roundRobin.matches || roundRobin.matches.length===0){
+    out.innerHTML = '<div class="empty-hint">لسه مفيش ماتشات - حط ليستة التيمات ودوس "استخرج الماتشات"</div>';
+    return;
+  }
+
+  const roundsHtml = renderRRRoundsHtml(roundRobin, true);
+
+  const standings = computeRRStandings(roundRobin);
+  const rowsHtml = standings.map((s, si)=>{
+    let tieHtml = '';
+    if(si < standings.length-1 && isTiedUnresolvedRR(roundRobin, s, standings[si+1])){
+      tieHtml = `<div class="tie-row">🟡 متعادلين <button onclick="swapRRStanding(${si})">بدّل الترتيب</button></div>`;
+    }
+    const rankClass = si===0 ? 'rank1' : (si===1 ? 'rank2' : '');
+    return `
+      <tr class="${rankClass} ${highlightTeam&&s.team===highlightTeam?'hl-row':''}">
+        <td>${si+1}</td>
+        <td>${s.team}${findBtn(s.team)} <button class="ghost" style="font-size:10px;padding:2px 6px;" onclick="editRRTeamName('${s.team.replace(/'/g,"\\'")}')">✏️</button></td>
+        <td>${s.wins}</td>
+        <td>${s.diff>0?'+':''}${s.diff}</td>
+      </tr>
+      ${tieHtml ? `<tr><td colspan="4">${tieHtml}</td></tr>` : ''}
+    `;
+  }).join('');
+
+  out.innerHTML = `
+    ${roundsHtml}
+    <h3 style="font-size:13.5px;margin:12px 0 6px;color:var(--head);">الترتيب العام</h3>
+    <table class="standings-table">
+      <thead><tr><th>#</th><th>الفريق</th><th>فوز</th><th>فرق الأشواط</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    ${roundRobin.override ? `<div class="reset-order"><button onclick="resetRROrder()">إعادة الترتيب التلقائي</button></div>` : ''}
+  `;
+}
+
+function renderRRHistoryBlock(rr){
+  const roundsHtml = renderRRRoundsHtml(rr, false);
+  const standings = computeRRStandings(rr);
+  const rows = standings.map((s,si)=>`<tr><td>${si+1}</td><td>${s.team}</td><td>${s.wins}</td><td>${s.diff>0?'+':''}${s.diff}</td></tr>`).join('');
+  return `
+    <h3 style="font-size:13px;margin:10px 0 4px;">ماتشات الدورة</h3>
+    ${roundsHtml}
+    <h3 style="font-size:13px;margin:10px 0 4px;">الترتيب النهائي</h3>
+    <table class="standings-table">
+      <thead><tr><th>#</th><th>الفريق</th><th>فوز</th><th>فرق</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+document.getElementById('roundRobinInput').addEventListener('input', saveState);
+
+/* ---------- Knockout draw (1st vs 2nd across groups) ---------- */
+function shuffleArray(arr){
+  const a = [...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+
+function groupLabel(gi){
+  return String.fromCharCode(65+gi);
+}
+
+function isGroupComplete(g){
+  return g.matches.every((m, mi)=> getResolvedWinner(g, mi) !== null);
+}
+
+// a team's final rank is certain from wins alone (no tie possible) even before the group ends
+function settledQualifier(g, rank){
+  const n = g.teams.length;
+  if(n < 2) return null;
+  const minW = {}, played = {};
+  g.teams.forEach(t=>{ minW[t]=0; played[t]=0; });
+  g.matches.forEach((m, mi)=>{
+    const r = resolveMatchTeams(g, mi);
+    if(!r) return;
+    const w = getResolvedWinner(g, mi);
+    if(!w || !(w in minW) || !(r.a in played) || !(r.b in played)) return;
+    minW[w]++;
+    played[r.a]++; played[r.b]++;
+  });
+  const maxW = {};
+  g.teams.forEach(t=>{ maxW[t] = minW[t] + Math.max(0, (n-1) - played[t]); });
+  for(const x of g.teams){
+    let above = 0, below = 0;
+    g.teams.forEach(y=>{
+      if(y===x) return;
+      if(minW[y] > maxW[x]) above++;
+      else if(maxW[y] < minW[x]) below++;
+    });
+    if(above === rank-1 && below === n-rank) return x;
+  }
+  return null;
+}
+
+function resolveQualifier(groupsArr, groupIdx, rank, confirmed){
+  if(confirmed) return confirmed;
+  const g = groupsArr[groupIdx];
+  if(!g) return null;
+  if(!isGroupComplete(g)) return settledQualifier(g, rank);
+  const standings = computeStandings(g);
+  return standings[rank-1] ? standings[rank-1].team : null;
+}
+
+
+function knockoutPairResolved(groupsArr, m){
+  return {
+    a: resolveQualifier(groupsArr, m.aGroupIdx, 1, m.confirmedA),
+    b: resolveQualifier(groupsArr, m.bGroupIdx, 2, m.confirmedB)
+  };
+}
+
+function knockoutPairWinner(groupsArr, m){
+  const r = knockoutPairResolved(groupsArr, m);
+  if(!r.a || !r.b) return null;
+  const sa = (m.scoreA===''||m.scoreA==null) ? null : parseFloat(m.scoreA);
+  const sb = (m.scoreB===''||m.scoreB==null) ? null : parseFloat(m.scoreB);
+  if(sa!=null && sb!=null && !isNaN(sa) && !isNaN(sb) && sa!==sb){
+    return sa > sb ? r.a : r.b;
+  }
+  if(m.manualWinner === r.a || m.manualWinner === r.b) return m.manualWinner;
+  return null;
+}
+
+function knockoutPairMargin(groupsArr, m){
+  const r = knockoutPairResolved(groupsArr, m);
+  if(!r.a || !r.b) return null;
+  const sa = (m.scoreA===''||m.scoreA==null) ? null : parseFloat(m.scoreA);
+  const sb = (m.scoreB===''||m.scoreB==null) ? null : parseFloat(m.scoreB);
+  if(sa!=null && sb!=null && !isNaN(sa) && !isNaN(sb)){
+    return Math.abs(sa-sb);
+  }
+  return null;
+}
+
+function generateKnockout(){
+  if(groups.length < 2){
+    alert('محتاج مجموعتين على الأقل عشان تعمل القرعة');
+    return;
+  }
+  const n = groups.length;
+  let perm, tries = 0;
+  do{
+    perm = shuffleArray([...Array(n).keys()]);
+    tries++;
+  } while(perm.some((p,i)=>p===i) && tries<300);
+
+  const pairs = groups.map((g,i)=>({
+    aGroupIdx: i,
+    bGroupIdx: perm[i],
+    confirmedA: null,
+    confirmedB: null,
+    scoreA:'', scoreB:'', manualWinner:null
+  }));
+
+  knockout = {pairs};
+  renderKnockout();
+  saveState();
+}
+
+function clearKnockout(){
+  if(!confirm('هيمسح القرعة الحالية، متأكد؟')) return;
+  knockout = null;
+  semifinal = null;
+  renderKnockout();
+  document.getElementById('semifinalOutput').innerHTML = '';
+  saveState();
+}
+
+function setKnockoutScore(i, side, value){
+  if(!knockout) return;
+  const m = knockout.pairs[i];
+  if(side==='a') m.scoreA = value; else m.scoreB = value;
+  m.auto = false;
+  renderKnockout();
+  saveState();
+}
+
+function setKnockoutWinner(i, side){
+  if(!knockout) return;
+  const m = knockout.pairs[i];
+  const r = knockoutPairResolved(groups, m);
+  if(!r.a || !r.b) return;
+  if(!tapWinner(m, r.a, r.b, side)) return;
+  renderKnockout();
+  saveState();
+}
+
+
+function confirmQualifier(i, side, teamName){
+  if(!knockout) return;
+  const m = knockout.pairs[i];
+  if(side==='a') m.confirmedA = teamName; else m.confirmedB = teamName;
+  renderKnockout();
+  saveState();
+}
+
+function unconfirmQualifier(i, side){
+  if(!knockout) return;
+  const m = knockout.pairs[i];
+  if(side==='a') m.confirmedA = null; else m.confirmedB = null;
+  renderKnockout();
+  saveState();
+}
+
+function renderKnockout(){
+  const out = document.getElementById('knockoutOutput');
+  if(!knockout || !knockout.pairs || knockout.pairs.length===0){
+    out.innerHTML = '<div class="empty-hint">لسه مفيش قرعة - دوس "اعمل القرعة" في أي وقت، حتى قبل ما المجموعات تخلص</div>';
+    return;
+  }
+  out.innerHTML = knockout.pairs.map((m,i)=>{
+    const r = knockoutPairResolved(groups, m);
+    const labelA = `${groupLabel(m.aGroupIdx)}1`;
+    const labelB = `${groupLabel(m.bGroupIdx)}2`;
+
+    function sideHtml(side, resolvedName, confirmed, groupIdx, rank){
+      if(resolvedName){
+        return `
+          <div style="flex:1;min-width:70px;">
+            <div style="font-size:10px;color:var(--mut1);text-align:center;margin-bottom:2px;">${side==='a'?labelA:labelB}${confirmed?' (مؤكد يدوي)':''}</div>
+            <button class="team-btn ${knockoutPairWinner(groups,m)===resolvedName?'winner':''}" onclick="setKnockoutWinner(${i},'${side}')">${resolvedName}</button>
+            ${confirmed ? `<div style="text-align:center;"><button class="ghost" style="font-size:10px;padding:2px 8px;margin-top:2px;" onclick="unconfirmQualifier(${i},'${side}')">إلغاء التأكيد</button></div>` : ''}
+          </div>
+        `;
+      }
+      const g = groups[groupIdx];
+      const teamOptions = g ? g.teams.map(t=>`<button class="ghost" style="font-size:11px;padding:4px 8px;margin:2px;" onclick="confirmQualifier(${i},'${side}','${t.replace(/'/g,"\\'")}')">${t}</button>`).join('') : '';
+      return `
+        <div style="flex:1;min-width:120px;">
+          <div style="font-size:10px;color:var(--mut1);text-align:center;margin-bottom:2px;">🔒 ${side==='a'?labelA:labelB}</div>
+          <div style="text-align:center;font-size:11px;color:var(--mut1);margin-bottom:4px;">لسه مش معروف - اتأكد يدوي:</div>
+          <div style="display:flex;flex-wrap:wrap;justify-content:center;">${teamOptions}</div>
+        </div>
+      `;
+    }
+
+    let scoreHtml = '';
+    if(r.a && r.b){
+      scoreHtml = `
+        <div class="score-inputs">
+          ${scoreSelect(m.scoreA, `setKnockoutScore(${i},'a',this.value)`)}
+          <span>:</span>
+          ${scoreSelect(m.scoreB, `setKnockoutScore(${i},'b',this.value)`)}
+        </div>
+      `;
+    }
+
+    return `
+      <div class="match-row ${hlClass(r.a, r.b)}" style="flex-direction:column; align-items:stretch;">
+        <div style="display:flex;align-items:flex-start;gap:8px;">
+          ${sideHtml('a', r.a, m.confirmedA, m.aGroupIdx, 1)}
+          ${scoreHtml}
+          ${sideHtml('b', r.b, m.confirmedB, m.bGroupIdx, 2)}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/* ---------- Archive ---------- */
+function saveTournament(){
+  if(!profile){
+    alert('اعمل بروفايل الأول قبل الحفظ');
+    return;
+  }
+  if(players.length === 0 && groups.length === 0 && !roundRobin){
+    alert('مفيش بيانات لحفظها لسه');
+    return;
+  }
+  const defaultLabel = profile.name;
+  const label = prompt('اسم/تاريخ للبطولة دي (اختياري)', defaultLabel) || defaultLabel;
+  const entry = {
+    id: Date.now().toString(),
+    type: profile.format,
+    date: new Date().toISOString(),
+    label: label,
+    groupsInput: document.getElementById('groupsInput').value,
+    groups: JSON.parse(JSON.stringify(groups)),
+    knockout: knockout ? JSON.parse(JSON.stringify(knockout)) : null,
+    semifinal: semifinal ? JSON.parse(JSON.stringify(semifinal)) : null,
+    roundRobin: roundRobin ? JSON.parse(JSON.stringify(roundRobin)) : null
+  };
+  history.unshift(entry);
+  saveState();
+  renderHistory();
+  alert('اتحفظت البطولة في الأرشيف ✓ تقدر تبدأ بطولة جديدة دلوقت لو حابب');
+}
+
+function startNewTournament(){
+  if(!confirm('هيمسح شاشة العمل الحالية (البطولات المحفوظة هتفضل زي ماهي في الأرشيف)، متأكد؟')) return false;
+  players = [];
+  groups = [];
+  knockout = null;
+  semifinal = null;
+  roundRobin = null;
+  profile = null;
+  wizard = null;
+  highlightTeam = null;
+  updateHighlightBar();
+  thursdayTeams = [];
+  thursdayTierAssignments = {};
+  document.getElementById('teamsInput').value = '';
+  document.getElementById('groupsInput').value = '';
+  document.getElementById('roundRobinInput').value = '';
+  document.getElementById('playersCard').style.display = 'none';
+  document.getElementById('totalsCard').style.display = 'none';
+  updateSearchFab();
+  document.getElementById('groupsOutput').innerHTML = '';
+  document.getElementById('knockoutOutput').innerHTML = '';
+  document.getElementById('semifinalOutput').innerHTML = '';
+  document.getElementById('roundRobinOutput').innerHTML = '';
+  document.getElementById('tiersOutput').innerHTML = '';
+  updateTypeUI();
+  renderProfileBox();
+  updateTeamsHint();
+  saveState();
+  return true;
+}
+
+function exportBackup(){
+  const data = localStorage.getItem(STORAGE_KEY);
+  if(!data){
+    alert('مفيش بيانات لسه لعمل نسخة احتياطية منها');
+    return;
+  }
+  const blob = new Blob([data], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `hesab-backup-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importBackup(file){
+  if(!file) return;
+  if(!confirm('استرجاع النسخة الاحتياطية هيستبدل كل البيانات الحالية على الموقع، متأكد؟')) return;
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    try{
+      const parsed = JSON.parse(e.target.result);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      alert('اترجعت النسخة الاحتياطية ✓ هتتحدث الصفحة دلوقت');
+      location.reload();
+    }catch(err){
+      alert('الملف ده مش نسخة احتياطية صحيحة، جرب ملف تاني');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function deleteHistoryEntry(id){
+  if(!confirm('هيتمسح نهائي من الأرشيف، متأكد؟')) return;
+  history = history.filter(h=>h.id!==id);
+  saveState();
+  renderHistory();
+}
+
+function toggleHistoryDetail(id){
+  const el = document.getElementById('hd-'+id);
+  if(!el) return;
+  el.classList.toggle('open');
+}
+
+function renderHistory(){
+  const list = document.getElementById('historyList');
+  if(history.length === 0){
+    list.innerHTML = '<div class="empty-hint">لسه مفيش بطولات محفوظة</div>';
+    return;
+  }
+  list.innerHTML = history.map(h=>{
+    const isRR = (h.type==='sunday' || h.type==='roundrobin');
+    const typeLabel = ({lowd:'Low D', beginners:'Beginners', thursday:'بطولة الخميس', sunday:'دورة الأحد', groups:'مجموعات', roundrobin:'الكل ضد الكل'})[h.type] || 'بطولة';
+
+    const groupsHtml = (!isRR) ? (h.groups||[]).map(g=>{
+      const matchesText = g.matches.map((m,mi)=>{
+        const r = resolveMatchTeams(g, mi);
+        if(!r) return `<div style="font-size:12px;color:var(--mut1);padding:2px 0;">ماتش ${mi+1}: متلعبش</div>`;
+        const w = getResolvedWinner(g, mi);
+        return `<div style="font-size:12.5px;padding:2px 0;">${r.a} <b>${m.scoreA||'?'}</b> - <b>${m.scoreB||'?'}</b> ${r.b} ${w?`(فاز: ${w})`:''}</div>`;
+      }).join('');
+      const standings = computeStandings(g);
+      const rows = standings.map((s,si)=>`<tr><td>${si+1}</td><td>${s.team}</td><td>${s.wins}</td><td>${s.diff>0?'+':''}${s.diff}</td></tr>`).join('');
+      const lateNames = Object.keys(g.lateTeams||{});
+      const lateText = lateNames.length ? `<div style="font-size:11.5px;color:var(--vodafone);padding:2px 0;">⏰ متأخرين: ${lateNames.map(n=>`${n} (${g.lateTeams[n]==='minor'?'-3 أشواط':'خسر الماتش'})`).join('، ')}</div>` : '';
+      return `<h3 style="font-size:13px;margin:10px 0 4px;">${g.name}</h3>
+        ${lateText}
+        ${matchesText}
+        <table class="standings-table">
+          <thead><tr><th>#</th><th>الفريق</th><th>فوز</th><th>فرق</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    }).join('') : '';
+
+    const knockoutHtml = (!isRR && h.knockout && h.knockout.pairs && h.knockout.pairs.length) ? `
+      <h3 style="font-size:13px;margin:10px 0 4px;">قرعة الدور الوسيط</h3>
+      ${h.knockout.pairs.map(m=>{
+        const r = knockoutPairResolved(h.groups||[], m);
+        const w = knockoutPairWinner(h.groups||[], m);
+        const aLabel = r.a || '؟';
+        const bLabel = r.b || '؟';
+        return `<div style="font-size:12.5px;padding:4px 0;">${aLabel} <b>${m.scoreA||'?'}</b> - <b>${m.scoreB||'?'}</b> ${bLabel} ${w?`(فاز: ${w})`:''}</div>`;
+      }).join('')}
+    ` : '';
+
+    let championHtml = '';
+    if(!isRR && h.semifinal && h.semifinal.final){
+      const fm = h.semifinal.final;
+      const champion = getMatchWinner(fm);
+      if(champion){
+        const runnerUp = champion===fm.a ? fm.b : fm.a;
+        const dm = h.semifinal.decider;
+        const deciderWinner = dm ? getMatchWinner(dm) : null;
+        const third = deciderWinner ? (dm.a===deciderWinner ? dm.b : dm.a) : null;
+        championHtml = `
+          <h3 style="font-size:13px;margin:10px 0 4px;">النتيجة النهائية</h3>
+          <div style="font-size:12.5px;">🥇 بطل: <b>${champion}</b></div>
+          <div style="font-size:12.5px;">🥈 وصيف: <b>${runnerUp}</b></div>
+          ${third ? `<div style="font-size:12.5px;">🥉 تالت: <b>${third}</b></div>` : ''}
+        `;
+      }
+    }
+
+    const sundayHtml = (isRR && h.roundRobin) ? renderRRHistoryBlock(h.roundRobin) : '';
+
+    return `
+      <div class="history-item">
+        <div class="history-head" onclick="toggleHistoryDetail('${h.id}')">
+          <div>
+            <span class="history-title">${h.label}</span>
+            <span class="history-tag ${h.type}">${typeLabel}</span>
+          </div>
+          <div class="history-actions">
+            <button onclick="event.stopPropagation(); deleteHistoryEntry('${h.id}')">حذف</button>
+          </div>
+        </div>
+        <div class="history-detail" id="hd-${h.id}">
+          ${groupsHtml || (!isRR ? '<div class="empty-hint">مفيش مجموعات محفوظة في البطولة دي</div>' : '')}
+          ${knockoutHtml}
+          ${championHtml}
+          ${sundayHtml}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/* ---------- Low D drop tracker ---------- */
+/* ---------- Semi-final (decider) + Final ---------- */
+function generateSemiFinal(){
+  if(!knockout || !knockout.pairs || (knockout.pairs.length !== 2 && knockout.pairs.length !== 3)){
+    alert('محتاج قرعة الدور الوسيط تكون فيها 2 أو 3 ماتشات بالظبط الأول');
+    return;
+  }
+
+  if(knockout.pairs.length === 2){
+    const w1 = knockoutPairWinner(groups, knockout.pairs[0]);
+    const w2 = knockoutPairWinner(groups, knockout.pairs[1]);
+    if(!w1 || !w2){
+      alert('محتاج نتيجة الماتشين الاتنين بتوع القرعة الأول');
+      return;
+    }
+    semifinal = {
+      byeTeam: null,
+      decider: null,
+      final: {a:w1, b:w2, scoreA:'', scoreB:'', manualWinner:null}
+    };
+    renderSemiFinal();
+    saveState();
+    return;
+  }
+
+  const results = knockout.pairs.map(m=>({
+    team: knockoutPairWinner(groups, m),
+    margin: knockoutPairMargin(groups, m)
+  }));
+  if(results.some(r=>!r.team || r.margin==null)){
+    alert('محتاج نتيجة كل الـ3 ماتشات تبقى مسجلة بالأشواط بالكامل (مش بس مين كسب) عشان نعرف نحدد الفارق');
+    return;
+  }
+  const maxMargin = Math.max(...results.map(r=>r.margin));
+  const topTeams = results.filter(r=>r.margin===maxMargin);
+
+  if(topTeams.length === 1){
+    const byeTeam = topTeams[0].team;
+    const deciderTeams = results.filter(r=>r.team!==byeTeam).map(r=>r.team);
+    semifinal = {
+      byeTeam,
+      decider: {a:deciderTeams[0], b:deciderTeams[1], scoreA:'', scoreB:'', manualWinner:null},
+      final: null
+    };
+  } else {
+    semifinal = {
+      tiedPending: {
+        tiedTeams: topTeams.map(r=>r.team),
+        otherTeams: results.filter(r=>r.margin!==maxMargin).map(r=>r.team)
+      }
+    };
+  }
+  renderSemiFinal();
+  saveState();
+}
+
+function doCoinFlip(){
+  if(!semifinal || !semifinal.tiedPending) return;
+  const tied = semifinal.tiedPending.tiedTeams;
+  const byeIndex = Math.floor(Math.random()*tied.length);
+  const byeTeam = tied[byeIndex];
+  const remaining = tied.filter((t,i)=>i!==byeIndex).concat(semifinal.tiedPending.otherTeams);
+  semifinal = {
+    byeTeam,
+    decider: {a:remaining[0], b:remaining[1], scoreA:'', scoreB:'', manualWinner:null},
+    final: null
+  };
+  renderSemiFinal();
+  saveState();
+}
+
+function clearSemiFinal(){
+  if(!confirm('هيمسح الدور اللي قبل النهائي والنهائي، متأكد؟')) return;
+  semifinal = null;
+  renderSemiFinal();
+  saveState();
+}
+
+function setDeciderScore(side, value){
+  if(!semifinal || !semifinal.decider) return;
+  if(side==='a') semifinal.decider.scoreA = value; else semifinal.decider.scoreB = value;
+  semifinal.decider.auto = false;
+  renderSemiFinal();
+  saveState();
+}
+
+function setDeciderWinner(side){
+  if(!semifinal || !semifinal.decider) return;
+  const m = semifinal.decider;
+  if(!tapWinner(m, m.a, m.b, side)) return;
+  renderSemiFinal();
+  saveState();
+}
+
+
+function setFinalScore(side, value){
+  if(!semifinal || !semifinal.final) return;
+  if(side==='a') semifinal.final.scoreA = value; else semifinal.final.scoreB = value;
+  semifinal.final.auto = false;
+  renderSemiFinal();
+  saveState();
+}
+
+function setFinalWinner(side){
+  if(!semifinal || !semifinal.final) return;
+  const m = semifinal.final;
+  if(!tapWinner(m, m.a, m.b, side)) return;
+  renderSemiFinal();
+  saveState();
+}
+
+
+function renderMatchRowGeneric(m, onWinnerA, onWinnerB, onScoreA, onScoreB){
+  const winner = getMatchWinner(m);
+  return `
+    <div class="match-row ${hlClass(m.a, m.b)}">
+      <button class="team-btn ${winner===m.a?'winner':''}" onclick="${onWinnerA}">${m.a}</button>
+      <div class="score-inputs">
+        ${scoreSelect(m.scoreA, `${onScoreA}`)}
+        <span>:</span>
+        ${scoreSelect(m.scoreB, `${onScoreB}`)}
+      </div>
+      <button class="team-btn ${winner===m.b?'winner':''}" onclick="${onWinnerB}">${m.b}</button>
+    </div>
+  `;
+}
+
+function renderSemiFinal(){
+  const out = document.getElementById('semifinalOutput');
+  if(!semifinal){
+    out.innerHTML = '<div class="empty-hint">لسه مفيش - دوس "تحديد الصاعد مباشرة للنهائي" بعد ما تخلص نتايج قرعة الدور الوسيط بالأشواط كاملة</div>';
+    return;
+  }
+
+  if(semifinal.tiedPending){
+    const tied = semifinal.tiedPending.tiedTeams;
+    out.innerHTML = `
+      <div class="tie-row" style="justify-content:flex-start;">
+        🟡 تعادل في الفارق بين: <b>${tied.join(' و ')}</b>
+      </div>
+      <div class="row-inline">
+        <button class="primary" onclick="doCoinFlip()">🪙 قرعة ملك وكتابة</button>
+      </div>
+    `;
+    return;
+  }
+
+  // auto-build the final once the decider has a winner (only applies to the 3-group bye/decider structure)
+  const deciderWinner = semifinal.decider ? getMatchWinner(semifinal.decider) : null;
+  if(semifinal.decider){
+    if(deciderWinner && !semifinal.final){
+      semifinal.final = {a:semifinal.byeTeam, b:deciderWinner, scoreA:'', scoreB:'', manualWinner:null};
+    }
+    // if decider result changes after the final was created, keep them in sync
+    if(semifinal.final && deciderWinner && semifinal.final.b !== deciderWinner && semifinal.final.a !== deciderWinner){
+      semifinal.final = {a:semifinal.byeTeam, b:deciderWinner, scoreA:'', scoreB:'', manualWinner:null};
+    }
+  }
+
+  let html = '';
+  if(semifinal.byeTeam){
+    html += `<div style="font-size:12.5px;color:var(--mut2);margin-bottom:6px;">صاعد مباشر للنهائي: <b>${semifinal.byeTeam}</b></div>`;
+  }
+  if(semifinal.decider){
+    html += `<div style="font-size:11px;color:var(--mut1);margin-bottom:4px;">ماتش تحديد المتأهل التاني للنهائي:</div>`;
+    html += renderMatchRowGeneric(semifinal.decider,
+      `setDeciderWinner('a')`, `setDeciderWinner('b')`,
+      `setDeciderScore('a',this.value)`, `setDeciderScore('b',this.value)`);
+  }
+
+  if(semifinal.final){
+    html += `<div style="font-size:11px;color:var(--mut1);margin:10px 0 4px;">🏆 النهائي:</div>`;
+    html += renderMatchRowGeneric(semifinal.final,
+      `setFinalWinner('a')`, `setFinalWinner('b')`,
+      `setFinalScore('a',this.value)`, `setFinalScore('b',this.value)`);
+
+    const champion = getMatchWinner(semifinal.final);
+    if(champion){
+      const runnerUp = champion===semifinal.final.a ? semifinal.final.b : semifinal.final.a;
+      const third = semifinal.decider && (deciderWinner===semifinal.final.a || deciderWinner===semifinal.final.b)
+        ? (semifinal.decider.a===deciderWinner ? semifinal.decider.b : semifinal.decider.a)
+        : null;
+      html += `
+        <div class="grand" style="margin-top:10px;">
+          <div class="lbl">🥇 بطل البطولة</div>
+          <div class="num" style="font-size:18px;">${champion}</div>
+          <div class="lbl" style="margin-top:6px;">🥈 وصيف: ${runnerUp}</div>
+          ${third ? `<div class="lbl">🥉 مركز تالت: ${third}</div>` : ''}
+        </div>
+      `;
+    }
+  }
+
+  out.innerHTML = html;
+}
+
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(e=>console.error('SW error:', e));
+  });
+}
+
+</script>
+
 </body>
 </html>
