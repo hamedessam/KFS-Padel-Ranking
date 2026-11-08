@@ -2632,7 +2632,7 @@ $("eif-btn").addEventListener("click", async () => {
 // (all-or-nothing), then double-checked. See bracket.js for the logic.
 // =========================================================================
 
-const rs = { editingDraw: false, tid: null, tournament: null, teams: [], fixtures: [], playersById: new Map(), bracket: null, calc: null, busy: false };
+const rs = { editingDraw: false, editingSemi: false, tid: null, tournament: null, teams: [], fixtures: [], playersById: new Map(), bracket: null, calc: null, busy: false };
 
 const rsOk = (msg) => showMsg($("rs-success"), msg);
 const rsErr = (msg) => showMsg($("rs-error"), msg);
@@ -2655,6 +2655,7 @@ $("rs-tournament").addEventListener("change", (e) => {
 async function loadResults(tid) {
   rs.tid = tid;
   rs.editingDraw = false;
+  rs.editingSemi = false;
   rs.calc = null;
   rsClear();
   $("rs-loading").classList.remove("hidden");
@@ -2821,6 +2822,37 @@ function rsQualifiersHtml(br, needChoice) {
     <div style="display:flex; gap:8px; margin-top:10px;">${btn(6, six)}${btn(8, eight)}</div></div>`;
 }
 
+// Semi-final draw card (8-team flow): shows the planned semi-finals and lets the admin
+// pair the 4 quarter-final winners by hand, like the quarter-final draw.
+function rsSemiDrawHtml(br) {
+  if (br.qualifiers !== 8 || !br.semiPlan || !br.semiWinners) return "";
+  const pairLine = (f, i) => `<div style="margin-top:8px; font-size:13px;">${i + 1}. ${rsTeam(f.team1Players, f.team1Number)} <span style="color:var(--text-soft);">vs</span> ${rsTeam(f.team2Players, f.team2Number)}</div>`;
+  const hasSemis = rs.fixtures.some((f) => ["sf-1", "sf-2", "final", "third"].includes(f.id));
+
+  if (!rs.editingSemi) {
+    return `<div class="msg info show" style="margin-top:14px;">
+      <strong>Semi-final draw</strong> <span style="color:var(--text-soft);">· ${br.customSemi ? "entered by hand" : "default (QF1 winner v QF4 winner, QF2 winner v QF3 winner)"}</span>
+      ${br.semiPlan.map(pairLine).join("")}
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+        <button class="btn btn-ghost btn-sm" data-edit-semi type="button">Edit draw</button>
+        ${br.customSemi ? '<button class="btn btn-ghost btn-sm" data-reset-semi type="button">Back to default draw</button>' : ""}
+      </div></div>`;
+  }
+
+  const opts = br.semiWinners.map((tm) => ({ id: tm.id, text: rsTeamPlain(tm) }));
+  const select = (attr, i, selected) => `<select class="team-slot-add-select" ${attr}="${i}" style="width:100%; margin-top:6px;">
+    ${opts.map((o) => `<option value="${o.id}" ${o.id === selected ? "selected" : ""}>${escapeHtml(o.text)}</option>`).join("")}</select>`;
+  return `<div class="msg info show" style="margin-top:14px;">
+    <strong>Edit semi-final draw</strong>
+    <div style="font-size:12.5px; color:var(--text-soft); margin-top:4px;">Pair the 4 quarter-final winners the way the semi-finals are really played — each team exactly once.${hasSemis ? " The semi-final matches already created (and the final / 3rd place match, with their results) will be deleted so they can be generated again." : ""}</div>
+    ${br.semiPlan.map((f, i) => `<div style="margin-top:12px;"><span style="font-size:12px; color:var(--text-soft);">Semi-final ${i + 1}</span>
+      ${select("data-semi-a", i, f.team1Id)}${select("data-semi-b", i, f.team2Id)}</div>`).join("")}
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px;">
+      <button class="btn btn-primary btn-sm" data-save-semi type="button">Save draw</button>
+      <button class="btn btn-ghost btn-sm" data-cancel-semi type="button">Cancel</button>
+    </div></div>`;
+}
+
 function renderResults() {
   const t = rs.tournament;
   const applied = !!t.pointsApplied;
@@ -2861,6 +2893,7 @@ function renderResults() {
       </div>`;
       html += rsDecisionsHtml(br.needs, br.qualifiers === 8);
       html += rsDrawHtml(br);
+      html += rsSemiDrawHtml(br);
     }
     [1, 2, 3].forEach((g) => {
       html += rsGroupBlock(g, br.standings[g], fixtures.filter((f) => f.stage === "group" && f.group === g), applied);
@@ -2917,6 +2950,10 @@ $("rs-body").addEventListener("click", (e) => {
   else if (t.closest("[data-cancel-draw]")) { rs.editingDraw = false; renderResults(); }
   else if (t.closest("[data-save-draw]")) rsSaveDraw();
   else if (t.closest("[data-reset-draw]")) rsResetDraw();
+  else if (t.closest("[data-edit-semi]")) { rs.editingSemi = true; renderResults(); }
+  else if (t.closest("[data-cancel-semi]")) { rs.editingSemi = false; renderResults(); }
+  else if (t.closest("[data-save-semi]")) rsSaveSemiDraw();
+  else if (t.closest("[data-reset-semi]")) rsResetSemiDraw();
   else if (t.closest("#rs-preview-btn")) rsPreview();
   else if (t.closest("#rs-apply-btn")) rsApply();
   else if (t.closest("#rs-verify-btn")) rsVerify();
@@ -3066,6 +3103,24 @@ async function rsSaveByeOverride() {
   await rsSaveOverrides({ ...(rs.tournament.bracketOverrides || {}), bye: id });
 }
 
+async function rsSaveSemiDraw() {
+  rsClear();
+  const picks = [0, 1].map((i) => ({
+    a: document.querySelector(`[data-semi-a="${i}"]`).value,
+    b: document.querySelector(`[data-semi-b="${i}"]`).value
+  }));
+  const ids = picks.flatMap((p) => [p.a, p.b]);
+  if (ids.some((id) => !id) || new Set(ids).size !== 4) { rsErr("Pair the 4 quarter-final winners, each one exactly once."); return; }
+  await rsSaveOverrides({ ...(rs.tournament.bracketOverrides || {}), sf: picks });
+}
+
+async function rsResetSemiDraw() {
+  rsClear();
+  const ov = { ...(rs.tournament.bracketOverrides || {}) };
+  delete ov.sf;
+  await rsSaveOverrides(ov);
+}
+
 async function rsSaveCross(cat) {
   rsClear();
   const ids = Array.from(document.querySelectorAll(`[data-cross-sel="${cat}"]`)).map((s) => s.value);
@@ -3086,7 +3141,7 @@ async function rsSetQualifiers(n) {
   const later = rs.fixtures.filter((f) => f.stage !== "group");
   if (changed && later.length && !confirm(`Switch to ${n} qualifying teams?\n\nThe knockout matches already created (and their results) will be deleted so they can be generated again:\n\n${later.map((f) => f.label).join(", ")}\n\nThe group matches are not touched.`)) return;
   const ov = { ...ov0, qualifiers: n };
-  if (changed) { delete ov.ko; delete ov.bye; }
+  if (changed) { delete ov.ko; delete ov.bye; delete ov.sf; }
   await rsRun(async () => {
     try {
       await saveOverrides(rs.tid, ov);

@@ -295,18 +295,27 @@ function deriveBracket8(fixtures, overrides, standings) {
   const staleIds = [];
   ["ko-1", "ko-2", "ko-3", "semi"].forEach((id) => { if (byId.has(id)) staleIds.push(id); }); // left over from the 6-team flow
 
-  let expSf = null, expFinal = null, expThird = null;
+  let expSf = null, expFinal = null, expThird = null, semiWinners = null, customSemi = false;
   let semisValid = false, finalValid = false, thirdValid = false, sfBad = false;
   if (existingQf.length > 0 && !qfValid) {
     existingQf.forEach((f) => staleIds.push(f.id));
     laterIds.forEach((id) => staleIds.push(id));
   } else if (qfValid) {
     if (existingQf.every((f) => f.done)) {
-      const w = (i) => teamFromSide(existingQf[i], winnerSide(existingQf[i]));
-      expSf = [
-        makeFixture({ id: "sf-1", stage: "sf", order: 23, label: "Semi-final 1", a: w(0), b: w(3) }),
-        makeFixture({ id: "sf-2", stage: "sf", order: 24, label: "Semi-final 2", a: w(1), b: w(2) })
-      ];
+      semiWinners = existingQf.map((f) => teamFromSide(f, winnerSide(f)));
+      // default: winner QF1 v winner QF4, winner QF2 v winner QF3 — unless the admin
+      // entered the semi-final draw by hand (overrides.sf = [{a,b},{a,b}] of the 4 winners)
+      let pairs = [[semiWinners[0], semiWinners[3]], [semiWinners[1], semiWinners[2]]];
+      const ovSf = overrides && overrides.sf;
+      const winnerById = new Map(semiWinners.map((x) => [x.id, x]));
+      if (Array.isArray(ovSf) && ovSf.length === 2) {
+        const ids = ovSf.flatMap((p) => [p && p.a, p && p.b]);
+        if (ids.every((id) => typeof id === "string" && winnerById.has(id)) && new Set(ids).size === 4) {
+          pairs = ovSf.map((p) => [winnerById.get(p.a), winnerById.get(p.b)]);
+          customSemi = true;
+        }
+      }
+      expSf = pairs.map(([a, b], i) => makeFixture({ id: `sf-${i + 1}`, stage: "sf", order: 23 + i, label: `Semi-final ${i + 1}`, a, b }));
     }
     const sfOk = ["sf-1", "sf-2"].map((id, i) => { const ex = byId.get(id); return !!expSf && !!ex && samePair(expSf[i], ex); });
     ["sf-1", "sf-2"].forEach((id, i) => { if (byId.has(id) && !sfOk[i]) { staleIds.push(id); sfBad = true; } });
@@ -357,7 +366,8 @@ function deriveBracket8(fixtures, overrides, standings) {
     koPlan: expectedQf,
     customDraw: validKoOverride(overrides && overrides.ko, standings, overrides),
     thirdPlan: (!exThird && semisValid && expThird) ? expThird : null,
-    hasThird: !!exThird
+    hasThird: !!exThird,
+    semiPlan: expSf, semiWinners, customSemi
   };
 }
 
