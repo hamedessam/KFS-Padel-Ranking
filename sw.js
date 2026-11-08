@@ -1,19 +1,24 @@
-const CACHE_NAME = 'hesab-tournament-v25';
-const FILES_TO_CACHE = [
-  './index.html',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+// Bump CACHE_NAME on every deploy to bust stale caches (lesson learned from previous PWAs)
+const CACHE_NAME = "padelx-v68";
+const ASSETS = [
+  "./index.html",
+  "./styles.css",
+  "./app.js",
+  "./firebase-config.js",
+  "./utils.js",
+  "./i18n.js",
+  "./teams.js",
+  "./manifest.json"
 ];
 
-self.addEventListener('install', (event) => {
+self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(FILES_TO_CACHE))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
   );
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
+self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
@@ -22,15 +27,21 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-self.addEventListener('fetch', (event) => {
+self.addEventListener("fetch", (event) => {
+  // network-first for Firestore/API calls, cache-first for static shell
+  if (event.request.method !== "GET") return;
+  // Only the app's own files go through this cache. Firestore, Firebase Auth,
+  // Google Fonts and the Firebase SDK files go straight to the network — the
+  // Firestore connection includes long-lived streaming GET requests that must
+  // never be intercepted/cloned here (that can stall loading).
+  if (new URL(event.request.url).origin !== self.location.origin) return;
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return cached || fetch(event.request).then((response) => {
-        return caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, response.clone());
-          return response;
-        });
-      }).catch(() => cached);
-    })
+    fetch(event.request)
+      .then((res) => {
+        const clone = res.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        return res;
+      })
+      .catch(() => caches.match(event.request))
   );
 });

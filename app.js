@@ -623,7 +623,7 @@ async function loadHome() {
     const data = await ensureLeaderboardData();
     const mine = data.find((p) => p.id === currentPlayer.id);
     $("hm-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : "—";
-    renderTopPlayers(data.slice(0, 3));
+    renderTopPlayers(data.filter(isRanked).slice(0, 3));
     if (mine) updateRankTrend(mine.rank);
   } catch (err) {
     console.error(err);
@@ -669,28 +669,33 @@ async function updateRankTrend(currentRank) {
   }
 }
 
+// Top 3 of Padel X as a podium (2 - 1 - 3). Used on Home and at the top of the
+// Leaderboard "All" view. Lime = "best in Padel X" (the app's own colour), so it
+// never gets mixed up with the rank colours (bronze/silver/gold/...), which stay
+// on each player's avatar ring and small emblem.
+function podiumHtml(players) {
+  if (!players.length) return "";
+  const crown = '<svg class="podium-crown" width="26" height="18" viewBox="0 0 26 18" aria-hidden="true"><polygon points="2,16 0,4 7,9 13,1 19,9 26,4 24,16" fill="#c9f24c"/></svg>';
+  const col = (p, pos) => {
+    if (!p) return "";
+    const fam = lbRankFamily(p);
+    const attr = fam ? ` data-rank="${fam}"` : "";
+    const me = p.id === currentPlayer.id;
+    const tier = fam ? `${rankEmblemSvg(fam, tierMeta(tierFromPoints(p.ratingPoints)).level, 14)}<span>${tierLabelFor(p)}</span>` : "";
+    return `<div class="podium-col pos${pos}${me ? " me" : ""}"${attr}>
+      ${pos === 1 ? crown : ""}
+      <div class="podium-avatar${isFoundingMember(p) ? " founding-ring" : ""}"${attr}>${avatarHtml(p)}</div>
+      <div class="podium-name">${p.name || "—"}</div>
+      <div class="podium-tier">${tier}</div>
+      <div class="podium-pts">${Math.round(p.ratingPoints ?? 0)}</div>
+      <div class="podium-bar">${pos}</div>
+    </div>`;
+  };
+  return `<div class="podium">${col(players[1], 2)}${col(players[0], 1)}${col(players[2], 3)}</div>`;
+}
+
 function renderTopPlayers(list) {
-  const el = $("hm-top-players");
-  el.innerHTML = "";
-  list.forEach((p) => {
-    const isMe = p.id === currentPlayer.id;
-    const meta = tierMeta(tierFromPoints(p.ratingPoints));
-    const founding = isFoundingMember(p);
-    const rankClass = p.rank === 1 ? "top1" : p.rank === 2 ? "top2" : p.rank === 3 ? "top3" : "";
-    const row = document.createElement("div");
-    row.className = "lb-row" + (isMe ? " me" : "");
-    if (lbRankFamily(p)) row.dataset.rank = lbRankFamily(p);
-    row.innerHTML = `
-      <span class="lb-rank ${rankClass}">${p.rank}</span>
-      <span class="lb-avatar${founding ? " founding-ring" : ""}"${lbRankAttr(p)}>${avatarHtml(p)}</span>
-      <span class="lb-mid">
-        <div class="lb-name">${founding ? '<span class="founding-star" title="Founding Member">🌟</span> ' : ""}${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
-        <div class="lb-tier">${lbTierHtml(p)}</div>
-      </span>
-      <span class="lb-points">${Math.round(p.ratingPoints ?? 0)}</span>
-    `;
-    el.appendChild(row);
-  });
+  $("hm-top-players").innerHTML = podiumHtml(list);
 }
 
 async function loadAnnouncement() {
@@ -1404,14 +1409,23 @@ function renderLeaderboard(data) {
     ? data
     : data.filter((p) => lbFamilyOf(p) === leaderboardFilter).map((p, i) => ({ ...p, rank: i + 1 }));
 
+  // "All" view: the top 3 stand on the podium and the list continues from #4.
+  // Inside a rank filter there's no podium (positions restart there); the top 3
+  // just get a small lime number badge.
+  const podiumPlayers = leaderboardFilter === "all" ? shown.filter(isRanked).slice(0, 3) : [];
+  const podiumIds = new Set(podiumPlayers.map((p) => p.id));
+  const podiumEl = $("lb-podium");
+  podiumEl.innerHTML = podiumHtml(podiumPlayers);
+  podiumEl.classList.toggle("hidden", podiumPlayers.length === 0);
+
   listEl.innerHTML = "";
-  shown.forEach((p) => {
+  shown.filter((p) => !podiumIds.has(p.id)).forEach((p) => {
     const isMe = p.id === currentPlayer.id;
     const founding = isFoundingMember(p);
     const li = document.createElement("li");
     li.className = "lb-row" + (isMe ? " me" : "");
     if (lbRankFamily(p)) li.dataset.rank = lbRankFamily(p);
-    const rankClass = p.rank === 1 ? "top1" : p.rank === 2 ? "top2" : p.rank === 3 ? "top3" : "";
+    const rankClass = leaderboardFilter !== "all" && p.rank <= 3 ? "chip" : "";
     li.innerHTML = `
       <span class="lb-rank ${rankClass}">${p.rank}</span>
       <span class="lb-avatar${founding ? " founding-ring" : ""}"${lbRankAttr(p)}>${avatarHtml(p)}</span>
