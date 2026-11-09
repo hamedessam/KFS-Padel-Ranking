@@ -349,14 +349,14 @@ async function loadPlayers() {
         : `<div style="width:28px;height:28px;border-radius:50%;background:var(--panel-alt);color:var(--ball);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800;font-size:11px;">${(p.name || "?").trim().charAt(0)}</div>`;
       tr.innerHTML = `
         <td>${avatarCell}</td>
-        <td>${isFoundingMember(p) ? "🌟 " : ""}${escapeHtml(p.name || "—")}</td>
+        <td>${isFoundingMember(p) ? "🌟 " : ""}${escapeHtml(p.name || "—")}${p.teamMember ? ' <span class="badge-pill team">TEAM</span>' : ""}</td>
         <td class="code">${escapeHtml(p.playerCode || "—")}</td>
         <td>${ranked ? `<span class="badge-pill ${meta.cssClass}">${meta.displayName}</span>` : '<span class="badge-pill" style="opacity:.6;">Unranked</span>'}</td>
         <td>${ranked ? Math.round(p.ratingPoints) : "—"}</td>
         <td>${p.matchesPlayed ?? 0}</td>
         <td>${sideLabel(p.playingSide)}</td>
         <td style="white-space:nowrap;">
-          <button class="link-btn" data-edit-player="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" data-player-side="${p.playingSide || ""}" data-player-points="${ranked ? Math.round(p.ratingPoints) : ""}" type="button" style="font-size:12px;">Edit rank/side</button>
+          <button class="link-btn" data-edit-player="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" data-player-side="${p.playingSide || ""}" data-player-points="${ranked ? Math.round(p.ratingPoints) : ""}" data-player-team="${p.teamMember ? "1" : ""}" type="button" style="font-size:12px;">Edit rank/side</button>
           <button class="link-btn" data-edit-name="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" type="button" style="font-size:12px;">Edit name</button>
           <button class="link-btn" data-edit-code="${d.id}" data-player-code="${escapeHtml(p.playerCode || "—")}" type="button" style="font-size:12px;">Edit code</button>
           <button class="link-btn" data-reset-player="${d.id}" data-player-name="${escapeHtml(p.name || "—")}" type="button" style="font-size:12px;">Reset password</button>
@@ -369,7 +369,7 @@ async function loadPlayers() {
     tableEl.classList.remove("hidden");
 
     tbody.querySelectorAll("[data-edit-player]").forEach((btn) => {
-      btn.addEventListener("click", () => openEditPlayerCard(btn.dataset.editPlayer, btn.dataset.playerName, btn.dataset.playerSide, btn.dataset.playerPoints));
+      btn.addEventListener("click", () => openEditPlayerCard(btn.dataset.editPlayer, btn.dataset.playerName, btn.dataset.playerSide, btn.dataset.playerPoints, btn.dataset.playerTeam === "1"));
     });
     tbody.querySelectorAll("[data-edit-name]").forEach((btn) => {
       btn.addEventListener("click", () => openEditNameCard(btn.dataset.editName, btn.dataset.playerName));
@@ -2484,11 +2484,12 @@ $("ep-rank").addEventListener("change", () => {
   $("ep-points-field").classList.toggle("hidden", $("ep-rank").value !== "custom");
 });
 
-function openEditPlayerCard(playerId, name, side, points) {
+function openEditPlayerCard(playerId, name, side, points, team) {
   editingRankPlayer = { id: playerId, name, points: points === "" ? null : Number(points) };
   hideMsg($("edit-player-error"));
   $("ep-sub").textContent = `${name} — current rank: ${editingRankPlayer.points === null ? "not ranked yet" : editingRankPlayer.points + " pts"}`;
   $("ep-side").value = side || "";
+  $("ep-team").checked = !!team;
   $("ep-rank").value = "keep";
   $("ep-points-field").classList.add("hidden");
   const card = $("edit-player-card");
@@ -2504,7 +2505,7 @@ $("edit-player-form").addEventListener("submit", async (e) => {
 
   const { id, name, points: currentPoints } = editingRankPlayer;
   const rankChoice = $("ep-rank").value;
-  const update = { playingSide: $("ep-side").value };
+  const update = { playingSide: $("ep-side").value, teamMember: $("ep-team").checked };
 
   if (rankChoice !== "keep") {
     let newPoints = null;

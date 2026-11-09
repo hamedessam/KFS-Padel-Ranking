@@ -132,7 +132,7 @@ function startSessionWatch(player) {
 // snapshot) can't cause a loop.
 function syncCurrentPlayerFromSnapshot(data) {
   if (!currentPlayer) return;
-  const fields = ["ratingPoints", "matchesPlayed", "wins", "losses", "coinsBalance"];
+  const fields = ["ratingPoints", "matchesPlayed", "wins", "losses", "coinsBalance", "teamMember"];
   const changed = fields.some((f) => (data[f] ?? null) !== (currentPlayer[f] ?? null));
   if (!changed) return;
   fields.forEach((f) => { currentPlayer[f] = data[f]; });
@@ -165,6 +165,7 @@ function refreshProfileDisplay(player) {
   $("pf-avatar").classList.toggle("founding-ring", isFoundingMember(player));
   $("pf-name").textContent = player.name || "—";
   $("pf-code").textContent = player.playerCode || "—";
+  $("pf-team-chip").classList.toggle("hidden", !player.teamMember);
 
   paintRankCard("pf", player);
   applyRankTheme(player);
@@ -210,6 +211,11 @@ function renderProfile(player) {
 function renderBadges(player, elId = "pf-badges") {
   const el = $(elId);
   el.innerHTML = "";
+
+  // "Padel X Team": set by the admin for the people who help run Padel X (not a rank)
+  if (player.teamMember) {
+    el.innerHTML += '<span class="badge-pill team"><span class="wordmark"><span class="wordmark-primary">PADEL</span><span class="wordmark-accent">X</span></span> TEAM</span>';
+  }
 
   if (isFoundingMember(player)) {
     el.innerHTML += `<span class="badge-pill founding">🌟 ${t("badge_founding")}</span>`;
@@ -352,6 +358,7 @@ function renderPlayerView(p) {
   if (fam) av.dataset.rank = fam; else delete av.dataset.rank;
   $("pv-name").textContent = p.name || "—";
   $("pv-code").textContent = p.playerCode || "—";
+  $("pv-team-chip").classList.toggle("hidden", !p.teamMember);
   renderBadges(p, "pv-badges");
   paintRankCard("pv", p, true);
 

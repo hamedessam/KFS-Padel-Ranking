@@ -1496,3 +1496,25 @@ table.players tr:last-child td { border-bottom: none; }
 .pv-dot.w { background: rgba(51,209,122,.16); color: var(--live); border: 1px solid rgba(51,209,122,.4); }
 .pv-dot.l { background: rgba(224,101,79,.14); color: var(--danger); border: 1px solid rgba(224,101,79,.35); }
 .pv-form-empty { font-size: 12px; color: var(--text-soft); font-family: var(--font-body); font-weight: 400; }
+
+
+/* ==========================================================================
+   Padel X Team (set by the admin for the people who help run Padel X)
+   Neutral off-white — deliberately not a rank colour and not the "best player" lime.
+   ========================================================================== */
+.badge-pill.team {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(245,243,234,.10); color: var(--text);
+  border: 1px solid rgba(245,243,234,.35); letter-spacing: .5px;
+}
+.badge-pill.team .wordmark { font-size: 11px; }
+.team-chip {
+  position: absolute; top: -3px; right: -3px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--ball); color: #0a1615; border: 2px solid var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-weight: 900; font-size: 11px; line-height: 1;
+}
+[dir="rtl"] .team-chip { right: auto; left: -3px; }
+.avatar-xl + .team-chip { top: 2px; right: 2px; width: 26px; height: 26px; font-size: 14px; }
+[dir="rtl"] .avatar-xl + .team-chip { right: auto; left: 2px; }

@@ -308,7 +308,7 @@
         </div>
 
         <div class="panel hidden" id="edit-player-card" style="margin-top:16px;">
-          <h1>Edit rank &amp; playing side</h1>
+          <h1>Edit rank, side &amp; team badge</h1>
           <p class="sub" id="ep-sub">—</p>
           <div class="msg error" id="edit-player-error"></div>
           <form id="edit-player-form">
@@ -325,6 +325,10 @@
               <label for="ep-rank">Rank</label>
               <select id="ep-rank"></select>
               <div class="hint">"Remove rank" makes them look like a new player with no rank yet. Their matches, wins/losses and history are kept.</div>
+            </div>
+            <div class="field" style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" id="ep-team" style="width:auto;">
+              <label for="ep-team" style="margin:0;">Padel X Team member — shows a "PADEL X TEAM" badge and a small X on their profile</label>
             </div>
             <div class="field hidden" id="ep-points-field">
               <label for="ep-points">Custom points</label>
