@@ -1479,3 +1479,20 @@ table.players tr:last-child td { border-bottom: none; }
   width: 24px; height: 24px; line-height: 24px; border-radius: 50%;
   background: rgba(201,242,76,.16); color: var(--ball);
 }
+
+
+/* ==========================================================================
+   Another player's profile (opened by tapping a row / podium column)
+   ========================================================================== */
+[data-player-id] { cursor: pointer; }
+.avatar-xl { width: 96px; height: 96px; font-size: 34px; }
+.pv-head { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; margin-bottom: 14px; }
+.pv-form { display: inline-flex; gap: 6px; align-items: center; }
+.pv-dot {
+  width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-weight: 700; font-size: 11.5px;
+}
+.pv-dot.w { background: rgba(51,209,122,.16); color: var(--live); border: 1px solid rgba(51,209,122,.4); }
+.pv-dot.l { background: rgba(224,101,79,.14); color: var(--danger); border: 1px solid rgba(224,101,79,.35); }
+.pv-form-empty { font-size: 12px; color: var(--text-soft); font-family: var(--font-body); font-weight: 400; }

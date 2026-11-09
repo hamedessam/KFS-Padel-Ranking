@@ -439,6 +439,52 @@
       </div>
     </div>
 
+    <!-- ===================== PLAYER VIEW (another player's profile) ===================== -->
+    <div class="hidden" id="view-player">
+      <div class="panel">
+        <div class="pv-head">
+          <div class="avatar avatar-xl" id="pv-avatar">?</div>
+          <div class="profile-name" id="pv-name" style="font-size:20px; margin-top:8px;">—</div>
+          <div class="profile-code" id="pv-code">—</div>
+        </div>
+
+        <div class="badge-row" id="pv-badges" style="justify-content:center;"></div>
+
+        <div class="tier-badge">
+          <div class="tier-shield" id="pv-shield">—</div>
+          <div class="tier-info">
+            <div class="tier-name" id="pv-tier-name">—</div>
+            <div class="tier-points" id="pv-points">— pts</div>
+            <div class="rank-progress hidden" id="pv-progress"><div class="rank-progress-bar"><span id="pv-progress-fill"></span></div><div class="rank-progress-text" id="pv-progress-text"></div></div>
+          </div>
+        </div>
+
+        <div class="stat-row stat-grid-4">
+          <div class="stat-box"><div class="num" id="pv-matches">0</div><div class="lbl" data-i18n="profile_matches">Matches</div></div>
+          <div class="stat-box"><div class="num" id="pv-wins">0</div><div class="lbl" data-i18n="profile_wins">Wins</div></div>
+          <div class="stat-box"><div class="num" id="pv-losses">0</div><div class="lbl" data-i18n="profile_losses">Losses</div></div>
+          <div class="stat-box"><div class="num" id="pv-winrate">0%</div><div class="lbl" data-i18n="profile_winrate">Win rate</div></div>
+        </div>
+
+        <div class="my-rank-strip">
+          <span data-i18n="pv_form_label">Last 5 matches</span>
+          <span class="pv-form" id="pv-form"></span>
+        </div>
+        <div class="my-rank-strip" style="margin-top:8px;">
+          <span data-i18n="pv_rank_label">Leaderboard rank</span>
+          <strong id="pv-rank-value">—</strong>
+        </div>
+        <div class="my-rank-strip" style="margin-top:8px;">
+          <span data-i18n="profile_side_label">Playing side</span>
+          <strong id="pv-side">—</strong>
+        </div>
+        <div class="my-rank-strip" style="margin-top:8px;">
+          <span data-i18n="profile_member_since">Member since</span>
+          <strong id="pv-member-since">—</strong>
+        </div>
+      </div>
+    </div>
+
     <!-- ===================== PRODUCT VIEW ===================== -->
     <div class="hidden" id="view-product">
       <div class="panel">

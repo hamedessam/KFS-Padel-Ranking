@@ -60,6 +60,11 @@ const settingsBtn = $("settings-btn");
 const settingsBackBtn = $("settings-back-btn");
 const viewProduct = $("view-product");
 let productOverlayOpen = false;
+const viewPlayer = $("view-player");
+let playerOverlayOpen = false;
+let viewedPlayer = null;
+let playerOverlayScroll = 0;
+const pvFormCache = new Map();
 
 let currentPlayer = null; // { id, ...data }
 let lastTabBeforeSettings = "home";
@@ -202,8 +207,8 @@ function renderProfile(player) {
 }
 
 // ---------------- badges ----------------
-function renderBadges(player) {
-  const el = $("pf-badges");
+function renderBadges(player, elId = "pf-badges") {
+  const el = $(elId);
   el.innerHTML = "";
 
   if (isFoundingMember(player)) {
@@ -220,6 +225,9 @@ function renderBadges(player) {
 function showLogin() {
   currentPlayer = null;
   clearRankTheme();
+  viewPlayer.classList.add("hidden");
+  playerOverlayOpen = false;
+  viewedPlayer = null;
   viewApp.classList.add("hidden");
   viewSettings.classList.add("hidden");
   tabbar.classList.add("hidden");
@@ -243,6 +251,10 @@ settingsBtn.addEventListener("click", () => {
 settingsBackBtn.addEventListener("click", () => {
   if (productOverlayOpen) {
     closeProductView();
+    return;
+  }
+  if (playerOverlayOpen) {
+    closePlayerView();
     return;
   }
   viewSettings.classList.add("hidden");
@@ -326,6 +338,101 @@ function updateProductTotal(item) {
   }
 }
 
+// ---------------- another player's profile (opened from the Leaderboard / podium / Home) ----------------
+// Shows: photo, name, code, rank card, stats, last 5 results (W/L only), leaderboard
+// position, playing side, member since. Deliberately NOT shown: points history,
+// opponents, coins, purchases, phone number. Data comes from the already-loaded
+// leaderboard (no extra read); only the "last 5" needs one small query (cached 2 min).
+function renderPlayerView(p) {
+  viewedPlayer = p;
+  const av = $("pv-avatar");
+  av.innerHTML = avatarHtml(p);
+  av.classList.toggle("founding-ring", isFoundingMember(p));
+  const fam = lbRankFamily(p);
+  if (fam) av.dataset.rank = fam; else delete av.dataset.rank;
+  $("pv-name").textContent = p.name || "—";
+  $("pv-code").textContent = p.playerCode || "—";
+  renderBadges(p, "pv-badges");
+  paintRankCard("pv", p, true);
+
+  const matches = p.matchesPlayed ?? 0;
+  const wins = p.wins ?? 0;
+  $("pv-matches").textContent = matches;
+  $("pv-wins").textContent = wins;
+  $("pv-losses").textContent = p.losses ?? 0;
+  $("pv-winrate").textContent = matches > 0 ? `${Math.round((wins / matches) * 100)}%` : "—";
+  $("pv-rank-value").textContent = isRanked(p) && p.rank ? `#${p.rank} ${t("of")} ${(leaderboardCache || []).length}` : "—";
+  $("pv-side").textContent = p.playingSide ? t(`side_${p.playingSide}`) : "—";
+  const since = p.createdAt?.toDate ? p.createdAt.toDate() : null;
+  $("pv-member-since").textContent = since
+    ? since.toLocaleDateString(getLang() === "ar" ? "ar-EG" : "en-US", { month: "short", year: "numeric" })
+    : "—";
+  loadPlayerForm(p);
+}
+
+async function loadPlayerForm(p) {
+  const el = $("pv-form");
+  const dots = (form) => (form.length
+    ? form.map((w) => `<span class="pv-dot ${w ? "w" : "l"}">${w ? "W" : "L"}</span>`).join("")
+    : `<span class="pv-form-empty">${t("pv_no_matches")}</span>`);
+  if ((p.matchesPlayed ?? 0) === 0) { el.innerHTML = dots([]); return; }
+  const cached = pvFormCache.get(p.id);
+  if (cached && Date.now() - cached.at < 120000) { el.innerHTML = dots(cached.form); return; }
+  el.innerHTML = '<span class="spinner"></span>';
+  try {
+    const snap = await withRecovery(() => getDocs(query(collection(db, "ratingHistory"), where("playerId", "==", p.id))), 12000);
+    const form = snap.docs.map((d) => d.data())
+      .sort((a, b) => (b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0) - (a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0))
+      .slice(0, 5)
+      .map((x) => x.actualResult === 1);
+    pvFormCache.set(p.id, { at: Date.now(), form });
+    if (!viewedPlayer || viewedPlayer.id !== p.id) return; // the user already moved on
+    el.innerHTML = dots(form);
+  } catch (err) {
+    console.error(err);
+    if (viewedPlayer && viewedPlayer.id === p.id) el.textContent = t("leaderboard_err");
+  }
+}
+
+async function openPlayerView(playerId) {
+  if (playerId === currentPlayer.id) { switchTab("profile"); return; } // your own row -> your own Profile tab
+  try {
+    const data = leaderboardCache || await ensureLeaderboardData();
+    const p = data.find((x) => x.id === playerId);
+    if (!p) return;
+    const scroller = document.querySelector(".content-scroll");
+    playerOverlayScroll = scroller.scrollTop;
+    viewApp.classList.add("hidden");
+    tabbar.classList.add("hidden");
+    settingsBtn.classList.add("hidden");
+    settingsBackBtn.classList.remove("hidden");
+    viewPlayer.classList.remove("hidden");
+    playerOverlayOpen = true;
+    scroller.scrollTop = 0;
+    renderPlayerView(p);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function closePlayerView() {
+  viewPlayer.classList.add("hidden");
+  viewApp.classList.remove("hidden");
+  tabbar.classList.remove("hidden");
+  settingsBtn.classList.remove("hidden");
+  settingsBackBtn.classList.add("hidden");
+  playerOverlayOpen = false;
+  viewedPlayer = null;
+  document.querySelector(".content-scroll").scrollTop = playerOverlayScroll;
+}
+
+["lb-list", "lb-podium", "hm-top-players"].forEach((id) => {
+  $(id).addEventListener("click", (e) => {
+    const el = e.target.closest("[data-player-id]");
+    if (el) openPlayerView(el.dataset.playerId);
+  });
+});
+
 function updateLangButtons() {
   const lang = getLang();
   $("lang-ar-btn").classList.toggle("active", lang === "ar");
@@ -346,6 +453,7 @@ function switchLanguage(lang) {
   if (currentPlayer) {
     refreshProfileDisplay(currentPlayer);
     loadHome(); // safe: only updates Home tab content, no view/tab navigation
+    if (playerOverlayOpen && viewedPlayer) renderPlayerView(viewedPlayer);
   }
 }
 
@@ -682,7 +790,7 @@ function podiumHtml(players) {
     const attr = fam ? ` data-rank="${fam}"` : "";
     const me = p.id === currentPlayer.id;
     const tier = fam ? `${rankEmblemSvg(fam, tierMeta(tierFromPoints(p.ratingPoints)).level, 14)}<span>${tierLabelFor(p)}</span>` : "";
-    return `<div class="podium-col pos${pos}${me ? " me" : ""}"${attr}>
+    return `<div class="podium-col pos${pos}${me ? " me" : ""}"${attr} data-player-id="${p.id}">
       ${pos === 1 ? crown : ""}
       <div class="podium-avatar${isFoundingMember(p) ? " founding-ring" : ""}"${attr}>${avatarHtml(p)}</div>
       <div class="podium-name">${p.name || "—"}</div>
@@ -1425,6 +1533,7 @@ function renderLeaderboard(data) {
     const li = document.createElement("li");
     li.className = "lb-row" + (isMe ? " me" : "");
     if (lbRankFamily(p)) li.dataset.rank = lbRankFamily(p);
+    li.dataset.playerId = p.id;
     const rankClass = leaderboardFilter !== "all" && p.rank <= 3 ? "chip" : "";
     li.innerHTML = `
       <span class="lb-rank ${rankClass}">${p.rank}</span>
@@ -2340,7 +2449,7 @@ function tierLabelFor(p) {
 // Paints one rank card (Home = "hm", Profile = "pf"). With tiers visible and a rank
 // set, the card gets its rank colour, emblem and progress bar; otherwise it keeps
 // the plain look (hidden shield, "Your rating").
-function paintRankCard(prefix, player) {
+function paintRankCard(prefix, player, other = false) {
   const shield = $(`${prefix}-shield`);
   const card = shield.closest(".tier-badge");
   const ranked = isRanked(player);
@@ -2355,7 +2464,7 @@ function paintRankCard(prefix, player) {
     shield.textContent = meta.level || "-";
     delete card.dataset.rank;
   }
-  $(`${prefix}-tier-name`).textContent = ranked ? tierLabelOrHidden(meta) : t("tier_hidden_label");
+  $(`${prefix}-tier-name`).textContent = ranked && tiersEnabled ? meta.displayName : t(other ? "rating_label" : "tier_hidden_label");
   $(`${prefix}-points`).textContent = `${Math.round(player.ratingPoints ?? 0)} ${t("pts")}`;
 
   const prog = $(`${prefix}-progress`);
