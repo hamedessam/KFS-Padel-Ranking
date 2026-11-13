@@ -207,6 +207,44 @@ export function canBePartner(player, tournament) {
   return canFoundTeam(player, tournament);
 }
 
+// ---------------- activity ("inactive" players) ----------------
+// A ranked player becomes INACTIVE after missing INACTIVE_AFTER tournaments in a row
+// that were open for their (current) rank. Their points are never touched — they only
+// leave the numbered ranking / podium until they play again.
+//  - counts only tournaments that are finished (status Completed) and were created
+//    after the player joined
+//  - "played" = if the tournament's points were calculated (Results tab), the players
+//    who actually received points; otherwise the registered list (with a team, not just
+//    the waiting list) at the moment the admin marks it Completed — so removing no-shows
+//    before marking it Completed is what confirms who really played
+//  - registering for an upcoming tournament does NOT bring anyone back; it is only
+//    reported (`registered`) so the app can tell an inactive player they're signed up
+// Needs no stored field: it is worked out from the tournaments list.
+export const INACTIVE_AFTER = 3;
+
+export function activityStatus(player, tournaments, limit = INACTIVE_AFTER) {
+  const none = { inactive: false, missed: 0, registered: false };
+  if (!isRanked(player) || !Array.isArray(tournaments)) return none;
+  const ms = (ts) => (ts && ts.toDate ? ts.toDate().getTime() : 0);
+  const joined = ms(player.createdAt);
+  const isCurrent = (t) => ["upcoming", "live"].includes(t.status || "upcoming");
+  const played = (t) => {
+    if (t.pointsApplied && t.appliedSummary && typeof t.appliedSummary === "object") {
+      return Object.prototype.hasOwnProperty.call(t.appliedSummary, player.id);
+    }
+    return (t.participantIds || []).includes(player.id) && !(t.waitingList || []).includes(player.id);
+  };
+  const eligible = tournaments.filter((t) => canFoundTeam(player, t) && !(joined && ms(t.createdAt) && ms(t.createdAt) < joined));
+  const registered = eligible.some((t) => isCurrent(t) && played(t));
+  const done = eligible.filter((t) => !isCurrent(t)).sort((a, b) => ms(b.createdAt) - ms(a.createdAt));
+  let missed = 0;
+  for (const t of done) {
+    if (played(t)) break;
+    missed++;
+  }
+  return { inactive: missed >= limit, missed, registered };
+}
+
 // Renders inner content for an avatar container (a div/span already carrying
 // the .avatar or .lb-avatar class): either the player's uploaded photo or a
 // fallback initial letter. Caller just does `container.innerHTML = avatarHtml(player)`.

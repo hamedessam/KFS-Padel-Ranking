@@ -3,7 +3,7 @@ import {
   auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential
 } from "./firebase-config.js";
 import { registerPlayer, unregisterPlayer, addPartner, fetchTeams, findTeamOf, requestToJoinTeam, cancelJoinRequest, acceptJoinRequest, declineJoinRequest, getOpenTeams, myPendingRequestTeams, myIncomingRequests } from "./teams.js";
-import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFoundingMember, isRanked, rankFamilyLabel, canFoundTeam, canBePartner, tournamentRanks, playerRankFamily, RANK_FAMILIES, tierProgress, rankEmblemSvg } from "./utils.js";
+import { hashPassword, randomSalt, tierMeta, tierFromPoints, avatarHtml, isFoundingMember, isRanked, rankFamilyLabel, canFoundTeam, canBePartner, tournamentRanks, playerRankFamily, RANK_FAMILIES, tierProgress, rankEmblemSvg, activityStatus } from "./utils.js";
 import { t, getLang, setLang, applyStaticTranslations } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
@@ -368,7 +368,8 @@ function renderPlayerView(p) {
   $("pv-wins").textContent = wins;
   $("pv-losses").textContent = p.losses ?? 0;
   $("pv-winrate").textContent = matches > 0 ? `${Math.round((wins / matches) * 100)}%` : "—";
-  $("pv-rank-value").textContent = isRanked(p) && p.rank ? `#${p.rank} ${t("of")} ${(leaderboardCache || []).length}` : "—";
+  $("pv-rank-value").textContent = p.inactive ? t("inactive_label") : (isRanked(p) && p.rank ? `#${p.rank} ${t("of")} ${leaderboardActiveCount}` : "—");
+  setInactivePill("pv-badges", !!p.inactive);
   $("pv-side").textContent = p.playingSide ? t(`side_${p.playingSide}`) : "—";
   const since = p.createdAt?.toDate ? p.createdAt.toDate() : null;
   $("pv-member-since").textContent = since
@@ -531,7 +532,9 @@ const tabPanels = {
   leaderboard: $("tab-leaderboard"),
   profile: $("tab-profile")
 };
-let leaderboardCache = null; // array of {id, rank, ...data}, shared between Home + Leaderboard tabs
+let leaderboardCache = null; // array of {id, rank, inactive, missed, ...data}, shared between Home + Leaderboard tabs
+let leaderboardRaw = null; // the players as loaded (before activity is worked out)
+let leaderboardActiveCount = 0;
 let tournamentsCache = null; // array of {id, ...data}, shared between Home + Tournaments tabs
 let tournamentsFilter = "current"; // Tournaments tab dropdown: "current" (upcoming + live) | "completed" | "all"
 
@@ -717,11 +720,36 @@ async function ensureLeaderboardData(forceRefresh = false) {
   );
   const snap = await getDocs(q);
   // Unranked players (ratingPoints null) count as 0, so they sit at the end.
-  leaderboardCache = snap.docs
+  leaderboardRaw = snap.docs
     .map((d) => ({ id: d.id, ...d.data() }))
-    .sort((a, b) => (b.ratingPoints ?? 0) - (a.ratingPoints ?? 0))
-    .map((p, i) => ({ ...p, rank: i + 1 }));
+    .sort((a, b) => (b.ratingPoints ?? 0) - (a.ratingPoints ?? 0));
+  let tournaments = [];
+  try { tournaments = await ensureTournamentsData(); } catch (err) { console.error(err); } // without it everybody counts as active
+  rebuildLeaderboard(tournaments);
   return leaderboardCache;
+}
+
+// Works out who is active / inactive (see activityStatus in utils.js) and numbers the
+// active players 1..N by points; inactive players come after them with no number.
+function rebuildLeaderboard(tournaments) {
+  const withActivity = leaderboardRaw.map((p) => ({ ...p, ...activityStatus(p, tournaments) }));
+  let n = 0;
+  const active = withActivity.filter((p) => !p.inactive).map((p) => ({ ...p, rank: ++n }));
+  const inactive = withActivity.filter((p) => p.inactive).map((p) => ({ ...p, rank: null }));
+  leaderboardActiveCount = active.length;
+  leaderboardCache = [...active, ...inactive];
+}
+
+// After the player registers / unregisters the list can change who is active — recompute
+// from what's already loaded (no extra reads).
+function refreshLeaderboardActivity() {
+  if (leaderboardRaw && leaderboardCache) rebuildLeaderboard(tournamentsCache || []);
+}
+
+function setInactivePill(elId, inactive) {
+  const el = $(elId);
+  el.querySelectorAll(".badge-pill.inactive").forEach((n) => n.remove());
+  if (inactive) el.insertAdjacentHTML("beforeend", `<span class="badge-pill inactive">${t("inactive_label")}</span>`);
 }
 
 // ---------------- home tab ----------------
@@ -737,9 +765,14 @@ async function loadHome() {
   try {
     const data = await ensureLeaderboardData();
     const mine = data.find((p) => p.id === currentPlayer.id);
-    $("hm-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${data.length}` : "—";
-    renderTopPlayers(data.filter(isRanked).slice(0, 3));
-    if (mine) updateRankTrend(mine.rank);
+    const isInactive = !!(mine && mine.inactive);
+    $("hm-rank-value").textContent = mine ? (isInactive ? t("inactive_label") : `#${mine.rank} ${t("of")} ${leaderboardActiveCount}`) : "—";
+    renderTopPlayers(data.filter((p) => isRanked(p) && !p.inactive).slice(0, 3));
+    if (mine && !isInactive) updateRankTrend(mine.rank); else $("hm-rank-trend").classList.add("hidden");
+    const note = $("hm-inactive-note");
+    if (isInactive) { note.textContent = t(mine.registered ? "inactive_note_registered" : "inactive_note").replace("{n}", mine.missed); note.classList.add("show"); }
+    else { note.classList.remove("show"); note.textContent = ""; }
+    setInactivePill("pf-badges", isInactive);
   } catch (err) {
     console.error(err);
     $("hm-rank-value").textContent = "—";
@@ -800,7 +833,7 @@ function podiumHtml(players) {
     return `<div class="podium-col pos${pos}${me ? " me" : ""}"${attr} data-player-id="${p.id}">
       ${pos === 1 ? crown : ""}
       <div class="podium-avatar${isFoundingMember(p) ? " founding-ring" : ""}"${attr}>${avatarHtml(p)}</div>
-      <div class="podium-name">${p.name || "—"}</div>
+      <div class="podium-name">${teamMiniHtml(p)}<span class="podium-name-text">${p.name || "—"}</span></div>
       <div class="podium-tier">${tier}</div>
       <div class="podium-pts">${Math.round(p.ratingPoints ?? 0)}</div>
       <div class="podium-bar">${pos}</div>
@@ -1149,6 +1182,7 @@ async function registerForTournament(tournamentId, btn) {
     }
     await registerPlayer(tournamentId, currentPlayer.id, tr?.totalTeams || 12);
     if (tr) tr.participantIds = [...(tr.participantIds || []), currentPlayer.id];
+    refreshLeaderboardActivity();
     loadTournamentsTab();
   } catch (err) {
     console.error(err);
@@ -1183,6 +1217,7 @@ async function performUnregister(tournamentId, btn, founderChoice) {
     await unregisterPlayer(tournamentId, currentPlayer.id, founderChoice);
     const cached = tournamentsCache?.find((tr) => tr.id === tournamentId);
     if (cached) cached.participantIds = (cached.participantIds || []).filter((id) => id !== currentPlayer.id);
+    refreshLeaderboardActivity();
     loadTournamentsTab();
   } catch (err) {
     console.error(err);
@@ -1519,10 +1554,15 @@ function renderLeaderboard(data) {
   const listEl = $("lb-list");
   buildLeaderboardFilterBar(data);
 
+  // Players who haven't played the last few tournaments open for their rank are
+  // "inactive": their points are kept, but they leave the numbered ranking and the
+  // podium and are listed separately at the bottom.
+  const scope = leaderboardFilter === "all" ? data : data.filter((p) => lbFamilyOf(p) === leaderboardFilter);
   // inside a rank, positions restart from 1
   const shown = leaderboardFilter === "all"
-    ? data
-    : data.filter((p) => lbFamilyOf(p) === leaderboardFilter).map((p, i) => ({ ...p, rank: i + 1 }));
+    ? scope.filter((p) => !p.inactive)
+    : scope.filter((p) => !p.inactive).map((p, i) => ({ ...p, rank: i + 1 }));
+  const inactiveList = scope.filter((p) => p.inactive);
 
   // "All" view: the top 3 stand on the podium and the list continues from #4.
   // Inside a rank filter there's no podium (positions restart there); the top 3
@@ -1533,29 +1573,39 @@ function renderLeaderboard(data) {
   podiumEl.innerHTML = podiumHtml(podiumPlayers);
   podiumEl.classList.toggle("hidden", podiumPlayers.length === 0);
 
-  listEl.innerHTML = "";
-  shown.filter((p) => !podiumIds.has(p.id)).forEach((p) => {
+  const rowEl = (p, inactive) => {
     const isMe = p.id === currentPlayer.id;
     const founding = isFoundingMember(p);
     const li = document.createElement("li");
-    li.className = "lb-row" + (isMe ? " me" : "");
+    li.className = "lb-row" + (isMe ? " me" : "") + (inactive ? " inactive" : "");
     if (lbRankFamily(p)) li.dataset.rank = lbRankFamily(p);
     li.dataset.playerId = p.id;
-    const rankClass = leaderboardFilter !== "all" && p.rank <= 3 ? "chip" : "";
+    const rankClass = !inactive && leaderboardFilter !== "all" && p.rank <= 3 ? "chip" : "";
     li.innerHTML = `
-      <span class="lb-rank ${rankClass}">${p.rank}</span>
+      <span class="lb-rank ${rankClass}">${inactive ? "—" : p.rank}</span>
       <span class="lb-avatar${founding ? " founding-ring" : ""}"${lbRankAttr(p)}>${avatarHtml(p)}</span>
       <span class="lb-mid">
-        <div class="lb-name">${founding ? '<span class="founding-star" title="Founding Member">🌟</span> ' : ""}${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
+        <div class="lb-name">${founding ? '<span class="founding-star" title="Founding Member">🌟</span> ' : ""}${teamMiniHtml(p)}${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
         <div class="lb-tier">${lbTierHtml(p)}</div>
       </span>
       <span class="lb-points">${Math.round(p.ratingPoints ?? 0)}</span>
     `;
-    listEl.appendChild(li);
-  });
+    return li;
+  };
+
+  listEl.innerHTML = "";
+  shown.filter((p) => !podiumIds.has(p.id)).forEach((p) => listEl.appendChild(rowEl(p, false)));
+  if (inactiveList.length > 0) {
+    const title = document.createElement("li");
+    title.className = "lb-section-title";
+    title.textContent = `${t("inactive_section")} (${inactiveList.length})`;
+    listEl.appendChild(title);
+    inactiveList.forEach((p) => listEl.appendChild(rowEl(p, true)));
+  }
 
   const mine = shown.find((p) => p.id === currentPlayer.id);
-  $("my-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${shown.length}` : "—";
+  const mineInactive = inactiveList.some((p) => p.id === currentPlayer.id);
+  $("my-rank-value").textContent = mine ? `#${mine.rank} ${t("of")} ${shown.length}` : (mineInactive ? t("inactive_label") : "—");
 }
 
 async function loadLeaderboard() {
@@ -2504,6 +2554,8 @@ function clearRankTheme() {
 
 // Leaderboard / top-players rows
 function lbRankFamily(p) { return tiersEnabled && isRanked(p) ? playerRankFamily(p) : null; }
+// small lime X before the name of a Padel X Team member (Leaderboard rows + podium)
+function teamMiniHtml(p) { return p.teamMember ? '<span class="team-mini" title="Padel X Team">X</span>' : ""; }
 function lbRankAttr(p) { const f = lbRankFamily(p); return f ? ` data-rank="${f}"` : ""; }
 function lbTierHtml(p) {
   const f = lbRankFamily(p);
