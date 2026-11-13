@@ -133,8 +133,13 @@ const EMBLEM_COLORS = {
   gold: { main: "#e3b74e", dark: "#8f6a16", light: "#fae9a8" },
   elite: { main: "#b98cff", dark: "#5f3aa6", light: "#efe3ff" }
 };
-export function rankEmblemSvg(family, level, size = 60) {
+export function rankEmblemSvg(family, level, size = 60, hollow = false) {
   const w = Math.round(size * 0.9);
+  if (hollow) { // outline only (used for inactive players)
+    const col = family === "diamond" ? "#7fd6f5" : (EMBLEM_COLORS[family] || EMBLEM_COLORS.bronze).main;
+    const pts = family === "diamond" ? "28,18 72,18 94,42 50,102 6,42" : "50,6 92,22 92,64 50,104 8,64 8,22";
+    return `<svg width="${w}" height="${size}" viewBox="0 0 100 112" aria-hidden="true" focusable="false"><polygon points="${pts}" fill="none" stroke="${col}" stroke-width="9" stroke-linejoin="round"/></svg>`;
+  }
   const small = size < 28;
   const num = (y, fs, fill) => (small || !level || level === "E") ? "" :
     `<text x="50" y="${y}" text-anchor="middle" font-size="${fs}" font-weight="700" fill="${fill}" font-family="'Space Mono', monospace">${level}</text>`;

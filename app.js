@@ -770,7 +770,16 @@ async function loadHome() {
     renderTopPlayers(data.filter((p) => isRanked(p) && !p.inactive).slice(0, 3));
     if (mine && !isInactive) updateRankTrend(mine.rank); else $("hm-rank-trend").classList.add("hidden");
     const note = $("hm-inactive-note");
-    if (isInactive) { note.textContent = t(mine.registered ? "inactive_note_registered" : "inactive_note").replace("{n}", mine.missed); note.classList.add("show"); }
+    if (isInactive) {
+      note.textContent = t(mine.registered ? "inactive_note_registered" : "inactive_note").replace("{n}", mine.missed) + " ";
+      const go = document.createElement("button");
+      go.className = "link-btn";
+      go.type = "button";
+      go.textContent = t("see_tournaments");
+      go.addEventListener("click", () => switchTab("tournaments"));
+      note.appendChild(go);
+      note.classList.add("show");
+    }
     else { note.classList.remove("show"); note.textContent = ""; }
     setInactivePill("pf-badges", isInactive);
   } catch (err) {
@@ -1588,7 +1597,9 @@ function renderLeaderboard(data) {
         <div class="lb-name">${founding ? '<span class="founding-star" title="Founding Member">🌟</span> ' : ""}${teamMiniHtml(p)}${p.name || "—"}${isMe ? " " + t("you_suffix") : ""}</div>
         <div class="lb-tier">${lbTierHtml(p)}</div>
       </span>
-      <span class="lb-points">${Math.round(p.ratingPoints ?? 0)}</span>
+      ${inactive
+        ? `<span class="lb-points-col"><span class="lb-points">${Math.round(p.ratingPoints ?? 0)}</span><span class="lb-return">${t("play_to_return")}</span></span>`
+        : `<span class="lb-points">${Math.round(p.ratingPoints ?? 0)}</span>`}
     `;
     return li;
   };
@@ -1598,7 +1609,9 @@ function renderLeaderboard(data) {
   if (inactiveList.length > 0) {
     const title = document.createElement("li");
     title.className = "lb-section-title";
-    title.textContent = `${t("inactive_section")} (${inactiveList.length})`;
+    title.innerHTML = `<div><div class="lb-section-name">${t("inactive_section")} (${inactiveList.length})</div><div class="lb-section-hint">${t("inactive_hint")}</div></div>
+      <button class="lb-section-btn" type="button">${t("see_tournaments")}</button>`;
+    title.querySelector("button").addEventListener("click", () => switchTab("tournaments"));
     listEl.appendChild(title);
     inactiveList.forEach((p) => listEl.appendChild(rowEl(p, true)));
   }
@@ -2560,7 +2573,7 @@ function lbRankAttr(p) { const f = lbRankFamily(p); return f ? ` data-rank="${f}
 function lbTierHtml(p) {
   const f = lbRankFamily(p);
   if (!f) return tierLabelFor(p);
-  return `${rankEmblemSvg(f, tierMeta(tierFromPoints(p.ratingPoints)).level, 16)}<span>${tierLabelFor(p)}</span>`;
+  return `${rankEmblemSvg(f, tierMeta(tierFromPoints(p.ratingPoints)).level, 16, !!p.inactive)}<span>${tierLabelFor(p)}</span>`;
 }
 
 function tierLabelOrHidden(meta) {
