@@ -4,9 +4,9 @@ import {
   auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged
 } from "./firebase-config.js";
 import { hashPassword, randomSalt, generatePassword, playerCodeFromSeq, tierMeta, tierFromPoints, isFoundingMember, computeMatchPointChanges, isRanked, tierStartOptions, RANK_FAMILIES, tournamentRanks } from "./utils.js";
-import { fetchTeams, assignToSlot, unregisterPlayer, setTeamGroup } from "./teams.js";
+import { fetchTeams, assignToSlot, unregisterPlayer, setTeamGroup, setTeamGroups } from "./teams.js";
 import {
-  checkReadiness, generateGroupFixtures, deriveBracket, computeTournamentPoints, fixturePlayerIds,
+  checkReadiness, generateGroupFixtures, deriveBracket, computeTournamentPoints, fixturePlayerIds, balanceGroups,
   fetchFixtures, createFixtures, saveFixtureScore, deleteFixtures, saveOverrides,
   applyTournamentPoints, verifyApplied, revertTournamentPoints
 } from "./bracket.js";
@@ -1017,6 +1017,79 @@ const COIN_AMOUNTS = {
   advancement: 20,
   placement: { 1: 150, 2: 100, 3: 75 }
 };
+
+// ---------------- Tournament Manager: auto-balance the groups ----------------
+// Preview first (several options to cycle through); only "Apply" writes anything.
+const bal = { tid: null, teams: [], names: new Map(), options: [], i: 0 };
+
+async function runBalance() {
+  const tid = $("tm-tournament").value;
+  const out = $("tm-balance-out");
+  if (!tid) return;
+  out.innerHTML = '<span class="spinner"></span> Calculating...';
+  try {
+    const [teams, fixtures] = await Promise.all([fetchTeams(tid), fetchFixtures(tid)]);
+    if (fixtures.length > 0) {
+      out.innerHTML = '<div class="msg error show">Matches were already generated for this tournament. Reset them in the Results tab first, then balance the groups again.</div>';
+      return;
+    }
+    const used = teams.filter((tm) => tm.player1Id || tm.player2Id);
+    const players = await fetchPlayersByIds([...new Set(used.flatMap((tm) => [tm.player1Id, tm.player2Id].filter(Boolean)))]);
+    const playersById = new Map(players.map((p) => [p.id, p]));
+    const res = balanceGroups(used, playersById);
+    if (!res.ok) {
+      out.innerHTML = `<div class="msg error show" style="white-space:pre-line;">Can't balance the groups yet:\n${res.errors.map(escapeHtml).join("\n")}</div>`;
+      return;
+    }
+    Object.assign(bal, { tid, teams: used, names: new Map(players.map((p) => [p.id, p.name || "—"])), options: res.options, i: 0, bestGap: res.bestGap });
+    renderBalance();
+  } catch (err) {
+    console.error(err);
+    out.innerHTML = '<div class="msg error show">Something went wrong. Try again.</div>';
+  }
+}
+
+function renderBalance() {
+  const o = bal.options[bal.i];
+  const teamLine = (tm) => `<div style="display:flex; justify-content:space-between; gap:8px; padding:5px 0; font-size:13px;">
+    <span><span style="font-family:var(--font-mono); font-size:11px; color:var(--text-soft);">T${tm.teamNumber}</span> ${tm.players.map((id) => escapeHtml(bal.names.get(id) || "—")).join(" &amp; ")}</span>
+    <span style="font-family:var(--font-mono); color:var(--text-soft);">${tm.strength}</span></div>`;
+  const boxes = o.groups.map((g, gi) => `<div style="background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:8px;">
+    <div style="display:flex; justify-content:space-between; font-weight:700; font-size:13.5px; margin-bottom:2px;"><span>Group ${gi + 1}</span><span style="font-family:var(--font-mono); color:var(--ball);">${o.totals[gi]}</span></div>
+    ${g.map(teamLine).join("")}
+    <div style="font-size:11px; color:var(--text-soft); margin-top:4px;">Strongest vs weakest team in this group: ${o.spreads[gi]} pts</div></div>`).join("");
+  $("tm-balance-out").innerHTML = `<div class="msg info show">
+      <strong>Option ${bal.i + 1} of ${bal.options.length}</strong><br>
+      Gap between the strongest and weakest group: <strong>${o.gap}</strong> pts (the smallest possible is ${bal.bestGap}).
+      Biggest difference between two teams of the same group: ${o.maxSpread} pts.
+    </div>${boxes}
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+      <button class="btn btn-primary btn-sm" data-bal-apply type="button">Apply these groups</button>
+      ${bal.options.length > 1 ? '<button class="btn btn-ghost btn-sm" data-bal-next type="button">Try another</button>' : ""}
+      <button class="btn btn-ghost btn-sm" data-bal-cancel type="button">Cancel</button>
+    </div>`;
+}
+
+$("tm-balance-btn").addEventListener("click", runBalance);
+$("tm-balance-out").addEventListener("click", async (e) => {
+  if (e.target.closest("[data-bal-next]")) { bal.i = (bal.i + 1) % bal.options.length; renderBalance(); return; }
+  if (e.target.closest("[data-bal-cancel]")) { $("tm-balance-out").innerHTML = ""; return; }
+  const apply = e.target.closest("[data-bal-apply]");
+  if (!apply) return;
+  if (bal.teams.some((tm) => tm.group) && !confirm("This replaces the groups that are already set for these teams. Continue?")) return;
+  apply.disabled = true;
+  try {
+    const o = bal.options[bal.i];
+    const assignments = o.groups.flatMap((g, gi) => g.map((tm) => ({ teamId: tm.teamId, group: gi + 1 })));
+    await setTeamGroups(bal.tid, assignments);
+    $("tm-balance-out").innerHTML = '<div class="msg success show">Groups saved. You can check them below, then go to the Results tab to generate the matches.</div>';
+    loadTeamGrid(bal.tid);
+  } catch (err) {
+    console.error(err);
+    $("tm-balance-out").innerHTML = '<div class="msg error show">Something went wrong, so nothing was changed. Try again.</div>';
+  }
+});
+$("tm-tournament").addEventListener("change", () => { $("tm-balance-out").innerHTML = ""; });
 
 async function loadCoinTournamentSelect(selectId) {
   const snap = await getDocs(query(collection(db, "tournaments"), orderBy("createdAt", "desc")));

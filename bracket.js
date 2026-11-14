@@ -67,6 +67,78 @@ export function checkReadiness(teams, playersById) {
   return { blocking, warnings };
 }
 
+// ----------------------------------------------------------- balanced groups
+// Splits 12 teams into 3 groups of 4 that are as equal in strength as possible.
+// Team strength = rating of player 1 + rating of player 2.
+//  1. every way of splitting the 12 teams is tried (only 5775 of them);
+//  2. the groups must be as equal as possible (gap between the strongest and weakest
+//     group total, with a small tolerance);
+//  3. among those, the grouping whose WORST group has the smallest difference between
+//     its strongest and weakest team wins (then the smallest total of differences between
+//     teams of the same group). This stops one group from collecting the two strongest AND
+//     the two weakest teams while the others are tight: every group gets a similar mix.
+// Returns the best few options so the admin can try another one.
+export function teamStrength(team, playersById) {
+  const a = playersById.get(team.player1Id), b = playersById.get(team.player2Id);
+  if (!a || !b || !isRanked(a) || !isRanked(b)) return null;
+  return a.ratingPoints + b.ratingPoints;
+}
+
+export function balanceGroups(teams, playersById, limit = 6) {
+  const errors = [];
+  if (teams.length !== 12) errors.push(`The tournament needs exactly 12 teams (found ${teams.length}).`);
+  const items = [];
+  teams.forEach((tm) => {
+    if (!tm.player1Id || !tm.player2Id) { errors.push(`Team ${tm.teamNumber} doesn't have 2 players yet.`); return; }
+    const s = teamStrength(tm, playersById);
+    if (s === null) { errors.push(`Team ${tm.teamNumber} has a player with no rank yet (or a player that no longer exists).`); return; }
+    items.push({ teamId: tm.id, teamNumber: tm.teamNumber, strength: s, players: [tm.player1Id, tm.player2Id] });
+  });
+  if (errors.length) return { ok: false, errors };
+  items.sort((a, b) => a.teamNumber - b.teamNumber);
+
+  const combos = (arr, k) => {
+    const res = [];
+    const rec = (start, acc) => {
+      if (acc.length === k) { res.push(acc.slice()); return; }
+      for (let i = start; i < arr.length; i++) { acc.push(arr[i]); rec(i + 1, acc); acc.pop(); }
+    };
+    rec(0, []);
+    return res;
+  };
+  const idx = items.map((_, i) => i);
+  const all = [];
+  for (const a of combos(idx.slice(1), 3)) {
+    const gA = [0, ...a];
+    const rest = idx.filter((i) => !gA.includes(i));
+    for (const b of combos(rest.slice(1), 3)) {
+      const gB = [rest[0], ...b];
+      const gC = rest.filter((i) => i !== rest[0] && !b.includes(i));
+      const groups = [gA, gB, gC];
+      const totals = groups.map((g) => g.reduce((s, i) => s + items[i].strength, 0));
+      const spreads = groups.map((g) => { const v = g.map((i) => items[i].strength); return Math.max(...v) - Math.min(...v); });
+      const pairSum = groups.reduce((s, g) => {
+        let t = 0;
+        for (let x = 0; x < g.length; x++) for (let y = x + 1; y < g.length; y++) t += Math.abs(items[g[x]].strength - items[g[y]].strength);
+        return s + t;
+      }, 0);
+      all.push({ groups, totals, spreads, pairSum, maxSpread: Math.max(...spreads), gap: Math.max(...totals) - Math.min(...totals), within: spreads.reduce((s, x) => s + x, 0) });
+    }
+  }
+  const bestGap = Math.min(...all.map((o) => o.gap));
+  const avgTotal = all[0].totals.reduce((s, x) => s + x, 0) / 3;
+  const tolerance = Math.max(30, avgTotal * 0.005);
+  const options = all
+    .filter((o) => o.gap <= bestGap + tolerance)
+    .sort((x, y) => x.maxSpread - y.maxSpread || x.pairSum - y.pairSum || x.gap - y.gap)
+    .slice(0, limit)
+    .map((o) => ({
+      groups: o.groups.map((g) => g.map((i) => items[i])), // [[team,...] x3], group number = position + 1
+      totals: o.totals, spreads: o.spreads, gap: o.gap, within: o.within, maxSpread: o.maxSpread, pairSum: o.pairSum
+    }));
+  return { ok: true, errors: [], options, bestGap, tolerance, checked: all.length };
+}
+
 // -------------------------------------------------------- group fixtures
 // 3 groups x 4 teams, everyone plays everyone: 6 matches per group, 18 total.
 // Order goes round by round across the groups (G1,G2,G3 round 1, then round 2...).

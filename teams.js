@@ -359,6 +359,15 @@ export async function assignToSlot(tournamentId, teamNumber, slot, playerId) {
   await updateDoc(doc(db, "tournaments", tournamentId, "teams", existing.id), { [`${slot}Id`]: playerId, ...(slot === "player1" ? { registeredAt: null } : {}) });
 }
 
+// Admin: saves the group (1-3) of several teams at once — all or nothing.
+export async function setTeamGroups(tournamentId, assignments) {
+  const batch = writeBatch(db);
+  assignments.forEach(({ teamId, group }) => {
+    batch.update(doc(db, "tournaments", tournamentId, "teams", teamId), { group: group || null });
+  });
+  await batch.commit();
+}
+
 export async function setTeamGroup(tournamentId, teamId, group) {
   await updateDoc(doc(db, "tournaments", tournamentId, "teams", teamId), { group: group || null });
 }
