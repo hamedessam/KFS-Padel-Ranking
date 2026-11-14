@@ -3,7 +3,7 @@ import {
   query, orderBy, where, runTransaction, writeBatch, increment, arrayUnion, serverTimestamp,
   auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged
 } from "./firebase-config.js";
-import { hashPassword, randomSalt, generatePassword, playerCodeFromSeq, tierMeta, tierFromPoints, isFoundingMember, computeMatchPointChanges, isRanked, tierStartOptions, RANK_FAMILIES, tournamentRanks } from "./utils.js";
+import { hashPassword, randomSalt, generatePassword, playerCodeFromSeq, tierMeta, tierFromPoints, isFoundingMember, computeMatchPointChanges, isRanked, tierStartOptions, RANK_FAMILIES, tournamentRanks, playerRankFamily } from "./utils.js";
 import { fetchTeams, assignToSlot, unregisterPlayer, setTeamGroup, setTeamGroups } from "./teams.js";
 import {
   checkReadiness, generateGroupFixtures, deriveBracket, computeTournamentPoints, fixturePlayerIds, balanceGroups,
@@ -876,13 +876,18 @@ async function loadTeamGrid(tournamentId) {
               <button class="team-slot-remove-btn" data-remove-player="${playerId}" data-tournament="${tournamentId}" title="Remove from this tournament — they'll need to register again if they want back in">×</button>
             </div>`;
         }
-        const options = availablePlayers.map((p) => `<option value="${p.id}">${escapeHtml(p.name)} (${escapeHtml(p.playerCode || "")})</option>`).join("");
         return `
           <div class="team-slot-player">
-            <select class="team-slot-add-select" data-assign-team="${n}" data-assign-slot="${slot}" data-tournament="${tournamentId}">
-              <option value="">+ Add player</option>
-              ${options}
-            </select>
+            <div class="pp" data-pp data-assign-team="${n}" data-assign-slot="${slot}" style="position:relative;">
+              <button type="button" class="pp-trigger" data-pp-trigger>
+                <span class="pp-trigger-label">+ Add player</span><span class="pp-caret">▾</span>
+              </button>
+              <div class="pp-panel hidden">
+                <input type="text" class="pp-search" placeholder="Search by name or code" autocomplete="off">
+                <div class="pp-chips hidden"></div>
+                <div class="pp-list"></div>
+              </div>
+            </div>
           </div>`;
       };
 
@@ -954,19 +959,17 @@ async function loadTeamGrid(tournamentId) {
 
     gridEl.innerHTML = html;
 
-    gridEl.querySelectorAll("[data-assign-team]").forEach((sel) => {
-      sel.addEventListener("change", async () => {
-        if (!sel.value) return;
-        sel.disabled = true;
-        try {
-          await assignToSlot(tournamentId, parseInt(sel.dataset.assignTeam, 10), sel.dataset.assignSlot, sel.value);
-          loadTeamGrid(tournamentId);
-        } catch (err) {
-          console.error(err);
-          showMsg(errEl, "Something went wrong assigning that player.");
-          sel.disabled = false;
-        }
-      });
+    setupAdminPickers(gridEl, availablePlayers, async (pp, player) => {
+      const trigger = pp.querySelector("[data-pp-trigger]");
+      trigger.disabled = true;
+      try {
+        await assignToSlot(tournamentId, parseInt(pp.dataset.assignTeam, 10), pp.dataset.assignSlot, player.id);
+        loadTeamGrid(tournamentId);
+      } catch (err) {
+        console.error(err);
+        showMsg(errEl, "Something went wrong assigning that player.");
+        trigger.disabled = false;
+      }
     });
 
     gridEl.querySelectorAll("[data-remove-player]").forEach((btn) => {
@@ -1017,6 +1020,103 @@ const COIN_AMOUNTS = {
   advancement: 20,
   placement: { 1: 150, 2: 100, 3: 75 }
 };
+
+// ---------------- searchable player picker (Tournament Manager "+ Add player") ----------------
+// Same look and behaviour as the partner picker in the player app: a search box and rank
+// filter chips inside the dropdown. English-only here. (Kept in this file on purpose: the
+// player app's copy lives in app.js and isn't shared.)
+function ppNormSearch(s) {
+  return String(s || "").toLowerCase()
+    .replace(/[\u064B-\u0652\u0640]/g, "")
+    .replace(/[أإآ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه")
+    .replace(/[\s\-_]/g, "");
+}
+let adminPpBound = false;
+function closeAdminPp(pp) {
+  pp.classList.remove("open");
+  pp.querySelector(".pp-panel").classList.add("hidden");
+}
+
+function setupAdminPickers(container, candidates, onPick) {
+  if (!adminPpBound) {
+    document.addEventListener("click", (e) => {
+      document.querySelectorAll(".pp.open").forEach((pp) => { if (!pp.contains(e.target)) closeAdminPp(pp); });
+    });
+    adminPpBound = true;
+  }
+  const cap = (f) => f.charAt(0).toUpperCase() + f.slice(1);
+  const famOf = (p) => (isRanked(p) ? playerRankFamily(p) : null);
+  const families = RANK_FAMILIES.filter((f) => candidates.some((p) => famOf(p) === f));
+  const chipKeys = ["all", ...families, ...(candidates.some((p) => !famOf(p)) ? ["none"] : [])];
+  const chipText = (k) => (k === "all" ? "All" : k === "none" ? "No rank" : cap(k));
+
+  container.querySelectorAll("[data-pp]").forEach((pp) => {
+    const trigger = pp.querySelector("[data-pp-trigger]");
+    const panel = pp.querySelector(".pp-panel");
+    const search = pp.querySelector(".pp-search");
+    const chipsEl = pp.querySelector(".pp-chips");
+    const listEl = pp.querySelector(".pp-list");
+    let q = "";
+    let rank = "all";
+
+    function renderChips() {
+      if (chipKeys.length < 3) { chipsEl.classList.add("hidden"); return; } // nothing worth filtering
+      chipsEl.classList.remove("hidden");
+      chipsEl.innerHTML = "";
+      chipKeys.forEach((k) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "pp-chip" + (k === rank ? " active" : "");
+        b.textContent = chipText(k);
+        b.addEventListener("click", () => { rank = k; renderChips(); renderList(); });
+        chipsEl.appendChild(b);
+      });
+    }
+
+    function renderList() {
+      const matches = candidates.filter((p) => {
+        const f = famOf(p) || "none";
+        if (rank !== "all" && f !== rank) return false;
+        return !q || ppNormSearch(p.name).includes(q) || ppNormSearch(p.playerCode).includes(q);
+      });
+      listEl.innerHTML = "";
+      if (matches.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "pp-empty";
+        empty.textContent = "No matching players";
+        listEl.appendChild(empty);
+        return;
+      }
+      matches.forEach((p) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "pp-item";
+        const nameEl = document.createElement("span");
+        nameEl.className = "pp-item-name";
+        nameEl.textContent = `${p.name || "—"} (${p.playerCode || "—"})`;
+        item.appendChild(nameEl);
+        const f = famOf(p);
+        const pill = document.createElement("span");
+        pill.className = `badge-pill ${f || ""}`;
+        pill.textContent = f ? `${tierLabel(tierFromPoints(p.ratingPoints))} · ${Math.round(p.ratingPoints)}` : "No rank";
+        item.appendChild(pill);
+        item.addEventListener("click", () => { closeAdminPp(pp); onPick(pp, p); });
+        listEl.appendChild(item);
+      });
+    }
+
+    trigger.addEventListener("click", () => {
+      if (pp.classList.contains("open")) { closeAdminPp(pp); return; }
+      document.querySelectorAll(".pp.open").forEach(closeAdminPp);
+      pp.classList.add("open");
+      panel.classList.remove("hidden");
+      renderChips();
+      renderList();
+      search.focus();
+    });
+    search.addEventListener("input", () => { q = ppNormSearch(search.value); renderList(); });
+  });
+}
 
 // ---------------- Tournament Manager: auto-balance the groups ----------------
 // Preview first (several options to cycle through); only "Apply" writes anything.
